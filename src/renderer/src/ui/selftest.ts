@@ -2,6 +2,7 @@ import { useStore } from '../state/store'
 import { engine } from '../engine/engineSingleton'
 import { BUILTIN_EFFECTS } from '../engine/effects/catalog'
 import { instanceFromDef } from '../state/defaults'
+import { constant } from '../types'
 import { exportVideo } from '../engine/export/exporter'
 
 // Headless end-to-end check: build a procedural image, apply a deformer,
@@ -27,7 +28,7 @@ export async function runSelfTest(): Promise<void> {
 
     const ripple = BUILTIN_EFFECTS.find((e) => e.id === 'ripple')!
     useStore.getState().update((p) => {
-      p.image = { name: 'selftest.png', dataUrl }
+      p.image = { name: 'selftest.png', dataUrl, offsetX: constant(0.5), offsetY: constant(0.5) }
       p.effects = [instanceFromDef(ripple)]
       // shorten for a fast test: 6 segments x 1s
       p.segments.forEach((s) => (s.durationSec = 1))

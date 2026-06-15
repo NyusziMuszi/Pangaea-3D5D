@@ -127,23 +127,6 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
   float g = dot(color.rgb, vec3(0.299, 0.587, 0.114));
   color.rgb = mix(color.rgb, vec3(g), uAmount);
   return color;`
-  },
-  {
-    id: 'vignette',
-    name: 'Vignette',
-    kind: 'shade',
-    description: 'Darkens toward the edges.',
-    builtin: true,
-    uniforms: [
-      { name: 'uInner', label: 'Inner', min: 0, max: 1, default: 0.35 },
-      { name: 'uOuter', label: 'Outer', min: 0.2, max: 1.6, default: 0.95 },
-      { name: 'uStrength', label: 'Strength', min: 0, max: 1, default: 0.7 }
-    ],
-    glslShade: `
-  float d = distance(uv, vec2(0.5));
-  float v = 1.0 - smoothstep(uInner, uOuter, d) * uStrength;
-  color.rgb *= v;
-  return color;`
   }
 ]
 

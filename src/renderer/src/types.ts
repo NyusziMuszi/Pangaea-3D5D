@@ -121,7 +121,15 @@ export interface Project {
     backgroundColor: string
     sceneTimeDuringCards: 'continue' | 'hold'
   }
-  image: { name: string | null; dataUrl: string | null }
+  image: {
+    name: string | null
+    dataUrl: string | null
+    // Normalized 0..1 position of the visible window when the image is
+    // cover-fit to the frame (aspect locked). 0.5 = centered. Only the
+    // overflowing axis responds; the fitted axis ignores its offset.
+    offsetX: Scalar
+    offsetY: Scalar
+  }
   subject: SubjectState
   effects: EffectInstance[]
   camera: CameraState

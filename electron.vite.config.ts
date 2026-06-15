@@ -22,7 +22,14 @@ export default defineConfig({
   renderer: {
     root: 'src/renderer',
     resolve: {
-      alias: { '@': resolve(__dirname, 'src/renderer/src') }
+      alias: {
+        '@': resolve(__dirname, 'src/renderer/src'),
+        '@assets': resolve(__dirname, 'assets')
+      }
+    },
+    // Allow the dev server to serve the shared assets/ dir that lives above the renderer root.
+    server: {
+      fs: { allow: [resolve(__dirname)] }
     },
     build: {
       rollupOptions: {

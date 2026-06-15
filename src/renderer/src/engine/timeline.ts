@@ -45,8 +45,9 @@ export function computeTimeline(project: Project, t: number): TimelineState {
     if (segment.text.reveal === 'fade') {
       const fade = Math.min(0.4, segment.durationSec * 0.3)
       const fadeIn = fade > 0 ? Math.min(1, localT / fade) : 1
+      const isClosing = idx === segments.length - 1
       const fadeOut =
-        fade > 0 ? Math.min(1, (segment.durationSec - localT) / fade) : 1
+        !isClosing && fade > 0 ? Math.min(1, (segment.durationSec - localT) / fade) : 1
       opacity = Math.min(fadeIn, fadeOut)
     }
     textCard = { segmentId: segment.id, style: segment.text, opacity }

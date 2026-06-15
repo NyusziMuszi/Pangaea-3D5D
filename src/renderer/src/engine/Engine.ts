@@ -7,6 +7,7 @@ import { composeSubjectShader, type ResolvedEffect, type UniformBinding } from '
 import { findEffectDef } from './effects/catalog'
 import { createParticleMaterial, buildParticleGeometry } from './effects/particle'
 import { TextOverlay, renderTextCard } from './textOverlay'
+import { loadTextCardFont } from './fonts'
 import { loadImage, loadModelGeometry } from './loaders'
 
 interface ActiveBinding extends UniformBinding {
@@ -23,8 +24,11 @@ export class Engine {
   private project: Project | null = null
 
   // image
-  private imageEl: HTMLImageElement | null = null
+  // sRGB-normalized copy of the source image (see normalizeToSrgb). Used for
+  // both the subject texture and particle sampling so colours match the file.
+  private imageSource: CanvasImageSource | null = null
   private imageTexture: THREE.Texture | null = null
+  private imageAspect = 1 // natural width / height of the loaded image
   private placeholder: THREE.Texture
   private lastImageUrl: string | null = null
 
@@ -81,6 +85,17 @@ export class Engine {
       THREE.RGBAFormat
     )
     this.placeholder.needsUpdate = true
+
+    // Load the custom text-card font, then refresh any cards already drawn with
+    // the system fallback so they pick up Parabole.
+    loadTextCardFont()
+      .then(() => {
+        this.clearTextCache()
+        this.renderFrame(this.playhead)
+      })
+      .catch(() => {
+        // Font failed to load; text cards keep the system-font fallback.
+      })
   }
 
   mount(container: HTMLElement): void {
@@ -118,10 +133,28 @@ export class Engine {
     if (!prev) this.renderFrame(this.playhead)
   }
 
+  // Browsers colour-manage a wide-gamut image (e.g. a macOS Display-P3
+  // screenshot) into the destination colour space when drawing onto a 2D
+  // canvas, which defaults to sRGB. Direct WebGL texture uploads skip this and
+  // show the raw P3 values as sRGB, which reads as oversaturated. Routing the
+  // image through an sRGB canvas first restores the file's real colours.
+  private normalizeToSrgb(img: HTMLImageElement): CanvasImageSource {
+    const w = img.naturalWidth
+    const h = img.naturalHeight
+    if (!w || !h) return img
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return img
+    ctx.drawImage(img, 0, 0)
+    return canvas
+  }
+
   private reloadImage(): void {
     const url = this.lastImageUrl
     if (!url) {
-      this.imageEl = null
+      this.imageSource = null
       this.imageTexture = null
       this.applyTextureToSubject()
       return
@@ -129,9 +162,13 @@ export class Engine {
     loadImage(url)
       .then((img) => {
         if (this.lastImageUrl !== url) return
-        this.imageEl = img
-        const tex = new THREE.Texture(img)
-        tex.colorSpace = THREE.SRGBColorSpace
+        this.imageAspect = img.naturalWidth / Math.max(1, img.naturalHeight)
+        this.imageSource = this.normalizeToSrgb(img)
+        const tex = new THREE.CanvasTexture(this.imageSource as HTMLCanvasElement)
+        // NoColorSpace: avoid the GPU's hardware sRGB decode (SRGB8_ALPHA8),
+        // which our custom ShaderMaterial never re-encodes on output. The 2D
+        // canvas above already produced sRGB bytes; pass them through as-is.
+        tex.colorSpace = THREE.NoColorSpace
         tex.needsUpdate = true
         tex.minFilter = THREE.LinearMipmapLinearFilter
         tex.magFilter = THREE.LinearFilter
@@ -257,7 +294,7 @@ export class Engine {
   private buildParticles(): void {
     const p = this.project!
     if (!this.particleMaterial) this.particleMaterial = createParticleMaterial()
-    const source: CanvasImageSource = this.imageEl ?? this.makeFallbackImageSource()
+    const source: CanvasImageSource = this.imageSource ?? this.makeFallbackImageSource()
     const geo = buildParticleGeometry(source, p.subject.particle.density, 1.6, 2.0)
     this.subjectObject = new THREE.Points(geo, this.particleMaterial)
     this.subjectGroup.add(this.subjectObject)
@@ -286,7 +323,9 @@ export class Engine {
     const uniforms: Record<string, THREE.IUniform> = {
       uTime: { value: 0 },
       uTexture: { value: this.imageTexture ?? this.placeholder },
-      uResolution: { value: new THREE.Vector2(p.output.width, p.output.height) }
+      uResolution: { value: new THREE.Vector2(p.output.width, p.output.height) },
+      uImageScale: { value: new THREE.Vector2(1, 1) },
+      uImageOffset: { value: new THREE.Vector2(0, 0) }
     }
     this.activeBindings = []
     for (const b of composed.bindings) {
@@ -299,7 +338,8 @@ export class Engine {
       vertexShader: composed.vertexShader,
       fragmentShader: composed.fragmentShader,
       uniforms,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      transparent: true
     })
     this.subjectMaterial = mat
     if (this.subjectObject && (this.subjectObject as THREE.Mesh).isMesh) {
@@ -331,6 +371,26 @@ export class Engine {
       for (const b of this.activeBindings) {
         const u = this.subjectMaterial.uniforms[b.uniformKey]
         if (u) u.value = this.valueOf(b.instanceId, b.uniformName, b.def, t)
+      }
+
+      // Aspect-correct "cover" framing of the source image (plane mode only).
+      // Scale the visible UV window so the image fills the frame without
+      // squeezing; the overflowing axis is positioned by image.offsetX/Y.
+      const scaleU = this.subjectMaterial.uniforms.uImageScale.value as THREE.Vector2
+      const offU = this.subjectMaterial.uniforms.uImageOffset.value as THREE.Vector2
+      if (p.subject.mode === 'plane' && this.imageTexture) {
+        const frameAspect = p.output.width / p.output.height
+        let sx = 1
+        let sy = 1
+        if (this.imageAspect > frameAspect) sx = frameAspect / this.imageAspect
+        else sy = this.imageAspect / frameAspect
+        const posX = evalScalar(p.image.offsetX ?? constant(0.5), t)
+        const posY = evalScalar(p.image.offsetY ?? constant(0.5), t)
+        scaleU.set(sx, sy)
+        offU.set(posX * (1 - sx), posY * (1 - sy))
+      } else {
+        scaleU.set(1, 1)
+        offU.set(0, 0)
       }
     }
 
@@ -401,7 +461,9 @@ export class Engine {
     const p = this.project!
     const canvas = renderTextCard(p.output.width, p.output.height, style)
     const tex = new THREE.CanvasTexture(canvas)
-    tex.colorSpace = THREE.SRGBColorSpace
+    // See reloadImage(): avoid GPU sRGB decode that the TextOverlay shader
+    // (also a passthrough ShaderMaterial) would never re-encode.
+    tex.colorSpace = THREE.NoColorSpace
     tex.needsUpdate = true
     this.textCache.set(key, tex)
     return tex
@@ -447,10 +509,14 @@ export class Engine {
     return this.playhead
   }
 
+  private clearTextCache(): void {
+    for (const t of this.textCache.values()) t.dispose()
+    this.textCache.clear()
+  }
+
   dispose(): void {
     this.pause()
     this.renderer.dispose()
-    for (const t of this.textCache.values()) t.dispose()
-    this.textCache.clear()
+    this.clearTextCache()
   }
 }

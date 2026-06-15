@@ -2,8 +2,9 @@ import { useStore } from '../state/store'
 import { BUILTIN_EFFECTS } from '../engine/effects/catalog'
 import { instanceFromDef, uid } from '../state/defaults'
 import type { EffectDef, SubjectMode, PrimitiveModel, Mapping } from '../types'
+import { constant } from '../types'
 import { bytesToDataUrl, mimeForName } from './files'
-import { Section, Field } from './controls'
+import { Section, Field, ScalarControl } from './controls'
 
 export function LibraryPanel(): JSX.Element {
   const project = useStore((s) => s.project)
@@ -16,7 +17,8 @@ export function LibraryPanel(): JSX.Element {
     if (!file) return
     const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name))
     update((p) => {
-      p.image = { name: file.name, dataUrl }
+      // New image: reset framing to centered.
+      p.image = { name: file.name, dataUrl, offsetX: constant(0.5), offsetY: constant(0.5) }
     })
   }
 
@@ -64,6 +66,24 @@ export function LibraryPanel(): JSX.Element {
         </button>
         {project.image.dataUrl && (
           <img className="thumb" src={project.image.dataUrl} alt="source" />
+        )}
+        {project.image.dataUrl && (
+          <>
+            <ScalarControl
+              label="Position X"
+              scalar={project.image.offsetX ?? constant(0.5)}
+              min={0}
+              max={1}
+              onChange={(s) => update((p) => { p.image.offsetX = s })}
+            />
+            <ScalarControl
+              label="Position Y"
+              scalar={project.image.offsetY ?? constant(0.5)}
+              min={0}
+              max={1}
+              onChange={(s) => update((p) => { p.image.offsetY = s })}
+            />
+          </>
         )}
       </Section>
 

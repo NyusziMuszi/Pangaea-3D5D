@@ -101,6 +101,8 @@ ${triplanarDefine}
 uniform float uTime;
 uniform sampler2D uTexture;
 uniform vec2 uResolution;
+uniform vec2 uImageScale;
+uniform vec2 uImageOffset;
 ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
@@ -115,7 +117,10 @@ vec4 pg_sampleSubject(vec2 uv) {
   vec4 cz = texture2D(uTexture, vWorldPos.xy * 0.5 + 0.5);
   return cx * n.x + cy * n.y + cz * n.z;
 #else
-  return texture2D(uTexture, uv);
+  // Aspect-correct cover fit: window the image so it fills the frame without
+  // squeezing. Engine supplies scale (<=1 on the overflowing axis) and offset.
+  vec2 t = uv * uImageScale + uImageOffset;
+  return texture2D(uTexture, t);
 #endif
 }
 ${shadeFns.join('\n')}

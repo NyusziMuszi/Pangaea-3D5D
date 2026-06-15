@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { TextStyle } from '../types'
+import { TEXT_CARD_FONT_FAMILY } from './fonts'
 
 // Render a full-frame colored text card to a 2D canvas at output resolution.
 export function renderTextCard(
@@ -19,7 +20,7 @@ export function renderTextCard(
   ctx.fillStyle = style.textColor
   ctx.textBaseline = 'middle'
   ctx.textAlign = style.align
-  ctx.font = `600 ${fontPx}px -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`
+  ctx.font = `600 ${fontPx}px "${TEXT_CARD_FONT_FAMILY}", -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif`
 
   const margin = width * 0.1
   const maxWidth = width - margin * 2
