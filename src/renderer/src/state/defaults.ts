@@ -15,7 +15,12 @@ export function defaultProject(): Project {
   return {
     version: 1,
     output: { width: 1080, height: 1350, fps: 30 },
-    scene: { backgroundColor: "#0b0b0f", sceneTimeDuringCards: "continue" },
+    scene: {
+      backgroundColor: "#0b0b0f",
+      sceneTimeDuringCards: "continue",
+      textBackdrop: "none",
+      textBackdropColor: "#000000",
+    },
     image: {
       name: null,
       dataUrl: null,

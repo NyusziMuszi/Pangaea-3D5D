@@ -1,6 +1,6 @@
 import { useStore } from '../state/store'
 import { findEffectDef } from '../engine/effects/catalog'
-import { constant, type Scalar } from '../types'
+import { constant, type Scalar, type TextBackdrop } from '../types'
 import { Section, Field, ScalarControl, ColorRow } from './controls'
 
 const TAU = Math.PI * 2
@@ -193,6 +193,27 @@ export function InspectorPanel(): JSX.Element {
             <option value="hold">Hold / freeze</option>
           </select>
         </Field>
+        <Field label="Text backdrop">
+          <select
+            value={project.scene.textBackdrop}
+            onChange={(e) =>
+              update((p) => {
+                p.scene.textBackdrop = e.target.value as TextBackdrop
+              })
+            }
+          >
+            <option value="none">None</option>
+            <option value="silhouette">Silhouette</option>
+            <option value="wireframe">Wireframe</option>
+          </select>
+        </Field>
+        {project.scene.textBackdrop !== 'none' && (
+          <ColorRow
+            label="Backdrop color"
+            value={project.scene.textBackdropColor}
+            onChange={(v) => update((p) => { p.scene.textBackdropColor = v })}
+          />
+        )}
         <Field label="Output">
           <span className="readonly">
             {project.output.width}×{project.output.height} · {project.output.fps}fps

@@ -14,6 +14,33 @@ interface ActiveBinding extends UniformBinding {
   def: EffectDef
 }
 
+// Vase-like profile revolved by LatheGeometry to build the 'lathe' primitive.
+function latheProfile(): THREE.Vector2[] {
+  const points: THREE.Vector2[] = []
+  for (let i = 0; i <= 32; i++) {
+    const t = i / 32
+    const y = (t - 0.5) * 2.2
+    const radius = 0.35 + 0.55 * Math.sin(t * Math.PI) + 0.15 * Math.sin(t * Math.PI * 4)
+    points.push(new THREE.Vector2(Math.max(radius, 0.001), y))
+  }
+  return points
+}
+
+// Trefoil-knot-like path used to build the 'tube' primitive.
+class TubePathCurve extends THREE.Curve<THREE.Vector3> {
+  constructor() {
+    super()
+  }
+
+  getPoint(t: number, target = new THREE.Vector3()): THREE.Vector3 {
+    const a = t * Math.PI * 2
+    const x = Math.sin(a) + 2 * Math.sin(2 * a)
+    const y = Math.cos(a) - 2 * Math.cos(2 * a)
+    const z = -Math.sin(3 * a)
+    return target.set(x, y, z).multiplyScalar(0.45)
+  }
+}
+
 export class Engine {
   readonly renderer: THREE.WebGLRenderer
   private scene = new THREE.Scene()
@@ -265,6 +292,24 @@ export class Engine {
         return new THREE.TorusGeometry(0.78, 0.34, 96, 160)
       case 'box':
         return new THREE.BoxGeometry(1.4, 1.7, 1.4, 64, 64, 64)
+      case 'cone':
+        return new THREE.ConeGeometry(0.95, 2.0, 128, 64)
+      case 'lathe':
+        return new THREE.LatheGeometry(latheProfile(), 128)
+      case 'ring':
+        return new THREE.RingGeometry(0.4, 1.1, 128, 8)
+      case 'tube':
+        return new THREE.TubeGeometry(new TubePathCurve(), 200, 0.32, 32, true)
+      case 'polyhedron':
+        return new THREE.IcosahedronGeometry(1.1, 2)
+      case 'dodecahedron':
+        return new THREE.DodecahedronGeometry(1.15)
+      case 'icosahedron':
+        return new THREE.IcosahedronGeometry(1.15)
+      case 'octahedron':
+        return new THREE.OctahedronGeometry(1.25)
+      case 'tetrahedron':
+        return new THREE.TetrahedronGeometry(1.35)
       case 'plane':
       default:
         return new THREE.PlaneGeometry(1.6, 2.0, 200, 200)
@@ -325,7 +370,10 @@ export class Engine {
       uTexture: { value: this.imageTexture ?? this.placeholder },
       uResolution: { value: new THREE.Vector2(p.output.width, p.output.height) },
       uImageScale: { value: new THREE.Vector2(1, 1) },
-      uImageOffset: { value: new THREE.Vector2(0, 0) }
+      uImageOffset: { value: new THREE.Vector2(0, 0) },
+      uSilhouette: { value: 0 },
+      uFlatColor: { value: new THREE.Vector3(0, 0, 0) },
+      uOpacity: { value: 1 }
     }
     this.activeBindings = []
     for (const b of composed.bindings) {
@@ -427,18 +475,53 @@ export class Engine {
     )
     this.camera.updateProjectionMatrix()
 
+    // Text-card backdrop: draw the subject as a flat silhouette or wireframe
+    // (still deformed by the active effects) under the text, over the card's
+    // background color. Only meaningful when a textured subject mesh exists.
+    const backdropActive =
+      !!tl.textCard &&
+      p.scene.textBackdrop !== 'none' &&
+      !!this.subjectMaterial &&
+      p.subject.mode !== 'particles'
+
+    if (this.subjectMaterial) {
+      if (backdropActive) {
+        this.subjectMaterial.uniforms.uSilhouette.value = 1
+        ;(this.subjectMaterial.uniforms.uFlatColor.value as THREE.Vector3).copy(
+          this.hexToRgb01(p.scene.textBackdropColor)
+        )
+        this.subjectMaterial.uniforms.uOpacity.value = tl.textCard!.opacity
+        this.subjectMaterial.wireframe = p.scene.textBackdrop === 'wireframe'
+      } else {
+        this.subjectMaterial.uniforms.uSilhouette.value = 0
+        this.subjectMaterial.uniforms.uOpacity.value = 1
+        this.subjectMaterial.wireframe = false
+      }
+    }
+
     // text overlay
     if (tl.textCard) {
-      const tex = this.textTexture(tl.textCard.segmentId, tl.textCard.style)
+      // With an active backdrop, the card's flat background fill is skipped
+      // (the rendered backdrop + lerped clear color take its place) so only
+      // the glyphs draw on top.
+      const tex = this.textTexture(tl.textCard.segmentId, tl.textCard.style, backdropActive)
       this.overlay.setTexture(tex)
-      this.overlay.setOpacity(tl.textCard.opacity)
+      this.overlay.setOpacity(backdropActive ? 1 : tl.textCard.opacity)
     } else {
       this.overlay.setOpacity(0)
     }
 
     // render
-    const bg = new THREE.Color(p.scene.backgroundColor)
-    this.renderer.setClearColor(bg, 1)
+    let clearColor = new THREE.Color(p.scene.backgroundColor)
+    if (backdropActive) {
+      // Fade from the scene background to the card's color, same curve as
+      // the card itself, so the backdrop appears to fade in with the card.
+      clearColor = clearColor.lerp(
+        new THREE.Color(tl.textCard!.style.backgroundColor),
+        tl.textCard!.opacity
+      )
+    }
+    this.renderer.setClearColor(clearColor, 1)
     this.renderer.clear()
     this.renderer.render(this.scene, this.camera)
     if (this.overlay.opacity > 0.001 && this.overlay.hasTexture) {
@@ -447,8 +530,23 @@ export class Engine {
     }
   }
 
-  private textTexture(segmentId: string, style: import('../types').TextStyle): THREE.CanvasTexture {
-    const key = `${segmentId}|${JSON.stringify(style)}`
+  // Parse a #rrggbb / #rgb hex string into literal 0..1 sRGB components.
+  // Deliberately NOT THREE.Color: the subject shader outputs raw bytes via
+  // NoColorSpace (see reloadImage()), so colour-managed sRGB->linear
+  // conversion here would make uFlatColor render too dark.
+  private hexToRgb01(hex: string): THREE.Vector3 {
+    let h = hex.replace('#', '').trim()
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+    const n = parseInt(h.padEnd(6, '0').slice(0, 6), 16)
+    return new THREE.Vector3(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255)
+  }
+
+  private textTexture(
+    segmentId: string,
+    style: import('../types').TextStyle,
+    transparentBg = false
+  ): THREE.CanvasTexture {
+    const key = `${segmentId}|${transparentBg ? 't' : 'o'}|${JSON.stringify(style)}`
     const cached = this.textCache.get(key)
     if (cached) return cached
     // drop stale textures for this segment
@@ -459,7 +557,7 @@ export class Engine {
       }
     }
     const p = this.project!
-    const canvas = renderTextCard(p.output.width, p.output.height, style)
+    const canvas = renderTextCard(p.output.width, p.output.height, style, transparentBg)
     const tex = new THREE.CanvasTexture(canvas)
     // See reloadImage(): avoid GPU sRGB decode that the TextOverlay shader
     // (also a passthrough ShaderMaterial) would never re-encode.

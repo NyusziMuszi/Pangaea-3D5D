@@ -3,18 +3,23 @@ import type { TextStyle } from '../types'
 import { TEXT_CARD_FONT_FAMILY } from './fonts'
 
 // Render a full-frame colored text card to a 2D canvas at output resolution.
+// When transparentBg is true, the background fill is skipped so only the
+// glyphs are drawn (used when a 3D backdrop shows through behind the text).
 export function renderTextCard(
   width: number,
   height: number,
-  style: TextStyle
+  style: TextStyle,
+  transparentBg = false
 ): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')!
 
-  ctx.fillStyle = style.backgroundColor
-  ctx.fillRect(0, 0, width, height)
+  if (!transparentBg) {
+    ctx.fillStyle = style.backgroundColor
+    ctx.fillRect(0, 0, width, height)
+  }
 
   const fontPx = style.fontSize
   ctx.fillStyle = style.textColor

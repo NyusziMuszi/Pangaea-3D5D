@@ -120,6 +120,15 @@ export function LibraryPanel(): JSX.Element {
                 <option value="cylinder">Cylinder</option>
                 <option value="torus">Torus</option>
                 <option value="box">Box</option>
+                <option value="cone">Cone</option>
+                <option value="lathe">Lathe</option>
+                <option value="ring">Ring</option>
+                <option value="tube">Tube</option>
+                <option value="polyhedron">Polyhedron</option>
+                <option value="dodecahedron">Dodecahedron</option>
+                <option value="icosahedron">Icosahedron</option>
+                <option value="octahedron">Octahedron</option>
+                <option value="tetrahedron">Tetrahedron</option>
               </select>
             </Field>
             <Field label="Mapping">

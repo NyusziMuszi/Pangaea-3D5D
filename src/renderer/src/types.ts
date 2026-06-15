@@ -62,7 +62,26 @@ export interface EffectInstance {
 
 export type SubjectMode = 'plane' | 'model' | 'particles'
 export type Mapping = 'uv' | 'triplanar'
-export type PrimitiveModel = 'plane' | 'sphere' | 'cylinder' | 'torus' | 'box'
+export type PrimitiveModel =
+  | 'plane'
+  | 'sphere'
+  | 'cylinder'
+  | 'torus'
+  | 'box'
+  | 'cone'
+  | 'lathe'
+  | 'ring'
+  | 'tube'
+  | 'polyhedron'
+  | 'dodecahedron'
+  | 'icosahedron'
+  | 'octahedron'
+  | 'tetrahedron'
+
+// Backdrop drawn behind a text card, in place of the textured subject.
+// 'none' keeps today's opaque card. The subject's deformers still animate
+// the backdrop, so it moves in sync with the (hidden) scene.
+export type TextBackdrop = 'none' | 'silhouette' | 'wireframe'
 
 export interface TextStyle {
   content: string
@@ -120,6 +139,8 @@ export interface Project {
   scene: {
     backgroundColor: string
     sceneTimeDuringCards: 'continue' | 'hold'
+    textBackdrop: TextBackdrop
+    textBackdropColor: string
   }
   image: {
     name: string | null

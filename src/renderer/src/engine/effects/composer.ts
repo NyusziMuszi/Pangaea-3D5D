@@ -103,6 +103,9 @@ uniform sampler2D uTexture;
 uniform vec2 uResolution;
 uniform vec2 uImageScale;
 uniform vec2 uImageOffset;
+uniform float uSilhouette;
+uniform vec3 uFlatColor;
+uniform float uOpacity;
 ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
@@ -127,6 +130,8 @@ ${shadeFns.join('\n')}
 void main() {
   vec4 color = pg_sampleSubject(vUv);
 ${shadeCalls.join('\n')}
+  if (uSilhouette > 0.5) color = vec4(uFlatColor, 1.0);
+  color.a *= uOpacity;
   gl_FragColor = color;
 }`
 
