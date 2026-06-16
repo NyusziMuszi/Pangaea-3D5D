@@ -1,6 +1,7 @@
 import type {
   EffectDef,
   EffectInstance,
+  ObjectImage,
   ObjectState,
   Project,
   Scalar,
@@ -17,6 +18,16 @@ export function instanceFromDef(def: EffectDef): EffectInstance {
   return { instanceId: uid("fx"), defId: def.id, enabled: true, values };
 }
 
+// An empty per-object image, centered for cover-fit framing.
+export function defaultObjectImage(): ObjectImage {
+  return {
+    name: null,
+    dataUrl: null,
+    offsetX: constant(0.5),
+    offsetY: constant(0.5),
+  };
+}
+
 // A fresh optional second object. Defaults to a small sphere parked to the
 // right of the primary object so it reads as a distinct, separate shape.
 export function defaultSecondObject(): ObjectState {
@@ -25,6 +36,8 @@ export function defaultSecondObject(): ObjectState {
     modelName: null,
     modelDataUrl: null,
     mapping: "uv",
+    image: defaultObjectImage(),
+    effects: [],
     rotX: constant(0),
     rotY: constant(0),
     rotZ: constant(0),
@@ -43,27 +56,22 @@ export function defaultProject(): Project {
       backgroundColor: "#281b6c",
       cameraType: "perspective",
     },
-    image: {
-      name: null,
-      dataUrl: null,
-      offsetX: constant(0.5),
-      offsetY: constant(0.5),
-    },
     object: {
       primitive: "plane",
       modelName: null,
       modelDataUrl: null,
       mapping: "uv",
+      image: defaultObjectImage(),
+      effects: [],
       rotX: constant(0),
       rotY: constant(0),
       rotZ: constant(0),
-      scale: constant(1.02),
+      scale: constant(0.7),
       posX: constant(0),
       posY: constant(0),
       posZ: constant(0),
     },
     object2: null,
-    effects: [],
     segments: [
       { id: uid("seg"), kind: "animation", label: "Intro", durationSec: 2.5 },
       {
@@ -95,13 +103,13 @@ export function defaultProject(): Project {
         durationSec: 2.5,
         text: {
           content: "Sculpture as a Tool for Wider Learning",
-          fontSize: 96,
+          fontSize: 120,
           align: "center",
           textColor: "#000000",
           backgroundColor: "#A3D6DC",
           reveal: "fade",
-          textBackdrop: "silhouette",
-          textBackdropColor: "#64e36e",
+          textBackdrop: "wireframe",
+          textBackdropColor: "#6473e3",
         },
       },
       {
@@ -117,7 +125,7 @@ export function defaultProject(): Project {
         durationSec: 2.5,
         text: {
           content: "3D–5D Learning Revolution",
-          fontSize: 120,
+          fontSize: 140,
           align: "center",
           textColor: "#000000",
           backgroundColor: "#A3D6DC",

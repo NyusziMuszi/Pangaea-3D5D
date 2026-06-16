@@ -48,10 +48,18 @@ export function TopBar({
 
   return (
     <div className="topbar">
-      <button onClick={newProject}>New</button>
-      <button onClick={open}>Open</button>
-      <button onClick={save}>Save</button>
-      <button onClick={onOpenExport}>Export</button>
+      <button className="important" onClick={newProject}>
+        New
+      </button>
+      <button className="important" onClick={open}>
+        Open
+      </button>
+      <button className="important" onClick={save}>
+        Save
+      </button>
+      <button className="important" onClick={onOpenExport}>
+        Export
+      </button>
     </div>
   );
 }

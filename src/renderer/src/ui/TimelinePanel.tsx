@@ -1,8 +1,10 @@
 import { type CSSProperties } from "react";
+import playIcon from "../assets/play_arrow_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
+import pauseIcon from "../assets/pause_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
 import { findEffectDef } from "../engine/effects/catalog";
-import { objectLabel, totalDuration } from "../types";
+import { totalDuration, type ObjectState } from "../types";
 
 function fmt(t: number): string {
   const s = Math.floor(t);
@@ -14,10 +16,8 @@ export function TimelinePanel(): JSX.Element {
   const project = useStore((s) => s.project);
   const update = useStore((s) => s.update);
   const selectedSegmentId = useStore((s) => s.selectedSegmentId);
-  const selectedEffectId = useStore((s) => s.selectedEffectId);
   const selectedObjectIndex = useStore((s) => s.selectedObjectIndex);
   const selectSegment = useStore((s) => s.selectSegment);
-  const selectEffect = useStore((s) => s.selectEffect);
   const selectObject = useStore((s) => s.selectObject);
   const playing = useStore((s) => s.playing);
   const setPlaying = useStore((s) => s.setPlaying);
@@ -33,26 +33,19 @@ export function TimelinePanel(): JSX.Element {
     acc += seg.durationSec;
   }
   const pct = (v: number): string => `${(v / total) * 100}%`;
-  const objectActive = !selectedSegmentId && !selectedEffectId;
+  // An object is the active context whenever no segment is selected; selecting
+  // an effect from the inspector no longer deactivates it.
+  const objectActive = !selectedSegmentId;
 
   function selectOnly(id: string): void {
     selectSegment(id);
-    selectEffect(null);
   }
 
-  // Select an object block (clearing any segment/effect selection) so the
-  // inspector edits that object's transform.
+  // Select an object block (clearing any segment selection) so the inspector
+  // edits that object's transform + effects.
   function selectObjectOnly(index: 0 | 1): void {
     selectObject(index);
     selectSegment(null);
-    selectEffect(null);
-  }
-
-  function removeSecondObject(): void {
-    update((p) => {
-      p.object2 = null;
-    });
-    selectObjectOnly(0);
   }
 
   function togglePlay(): void {
@@ -65,13 +58,31 @@ export function TimelinePanel(): JSX.Element {
     }
   }
 
-  function moveEffect(index: number, dir: -1 | 1): void {
-    const j = index + dir;
-    if (j < 0 || j >= project.effects.length) return;
-    update((p) => {
-      const arr = p.effects;
-      [arr[index], arr[j]] = [arr[j], arr[index]];
-    });
+  // Read-only effect labels for an object. Editing (reorder/toggle/delete and
+  // per-effect uniforms) lives in the inspector now.
+  function renderEffects(obj: ObjectState): JSX.Element {
+    if (obj.effects.length === 0) {
+      return (
+        <p className="fx-empty">
+          No effects. Add deformers/shaders from the Library.
+        </p>
+      );
+    }
+    return (
+      <div className="fx-stack">
+        {obj.effects.map((inst) => {
+          const def = findEffectDef(inst.defId, project.customEffects);
+          return (
+            <div
+              key={inst.instanceId}
+              className={`fx-row read-only ${inst.enabled ? "" : "fx-disabled"}`}
+            >
+              <span className="fx-name">{def?.name ?? inst.defId}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
   }
 
   return (
@@ -80,8 +91,11 @@ export function TimelinePanel(): JSX.Element {
         <div className="tl-tracks">
           <div className="tl-row tl-scrub-row">
             <div className="tl-row-label">
-              <button className="play" onClick={togglePlay}>
-                {playing ? "⏸" : "▶"}
+              <button className="btn-icon play" onClick={togglePlay}>
+                <img
+                  src={playing ? pauseIcon : playIcon}
+                  alt={playing ? "pause" : "play"}
+                />
               </button>
             </div>
             <div className="tl-scrub-area">
@@ -129,7 +143,7 @@ export function TimelinePanel(): JSX.Element {
                     onClick={() => selectOnly(seg.id)}
                   >
                     <span className="segment-label">
-                      {isText ? "Text" : "Break"}
+                      {isText ? "Text" : "—"}
                     </span>
                     <input
                       type="number"
@@ -161,112 +175,24 @@ export function TimelinePanel(): JSX.Element {
             <div className="tl-row-label">Object</div>
             <div className="tl-track tl-track-object">
               <div
-                className={`segment object ${objectActive && selectedObjectIndex === 0 ? "sel" : ""}`}
+                className={`segment object object-a ${objectActive && selectedObjectIndex === 0 ? "sel" : ""}`}
                 onClick={() => selectObjectOnly(0)}
               >
                 <div className="object-head">
-                  <span className="segment-label">
-                    {objectLabel(project.object)}
-                  </span>
+                  <span className="segment-label">Object A</span>
                   <span className="segment-dur">{total.toFixed(1)}s</span>
                 </div>
-                {project.effects.length === 0 ? (
-                  <p className="fx-empty">
-                    No effects. Add deformers/shaders from the Library.
-                  </p>
-                ) : (
-                  <div className="fx-stack">
-                    {project.effects.map((inst, i) => {
-                      const def = findEffectDef(
-                        inst.defId,
-                        project.customEffects,
-                      );
-                      return (
-                        <div
-                          key={inst.instanceId}
-                          className={`fx-row ${selectedEffectId === inst.instanceId ? "sel" : ""}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selectEffect(inst.instanceId);
-                            selectSegment(null);
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={inst.enabled}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) =>
-                              update((p) => {
-                                const t = p.effects.find(
-                                  (x) => x.instanceId === inst.instanceId,
-                                );
-                                if (t) t.enabled = e.target.checked;
-                              })
-                            }
-                          />
-                          <span className="fx-name">
-                            {def?.name ?? inst.defId}
-                          </span>
-                          <span className="spacer" />
-                          <button
-                            className="mini"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              moveEffect(i, -1);
-                            }}
-                          >
-                            ↑
-                          </button>
-                          <button
-                            className="mini"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              moveEffect(i, 1);
-                            }}
-                          >
-                            ↓
-                          </button>
-                          <button
-                            className="mini"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              update((p) => {
-                                p.effects = p.effects.filter(
-                                  (x) => x.instanceId !== inst.instanceId,
-                                );
-                              });
-                              if (selectedEffectId === inst.instanceId)
-                                selectEffect(null);
-                            }}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                {renderEffects(project.object)}
               </div>
               {project.object2 && (
                 <div
-                  className={`segment object object-2 ${objectActive && selectedObjectIndex === 1 ? "sel" : ""}`}
+                  className={`segment object object-2 object-b ${objectActive && selectedObjectIndex === 1 ? "sel" : ""}`}
                   onClick={() => selectObjectOnly(1)}
                 >
                   <div className="object-head">
-                    <span className="segment-label">
-                      {objectLabel(project.object2)}
-                    </span>
-                    <button
-                      className="mini"
-                      title="Remove second object"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeSecondObject();
-                      }}
-                    >
-                      ✕
-                    </button>
+                    <span className="segment-label">Object B</span>
                   </div>
+                  {renderEffects(project.object2)}
                 </div>
               )}
               <div className="tl-playhead" style={{ left: pct(playhead) }} />

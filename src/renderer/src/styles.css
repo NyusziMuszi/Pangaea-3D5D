@@ -11,12 +11,12 @@
 
   --text: #e7e7ee;
 
-  --text-btn: #ffffff;
+  --text-btn: #e1e3e3;
   --text-btn-hover: #a3d6dc;
   --text-section: #599399;
   --text-section-rule: #599399;
 
-  --border-btn: #f0923f;
+  --border-btn: #494949;
   --border: #6e706e;
 
   --panel-btn: #1b1b1b;
@@ -24,11 +24,31 @@
   --text-dim: #9a9aab;
   --accent: #a3d6dc;
   --anim: #54ced5;
-  --textseg: #7e8b36;
   --ok: #56d364;
   --err: #ff6b6b;
-  --slider-fill: #a3d6dc;
-  --slider-track: #d8d8de;
+  --slider-fill: #599399;
+  --slider-track: #bfd1d3;
+
+  --objectA-text-border: #997a59;
+  --objectA-highlight: #997a5911;
+  --objectB-text-border: #955999;
+  --objectB-highlight: #9559991a;
+}
+
+/* Object A / B identity colours. Applied to the Library section, the timeline
+   block, and the inspector header so each object keeps the same accent across
+   panels. These locally override --text-section(-rule) — already consumed by
+   section titles, segment labels and the inspector title — so the colour
+   cascades for free; hover states use literal colours and keep working. */
+.object-a {
+  --text-section: var(--objectA-text-border);
+  --text-section-rule: var(--objectA-text-border);
+  --obj-highlight: var(--objectA-highlight);
+}
+.object-b {
+  --text-section: var(--objectB-text-border);
+  --text-section-rule: var(--objectB-text-border);
+  --obj-highlight: var(--objectB-highlight);
 }
 
 * {
@@ -54,35 +74,55 @@ body {
   user-select: none;
 }
 
+/* Three button types share structure (outline, corner radius, hover shadow)
+   and differ only in fill / border / text via these per-type variables.
+   default = bare <button>; important and secondary are modifier classes. */
 button {
+  --btn-fill: var(--panel-btn);
+  --btn-border: var(--border-btn);
+  --btn-text: var(--text-btn);
   font-family: inherit;
   font-size: 12px;
-  color: var(--text-btn);
-  background: var(--panel-btn);
-  border: 1px solid var(--border);
+  color: var(--btn-text);
+  background: var(--btn-fill);
+  border: 1px solid var(--btn-border);
   border-radius: 30px;
   padding: 5px 9px;
   cursor: pointer;
-  transition: background 0.35s ease;
+  transition:
+    background 0.35s ease,
+    border-radius 0.2s ease,
+    box-shadow 0.15s ease;
 }
 button:hover {
-  color: var(--text-btn-hover);
+  color: white;
   border-radius: 2px;
-  box-shadow: 0 3px 0px #599399 inset;
+  box-shadow: 0 3px 0px white inset;
+}
+/* Clicked state: nudge the button down with a small inset shadow. */
+button:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.3);
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: default;
 }
-button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
+
+button.important {
+  --btn-fill: var(--text-section);
+  border: none;
+  --btn-border: transparent;
+  --btn-text: #000000;
+  font-weight: 600;
 }
-button.primary:hover {
-  filter: brightness(1.1);
+button.secondary {
+  --btn-fill: transparent;
+  --btn-text: var(--text-dim);
 }
+
+/* Orthogonal modifiers — compose with any type. */
 button.mini {
   padding: 2px 6px;
   font-size: 11px;
@@ -90,9 +130,34 @@ button.mini {
 button.full {
   width: 100%;
 }
-button.subtle {
+
+button.btn-icon {
   background: transparent;
-  color: var(--text-dim);
+  border: none;
+  outline: none;
+  padding: 2px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+button.btn-icon:hover {
+  background: transparent;
+  border-radius: 4px;
+  box-shadow: none;
+  color: inherit;
+}
+button.btn-icon:active {
+  transform: none;
+  box-shadow: none;
+}
+button.btn-icon img {
+  display: block;
+  transition: filter 0.2s ease;
+}
+button.btn-icon:hover img {
+  filter: brightness(0) saturate(100%) invert(54%) sepia(28%) saturate(521%)
+    hue-rotate(143deg) brightness(97%) contrast(86%);
 }
 
 input,
@@ -143,7 +208,7 @@ textarea {
   align-items: center;
   gap: 8px;
   padding: 0 12px;
-  background: rgb(12, 44, 48);
+  background: var(--panel);
   border-bottom: 1px solid var(--border);
   height: 46px;
 }
@@ -167,8 +232,16 @@ textarea {
 }
 .center {
   display: grid;
-  grid-template-rows: 1fr 240px;
+  grid-template-rows: 1fr 5px var(--timeline-height, 240px);
   min-height: 0;
+}
+.timeline-resize-handle {
+  cursor: ns-resize;
+  background: transparent;
+  transition: background 0.15s;
+}
+.timeline-resize-handle:hover {
+  background: var(--accent);
 }
 
 .panel {
@@ -184,26 +257,83 @@ textarea {
   padding: 10px;
   border-top: 1px solid var(--border);
 }
+.inspector-object-header {
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Tint the header in the active object's colour (title uses --text-section). */
+.inspector-object-header.object-a,
+.inspector-object-header.object-b {
+  background: var(--obj-highlight);
+  border-bottom-color: var(--text-section);
+}
+.inspector-object-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-section);
+}
+.inspector-object-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
 
 /* ---------- Sections / fields ---------- */
 .section {
-  border-top: 3px solid var(--text-section-rule);
+  border-top: 1px solid var(--border);
+}
+/* Object A / B sections carry the object's accent on their rule + title.
+   (These elements use literal colours, so set them explicitly rather than
+   relying on the --text-section cascade.) */
+.section.object-a,
+.section.object-b {
+  border-top-color: var(--text-section);
+}
+.section.object-a .section-toggle,
+.section.object-b .section-toggle {
+  color: var(--text-section);
+}
+.section.object-a .section-toggle:hover,
+.section.object-b .section-toggle:hover {
+  color: white;
 }
 .section-head {
   display: flex;
 
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: 0px 10px 3px 10px;
 }
 .section-toggle {
   background: none;
   border: none;
-  color: var(--text-section);
+  color: rgb(170, 169, 169);
   font-family: "Bebas Neue", sans-serif;
   font-weight: 400;
   padding: 2px 0;
   font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.section-toggle:hover {
+  color: white;
+  border-radius: 0;
+  box-shadow: none;
+}
+.section-toggle:active {
+  transform: none;
+  box-shadow: none;
+}
+.section:has(.section-toggle:hover) {
+  border-top-color: var(--text-btn-hover);
 }
 .section-body {
   padding: 4px 10px 12px;
@@ -272,11 +402,11 @@ textarea {
   text-align: left;
 }
 .catalog-rule {
+  display: block;
   width: 100%;
-  height: 0;
-  margin: 1px 0;
+  margin: 10px 0;
   border: none;
-  border-top: 1px solid var(--border);
+  overflow: visible;
 }
 
 /* ---------- Preview ---------- */
@@ -324,24 +454,7 @@ textarea {
   padding: 0;
   cursor: pointer;
 }
-.scrub::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(
-    to right,
-    var(--slider-fill) var(--slider-pct, 0%),
-    var(--slider-track) var(--slider-pct, 0%)
-  );
-}
-.scrub::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  margin-top: -5px;
-  border-radius: 50%;
-  background: var(--slider-fill);
-}
+/* Track + thumb styling is shared with .scalar-slider (see Scalar control). */
 
 /* ---------- Timeline ---------- */
 .timeline {
@@ -395,6 +508,21 @@ textarea {
 .tl-track.tl-track-object .segment.object + .segment.object {
   margin-top: 6px;
 }
+/* Coloured border so A and B read apart at a glance. */
+.tl-track.tl-track-object .segment.object.object-a,
+.tl-track.tl-track-object .segment.object.object-b {
+  border-color: var(--text-section);
+}
+/* Hover and selection use the per-object highlight tint instead of the generic teal. */
+.tl-track.tl-track-object .segment.object.object-a:hover,
+.tl-track.tl-track-object .segment.object.object-b:hover,
+.tl-track.tl-track-object .segment.object.sel {
+  background: var(--obj-highlight);
+}
+/* Selection also shows an inner ring. */
+.tl-track.tl-track-object .segment.object.sel {
+  box-shadow: inset 0 0 0 1px var(--text-section);
+}
 .tl-scrub-area {
   flex: 1;
   display: flex;
@@ -423,7 +551,7 @@ textarea {
   bottom: 0;
   width: 2px;
   margin-left: -1px;
-  background: var(--accent);
+  background: var(--slider-fill);
   pointer-events: none;
 }
 .segment {
@@ -434,24 +562,24 @@ textarea {
   cursor: pointer;
   overflow: hidden;
 }
-.segment.object {
-  border-color: rgba(56, 121, 212, 0.35);
-}
-.segment.text {
-  border-color: rgba(49, 206, 211, 0.35);
-}
 .segment.break {
-  border-style: dashed;
-  border-color: var(--border);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(86, 70, 4, 0.055);
+}
+.segment:hover,
+.segment.sel {
+  background: rgba(49, 157, 163, 0.1);
 }
 .segment.sel {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  border-color: var(--slider-fill);
+  box-shadow: inset 0 0 0 1px var(--slider-fill);
 }
 .segment-label {
   display: block;
+  font-size: 11px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-section);
 }
 .segment-dur {
   color: var(--text-dim);
@@ -479,7 +607,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--panel-2);
+  background: var(--panel-3);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px 8px;
@@ -488,8 +616,32 @@ textarea {
 .fx-row.sel {
   border-color: var(--accent);
 }
+/* Timeline shows effects as plain read-only labels — no box outline. */
+.fx-row.read-only {
+  cursor: default;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  color: var(--text-dim);
+}
+.fx-row.fx-disabled {
+  opacity: 0.45;
+}
 .fx-name {
   font-weight: 600;
+}
+.fx-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+}
+
+.fx-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0px;
 }
 
 /* ---------- Scalar control ---------- */
@@ -516,6 +668,7 @@ textarea {
   margin: 0;
   cursor: pointer;
 }
+.scrub::-webkit-slider-runnable-track,
 .scalar-slider::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 2px;
@@ -525,6 +678,7 @@ textarea {
     var(--slider-track) var(--slider-pct, 0%)
   );
 }
+.scrub::-webkit-slider-thumb,
 .scalar-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -537,6 +691,21 @@ textarea {
 .scalar-num {
   width: 56px;
 }
+/* Scalar hover cue. */
+.scalar-row:hover .scalar-label {
+  color: var(--text);
+}
+/* Keyframed-input cue: animated fields read accent, a key on the playhead
+   reads brighter still. */
+.scalar-row.anim .scalar-num {
+  border-color: var(--accent);
+}
+.scalar-row.keyed .scalar-num {
+  border-color: var(--anim);
+  box-shadow: inset 0 0 0 1px var(--anim);
+}
+/* ---------- Keyframe control ---------- */
+
 .diamond {
   background: none;
   border: none;
@@ -544,11 +713,59 @@ textarea {
   padding: 2px 3px;
   font-size: 12px;
 }
+.diamond:hover {
+  color: var(--accent);
+}
 .diamond.anim {
   color: var(--accent);
 }
 .diamond.keyed {
-  color: var(--accent-2);
+  color: var(--anim);
+}
+
+/* Per-property keyframe strip under the row. */
+.scalar-control {
+  display: flex;
+  flex-direction: column;
+}
+.kf-track {
+  position: relative;
+  height: 12px;
+  margin-left: 84px;
+  margin-right: 24px;
+  border-bottom: 2px dotted;
+}
+.kf-marker {
+  position: absolute;
+  top: 2px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--slider-fill);
+  transform: translateX(-50%) rotate(45deg);
+  transition: none;
+  cursor: pointer;
+}
+/* Markers are not buttons visually — neutralize the global button hover/active
+   chrome (border-radius morph, inset shadow, translateY) so the diamond keeps
+   its rotation and only the fill responds. */
+.kf-marker:hover {
+  background: var(--accent);
+  border-radius: 0;
+  box-shadow: none;
+}
+.kf-marker:active {
+  transform: translateX(-50%) rotate(45deg);
+  box-shadow: none;
+}
+.kf-marker.active {
+  background: white;
+  box-shadow: 0 0 4px white;
+}
+.kf-marker.active:active {
+  box-shadow: 0 0 4px white;
 }
 
 /* ---------- Modals ---------- */
@@ -645,7 +862,7 @@ textarea.code {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: var(--panel-2);
+  background: var(--panel-3);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px;

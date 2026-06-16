@@ -1,7 +1,13 @@
 import { useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import { defaultSecondObject, instanceFromDef, uid } from "../state/defaults";
-import type { EffectDef, PrimitiveModel, Mapping, CameraType } from "../types";
+import type {
+  EffectDef,
+  ObjectState,
+  PrimitiveModel,
+  Mapping,
+  CameraType,
+} from "../types";
 import { constant } from "../types";
 import { bytesToDataUrl, mimeForName } from "./files";
 import { Section, Field, ScalarControl, ColorRow } from "./controls";
@@ -13,14 +19,12 @@ const PRIMITIVE_OPTIONS: { value: PrimitiveModel; label: string }[] = [
   { value: "cylinder", label: "Cylinder" },
   { value: "torus", label: "Torus" },
   { value: "box", label: "Box" },
-  { value: "cone", label: "Cone" },
   { value: "lathe", label: "Lathe" },
-  { value: "tube", label: "Tube" },
+  { value: "knot", label: "Knot" },
+  { value: "twist", label: "Twist" },
+
   { value: "polyhedron", label: "Polyhedron" },
   { value: "dodecahedron", label: "Dodecahedron" },
-  { value: "icosahedron", label: "Icosahedron" },
-  { value: "octahedron", label: "Octahedron" },
-  { value: "tetrahedron", label: "Tetrahedron" },
 ];
 
 export function LibraryPanel(): JSX.Element {
@@ -29,6 +33,7 @@ export function LibraryPanel(): JSX.Element {
   const selectEffect = useStore((s) => s.selectEffect);
   const selectSegment = useStore((s) => s.selectSegment);
   const selectObject = useStore((s) => s.selectObject);
+  const setToast = useStore((s) => s.setToast);
   const openShaderEditor = useStore((s) => s.openShaderEditor);
 
   function addSecondObject(): void {
@@ -48,13 +53,21 @@ export function LibraryPanel(): JSX.Element {
     selectObject(0);
   }
 
-  async function loadImage(): Promise<void> {
+  // Mutate one object (0 = primary, 1 = optional second) in place.
+  function mutateObject(index: 0 | 1, fn: (o: ObjectState) => void): void {
+    update((p) => {
+      const o = index === 0 ? p.object : p.object2;
+      if (o) fn(o);
+    });
+  }
+
+  async function loadImageFor(index: 0 | 1): Promise<void> {
     const file = await window.api.openImageFile();
     if (!file) return;
     const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
-    update((p) => {
+    mutateObject(index, (o) => {
       // New image: reset framing to centered.
-      p.image = {
+      o.image = {
         name: file.name,
         dataUrl,
         offsetX: constant(0.5),
@@ -63,21 +76,36 @@ export function LibraryPanel(): JSX.Element {
     });
   }
 
-  async function importModel(): Promise<void> {
+  async function importModelFor(index: 0 | 1): Promise<void> {
     const file = await window.api.openModelFile();
     if (!file) return;
     const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
-    update((p) => {
-      p.object.modelName = file.name;
-      p.object.modelDataUrl = dataUrl;
+    mutateObject(index, (o) => {
+      o.modelName = file.name;
+      o.modelDataUrl = dataUrl;
     });
   }
 
+  // Add an effect to the currently active object. With no second object it
+  // always targets object 1. With two objects it targets whichever object is
+  // the active context; if a segment is selected instead, there is no object
+  // to attach to, so prompt the user to pick one.
   function addEffect(def: EffectDef): void {
+    const { selectedSegmentId, selectedObjectIndex } = useStore.getState();
+    let target: 0 | 1 = 0;
+    if (project.object2) {
+      if (selectedSegmentId) {
+        setToast("Select an object first");
+        return;
+      }
+      target = selectedObjectIndex === 1 ? 1 : 0;
+    }
     const inst = instanceFromDef(def);
-    update((p) => {
-      p.effects.push(inst);
+    mutateObject(target, (o) => {
+      o.effects.push(inst);
     });
+    selectObject(target);
+    selectSegment(null);
     selectEffect(inst.instanceId);
   }
 
@@ -98,11 +126,118 @@ export function LibraryPanel(): JSX.Element {
     openShaderEditor(def.id);
   }
 
+  // Identical shape/material + image controls for either object.
+  function ObjectMenu({ index }: { index: 0 | 1 }): JSX.Element {
+    const obj = index === 0 ? project.object : project.object2;
+    if (!obj) return <></>;
+    return (
+      <>
+        <Field label="Primitive">
+          <select
+            value={obj.primitive}
+            disabled={!!obj.modelDataUrl}
+            onChange={(e) =>
+              mutateObject(index, (o) => {
+                o.primitive = e.target.value as PrimitiveModel;
+              })
+            }
+          >
+            {PRIMITIVE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Mapping">
+          <select
+            value={obj.mapping}
+            onChange={(e) =>
+              mutateObject(index, (o) => {
+                o.mapping = e.target.value as Mapping;
+              })
+            }
+          >
+            <option value="uv">UV</option>
+            <option value="triplanar">Triplanar</option>
+          </select>
+        </Field>
+        <button className="full secondary" onClick={() => importModelFor(index)}>
+          {obj.modelName
+            ? `Replace model: ${obj.modelName}`
+            : "Import 3D model"}
+        </button>
+        {obj.modelDataUrl && (
+          <button
+            className="full secondary"
+            onClick={() =>
+              mutateObject(index, (o) => {
+                o.modelDataUrl = null;
+                o.modelName = null;
+              })
+            }
+          >
+            Use primitive instead
+          </button>
+        )}
+        <button
+          className={obj.image.name ? "full secondary" : "full important"}
+          onClick={() => loadImageFor(index)}
+        >
+          {obj.image.name ? "Replace image" : "Load image"}
+        </button>
+        {obj.image.dataUrl && (
+          <ScalarControl
+            label="Position X"
+            scalar={obj.image.offsetX ?? constant(0.5)}
+            min={0}
+            max={1}
+            onChange={(s) =>
+              mutateObject(index, (o) => {
+                o.image.offsetX = s;
+              })
+            }
+          />
+        )}
+      </>
+    );
+  }
+
+  function ZigzagRule({ patId }: { patId: string }): JSX.Element {
+    return (
+      <svg
+        className="catalog-rule"
+        width="100%"
+        height="8"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <pattern
+            id={patId}
+            x="0"
+            y="0"
+            width="12"
+            height="8"
+            patternUnits="userSpaceOnUse"
+          >
+            <polyline
+              points="0,8 6,0 12,8"
+              fill="none"
+              stroke="var(--border)"
+              strokeWidth="1.5"
+            />
+          </pattern>
+        </defs>
+        <rect width="100%" height="8" fill={`url(#${patId})`} />
+      </svg>
+    );
+  }
+
   const allDefs = [...BUILTIN_EFFECTS, ...project.customEffects];
 
   return (
     <div className="panel library">
-      <Section title="Image">
+      <Section title="Scene">
         <ColorRow
           label="Background"
           value={project.scene.backgroundColor}
@@ -125,111 +260,17 @@ export function LibraryPanel(): JSX.Element {
             <option value="isometric">Isometric</option>
           </select>
         </Field>
-        <button className="full" onClick={loadImage}>
-          {project.image.name ? "Replace image" : "Load image"}
-        </button>
-        {project.image.dataUrl && (
-          <img className="thumb" src={project.image.dataUrl} alt="source" />
-        )}
-        {project.image.dataUrl && (
-          <>
-            <ScalarControl
-              label="Position X"
-              scalar={project.image.offsetX ?? constant(0.5)}
-              min={0}
-              max={1}
-              onChange={(s) =>
-                update((p) => {
-                  p.image.offsetX = s;
-                })
-              }
-            />
-            {/* <ScalarControl
-              label="Position Y"
-              scalar={project.image.offsetY ?? constant(0.5)}
-              min={0}
-              max={1}
-              onChange={(s) =>
-                update((p) => {
-                  p.image.offsetY = s;
-                })
-              }
-            /> */}
-          </>
-        )}
       </Section>
 
-      <Section title="Object">
-        <Field label="Primitive">
-          <select
-            value={project.object.primitive}
-            disabled={!!project.object.modelDataUrl}
-            onChange={(e) =>
-              update((p) => {
-                p.object.primitive = e.target.value as PrimitiveModel;
-              })
-            }
-          >
-            {PRIMITIVE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Mapping">
-          <select
-            value={project.object.mapping}
-            onChange={(e) =>
-              update((p) => {
-                p.object.mapping = e.target.value as Mapping;
-              })
-            }
-          >
-            <option value="uv">UV</option>
-            <option value="triplanar">Triplanar</option>
-          </select>
-        </Field>
-        <button className="full" onClick={importModel}>
-          {project.object.modelName
-            ? `Replace model: ${project.object.modelName}`
-            : "Import model (glb/gltf/obj)…"}
-        </button>
-        {project.object.modelDataUrl && (
-          <button
-            className="full subtle"
-            onClick={() =>
-              update((p) => {
-                p.object.modelDataUrl = null;
-                p.object.modelName = null;
-              })
-            }
-          >
-            Use primitive instead
-          </button>
-        )}
+      <Section title="Object A" className="object-a">
+        <ObjectMenu index={0} />
+      </Section>
 
-        <hr className="catalog-rule" />
+      <Section title="Object B" className="object-b">
         {project.object2 ? (
           <>
-            <Field label="2nd primitive">
-              <select
-                value={project.object2.primitive}
-                onChange={(e) =>
-                  update((p) => {
-                    if (p.object2)
-                      p.object2.primitive = e.target.value as PrimitiveModel;
-                  })
-                }
-              >
-                {PRIMITIVE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <button className="full subtle" onClick={removeSecondObject}>
+            <ObjectMenu index={1} />
+            <button className="full secondary" onClick={removeSecondObject}>
               Remove second object
             </button>
           </>
@@ -249,11 +290,19 @@ export function LibraryPanel(): JSX.Element {
           >
             <span className="catalog-name">Bespoke</span>
           </button>
-          <hr className="catalog-rule" />
+          <ZigzagRule patId="zigzag-bespoke" />
           {allDefs.map((def) => (
-            <button key={def.id} className="catalog-item" onClick={() => addEffect(def)}>
-              <span className="catalog-name">{def.name}</span>
-            </button>
+            <div key={def.id}>
+              <button
+                className="catalog-item"
+                onClick={() => addEffect(def)}
+              >
+                <span className="catalog-name">{def.name}</span>
+              </button>
+              {(def.id === "relief" || def.id === "jitter") && (
+                <ZigzagRule patId={`zigzag-${def.id}`} />
+              )}
+            </div>
           ))}
         </div>
       </Section>

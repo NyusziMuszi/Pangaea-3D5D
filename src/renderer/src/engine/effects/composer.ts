@@ -100,6 +100,7 @@ precision highp float;
 ${triplanarDefine}
 uniform float uTime;
 uniform sampler2D uTexture;
+uniform sampler2D uTextureB;
 uniform vec2 uResolution;
 uniform vec2 uImageScale;
 uniform vec2 uImageOffset;
@@ -126,6 +127,7 @@ vec4 pg_sampleObject(vec2 uv) {
   return texture2D(uTexture, t);
 #endif
 }
+vec4 pg_sampleOther(vec2 uv) { return texture2D(uTextureB, uv); }
 ${shadeFns.join('\n')}
 void main() {
   vec4 color = pg_sampleObject(vUv);

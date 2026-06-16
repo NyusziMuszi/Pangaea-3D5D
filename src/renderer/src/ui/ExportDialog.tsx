@@ -128,7 +128,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): JSX.Element 
           {busy ? (
             <button onClick={() => abortRef.current?.abort()}>Cancel</button>
           ) : (
-            <button className="primary" onClick={run}>
+            <button className="important" onClick={run}>
               Choose file & export
             </button>
           )}

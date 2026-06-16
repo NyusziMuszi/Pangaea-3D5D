@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from './state/store'
 import { engine } from './engine/engineSingleton'
 import { TopBar } from './ui/TopBar'
@@ -15,6 +15,28 @@ export default function App(): JSX.Element {
   const toast = useStore((s) => s.toast)
   const setToast = useStore((s) => s.setToast)
   const [exportOpen, setExportOpen] = useState(false)
+  const [timelineHeight, setTimelineHeight] = useState(240)
+  const dragStartY = useRef<number | null>(null)
+  const dragStartH = useRef<number>(240)
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    dragStartY.current = e.clientY
+    dragStartH.current = timelineHeight
+
+    const onMove = (ev: MouseEvent): void => {
+      if (dragStartY.current === null) return
+      const delta = dragStartY.current - ev.clientY
+      const next = Math.max(80, Math.min(window.innerHeight * 0.75, dragStartH.current + delta))
+      setTimelineHeight(next)
+    }
+    const onUp = (): void => {
+      dragStartY.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [timelineHeight])
 
   // Wire engine callbacks once.
   useEffect(() => {
@@ -54,8 +76,9 @@ export default function App(): JSX.Element {
     <div className="app">
       <div className="workspace">
         <LibraryPanel />
-        <div className="center">
+        <div className="center" style={{ '--timeline-height': `${timelineHeight}px` } as React.CSSProperties}>
           <PreviewPanel />
+          <div className="timeline-resize-handle" onMouseDown={startResize} />
           <TimelinePanel />
         </div>
         <div className="right-col">

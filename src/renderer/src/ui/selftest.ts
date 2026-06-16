@@ -28,8 +28,8 @@ export async function runSelfTest(): Promise<void> {
 
     const ripple = BUILTIN_EFFECTS.find((e) => e.id === 'ripple')!
     useStore.getState().update((p) => {
-      p.image = { name: 'selftest.png', dataUrl, offsetX: constant(0.5), offsetY: constant(0.5) }
-      p.effects = [instanceFromDef(ripple)]
+      p.object.image = { name: 'selftest.png', dataUrl, offsetX: constant(0.5), offsetY: constant(0.5) }
+      p.object.effects = [instanceFromDef(ripple)]
       // shorten for a fast test: 6 segments x 1s
       p.segments.forEach((s) => (s.durationSec = 1))
     })

@@ -1,8 +1,12 @@
 import { useStore } from "../state/store";
+import arrowUpIcon from "../assets/arrow_drop_up_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
+import arrowDownIcon from "../assets/arrow_drop_down_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
+import closeIcon from "../assets/close_small_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
+import deleteIcon from "../assets/delete_forever_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
+
 import { findEffectDef } from "../engine/effects/catalog";
 import {
   constant,
-  objectLabel,
   type ObjectState,
   type Scalar,
   type TextBackdrop,
@@ -17,9 +21,9 @@ export function InspectorPanel(): JSX.Element {
   const update = useStore((s) => s.update);
   const setProject = useStore((s) => s.setProject);
   const selectEffect = useStore((s) => s.selectEffect);
+  const selectedEffectId = useStore((s) => s.selectedEffectId);
   const selectSegment = useStore((s) => s.selectSegment);
   const setToast = useStore((s) => s.setToast);
-  const selectedEffectId = useStore((s) => s.selectedEffectId);
   const selectedSegmentId = useStore((s) => s.selectedSegmentId);
   const selectedObjectIndex = useStore((s) => s.selectedObjectIndex);
   const openShaderEditor = useStore((s) => s.openShaderEditor);
@@ -27,8 +31,8 @@ export function InspectorPanel(): JSX.Element {
   function resetToDefault(): void {
     const fresh = defaultProject();
     fresh.scene.backgroundColor = project.scene.backgroundColor;
-    fresh.image.name = project.image.name;
-    fresh.image.dataUrl = project.image.dataUrl;
+    fresh.object.image.name = project.object.image.name;
+    fresh.object.image.dataUrl = project.object.image.dataUrl;
     fresh.object.primitive = project.object.primitive;
     fresh.object.modelName = project.object.modelName;
     fresh.object.modelDataUrl = project.object.modelDataUrl;
@@ -49,14 +53,10 @@ export function InspectorPanel(): JSX.Element {
     setToast("Reset to default");
   }
 
-  const effect = project.effects.find((e) => e.instanceId === selectedEffectId);
-  const effectDef = effect
-    ? findEffectDef(effect.defId, project.customEffects)
-    : undefined;
   const segment = project.segments.find((s) => s.id === selectedSegmentId);
 
-  // Which object the transform section edits. Guard against a stale index
-  // pointing at a second object that no longer exists.
+  // Which object the inspector edits. Guard against a stale index pointing at
+  // a second object that no longer exists.
   const activeObjectIndex =
     selectedObjectIndex === 1 && project.object2 ? 1 : 0;
   const activeObject: ObjectState =
@@ -69,50 +69,37 @@ export function InspectorPanel(): JSX.Element {
     });
   }
 
+  function moveEffect(index: number, dir: -1 | 1): void {
+    const j = index + dir;
+    if (j < 0 || j >= activeObject.effects.length) return;
+    updateObject((o) => {
+      const arr = o.effects;
+      [arr[index], arr[j]] = [arr[j], arr[index]];
+    });
+  }
+
+  function toggleEffect(instanceId: string, enabled: boolean): void {
+    updateObject((o) => {
+      const t = o.effects.find((x) => x.instanceId === instanceId);
+      if (t) t.enabled = enabled;
+    });
+  }
+
+  function deleteEffect(instanceId: string): void {
+    updateObject((o) => {
+      o.effects = o.effects.filter((x) => x.instanceId !== instanceId);
+    });
+    if (selectedEffectId === instanceId) selectEffect(null);
+  }
+
   return (
     <div className="panel inspector">
-      {effect && effectDef && (
+      {segment && (
         <Section
-          title={`Effect — ${effectDef.name}`}
-          right={
-            !effectDef.builtin ? (
-              <button
-                className="mini"
-                onClick={() => openShaderEditor(effectDef.id)}
-              >
-                Edit GLSL
-              </button>
-            ) : undefined
+          title={
+            segment.kind === "text" ? `Text — ${segment.label}` : "Text — None"
           }
         >
-          {effectDef.description && (
-            <p className="hint">{effectDef.description}</p>
-          )}
-          {effectDef.uniforms.map((u) => {
-            const scalar: Scalar = effect.values[u.name] ?? constant(u.default);
-            return (
-              <ScalarControl
-                key={u.name}
-                label={u.label}
-                scalar={scalar}
-                min={u.min}
-                max={u.max}
-                onChange={(s) =>
-                  update((p) => {
-                    const inst = p.effects.find(
-                      (e) => e.instanceId === effect.instanceId,
-                    );
-                    if (inst) inst.values[u.name] = s;
-                  })
-                }
-              />
-            );
-          })}
-        </Section>
-      )}
-
-      {segment && (
-        <Section title={`Segment — ${segment.label}`}>
           <Field label="Duration">
             <input
               type="number"
@@ -249,60 +236,176 @@ export function InspectorPanel(): JSX.Element {
         </Section>
       )}
 
-      {!segment && <Section
-        title={`Object transform — ${objectLabel(activeObject)}`}
-        defaultOpen={!effect}
-      >
-        <ScalarControl
-          label="Rotate X"
-          scalar={activeObject.rotX}
-          min={-TAU}
-          max={TAU}
-          onChange={(s) => updateObject((o) => { o.rotX = s; })}
-        />
-        <ScalarControl
-          label="Rotate Y"
-          scalar={activeObject.rotY}
-          min={-TAU}
-          max={TAU}
-          onChange={(s) => updateObject((o) => { o.rotY = s; })}
-        />
-        <ScalarControl
-          label="Rotate Z"
-          scalar={activeObject.rotZ}
-          min={-TAU}
-          max={TAU}
-          onChange={(s) => updateObject((o) => { o.rotZ = s; })}
-        />
-        <ScalarControl
-          label="Scale"
-          scalar={activeObject.scale}
-          min={0.1}
-          max={3}
-          onChange={(s) => updateObject((o) => { o.scale = s; })}
-        />
-        <ScalarControl
-          label="Position X"
-          scalar={activeObject.posX ?? constant(0)}
-          min={-3}
-          max={3}
-          onChange={(s) => updateObject((o) => { o.posX = s; })}
-        />
-        <ScalarControl
-          label="Position Y"
-          scalar={activeObject.posY ?? constant(0)}
-          min={-3}
-          max={3}
-          onChange={(s) => updateObject((o) => { o.posY = s; })}
-        />
-        <ScalarControl
-          label="Position Z"
-          scalar={activeObject.posZ ?? constant(0)}
-          min={-3}
-          max={3}
-          onChange={(s) => updateObject((o) => { o.posZ = s; })}
-        />
-      </Section>}
+      {!segment && (
+        <>
+          <div
+            className={`inspector-object-header ${activeObjectIndex === 0 ? "object-a" : "object-b"}`}
+          >
+            <span className="inspector-object-title">
+              {activeObjectIndex === 0 ? "Object A" : "Object B"}
+            </span>
+            {activeObject.image?.dataUrl && (
+              <img
+                className="inspector-object-thumb"
+                src={activeObject.image.dataUrl}
+                alt={activeObject.image.name ?? ""}
+              />
+            )}
+          </div>
+
+          <Section title="Transform">
+            <ScalarControl
+              label="Rotate X"
+              scalar={activeObject.rotX}
+              min={-TAU}
+              max={TAU}
+              onChange={(s) =>
+                updateObject((o) => {
+                  o.rotX = s;
+                })
+              }
+            />
+            <ScalarControl
+              label="Rotate Y"
+              scalar={activeObject.rotY}
+              min={-TAU}
+              max={TAU}
+              onChange={(s) =>
+                updateObject((o) => {
+                  o.rotY = s;
+                })
+              }
+            />
+            <ScalarControl
+              label="Rotate Z"
+              scalar={activeObject.rotZ}
+              min={-TAU}
+              max={TAU}
+              onChange={(s) =>
+                updateObject((o) => {
+                  o.rotZ = s;
+                })
+              }
+            />
+            <ScalarControl
+              label="Scale"
+              scalar={activeObject.scale}
+              min={0.1}
+              max={3}
+              onChange={(s) =>
+                updateObject((o) => {
+                  o.scale = s;
+                })
+              }
+            />
+            <ScalarControl
+              label="Position X"
+              scalar={activeObject.posX ?? constant(0)}
+              min={-3}
+              max={3}
+              onChange={(s) =>
+                updateObject((o) => {
+                  o.posX = s;
+                })
+              }
+            />
+            <ScalarControl
+              label="Position Y"
+              scalar={activeObject.posY ?? constant(0)}
+              min={-3}
+              max={3}
+              onChange={(s) =>
+                updateObject((o) => {
+                  o.posY = s;
+                })
+              }
+            />
+            <ScalarControl
+              label="Position Z"
+              scalar={activeObject.posZ ?? constant(0)}
+              min={-3}
+              max={3}
+              onChange={(s) =>
+                updateObject((o) => {
+                  o.posZ = s;
+                })
+              }
+            />
+          </Section>
+
+          {activeObject.effects.map((inst, i) => {
+            const def = findEffectDef(inst.defId, project.customEffects);
+            return (
+              <Section
+                key={inst.instanceId}
+                title={def?.name ?? inst.defId}
+                right={
+                  <div className="fx-row-controls">
+                    {def && !def.builtin && (
+                      <button
+                        className="mini"
+                        onClick={() => openShaderEditor(def.id)}
+                      >
+                        Edit GLSL
+                      </button>
+                    )}
+                    <div className="fx-row-actions">
+                      <input
+                        type="checkbox"
+                        checked={inst.enabled}
+                        onChange={(e) =>
+                          toggleEffect(inst.instanceId, e.target.checked)
+                        }
+                      />
+                      <button
+                        className="btn-icon"
+                        onClick={() => moveEffect(i, -1)}
+                      >
+                        <img src={arrowUpIcon} alt="move up" />
+                      </button>
+                      <button
+                        className="btn-icon"
+                        onClick={() => moveEffect(i, 1)}
+                      >
+                        <img src={arrowDownIcon} alt="move down" />
+                      </button>
+                      <button
+                        className="btn-icon"
+                        onClick={() => deleteEffect(inst.instanceId)}
+                      >
+                        <img src={deleteIcon} alt="delete" />
+                      </button>
+                    </div>
+                  </div>
+                }
+              >
+                {def?.description && <p className="hint">{def.description}</p>}
+                {def?.uniforms.map((u) => {
+                  const scalar: Scalar =
+                    inst.values[u.name] ?? constant(u.default);
+                  return (
+                    <ScalarControl
+                      key={u.name}
+                      label={u.label}
+                      scalar={scalar}
+                      min={u.min}
+                      max={u.max}
+                      onChange={(s) =>
+                        updateObject((o) => {
+                          const target = o.effects.find(
+                            (e) => e.instanceId === inst.instanceId,
+                          );
+                          if (target) target.values[u.name] = s;
+                        })
+                      }
+                    />
+                  );
+                })}
+              </Section>
+            );
+          })}
+        </>
+      )}
 
       <div className="inspector-footer">
         <button onClick={resetToDefault}>Reset to default</button>
