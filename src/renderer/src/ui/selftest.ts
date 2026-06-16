@@ -34,7 +34,7 @@ export async function runSelfTest(): Promise<void> {
       p.segments.forEach((s) => (s.durationSec = 1))
     })
 
-    // let the engine load the texture + (re)build the subject
+    // let the engine load the texture + (re)build the object
     await new Promise((r) => setTimeout(r, 1000))
 
     const project = useStore.getState().project

@@ -21,18 +21,18 @@ features. The original product spec lives at
 Working and verified end-to-end. A headless self-test renders an image through a deformer and
 exports a valid file; `ffmpeg` confirms `h264 (High) yuv420p, 1080x1350, 30 fps`.
 
-| Area | State |
-|---|---|
-| Electron shell + IPC file I/O | ✅ |
-| Time-pure render engine (preview + export share one path) | ✅ |
-| Effect stack (GLSL chunk injection) + built-in catalog | ✅ |
-| Subject modes: plane / 3D model / particles | ✅ |
-| 6-segment timeline + colored text cards | ✅ |
-| Keyframes + easing on every scalar property | ✅ (diamond toggles; **no bezier curve editor yet**) |
-| In-app GLSL editor (live recompile, uniform auto-UI) | ✅ (plain textarea, **not Monaco yet**) |
-| Export: WebCodecs H.264 → mp4-muxer, ffmpeg fallback | ✅ |
-| Project save/load (`.pangaea` JSON, embedded assets) | ✅ |
-| Packaging to `.dmg` (electron-builder) | configured, not exercised |
+| Area                                                      | State                                                |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| Electron shell + IPC file I/O                             | ✅                                                   |
+| Time-pure render engine (preview + export share one path) | ✅                                                   |
+| Effect stack (GLSL chunk injection) + built-in catalog    | ✅                                                   |
+| Subject modes: plane / 3D model / particles               | ✅                                                   |
+| 6-segment timeline + colored text cards                   | ✅                                                   |
+| Keyframes + easing on every scalar property               | ✅ (diamond toggles; **no bezier curve editor yet**) |
+| In-app GLSL editor (live recompile, uniform auto-UI)      | ✅ (plain textarea, **not Monaco yet**)              |
+| Export: WebCodecs H.264 → mp4-muxer, ffmpeg fallback      | ✅                                                   |
+| Project save/load (`.pangaea` JSON, embedded assets)      | ✅                                                   |
+| Packaging to `.dmg` (electron-builder)                    | configured, not exercised                            |
 
 See [Known limitations & roadmap](#known-limitations--roadmap) for what's intentionally missing.
 
@@ -141,7 +141,7 @@ Preview playback (`play()`) advances a playhead with real `dt` and calls `render
 so the output is frame-exact regardless of machine speed. If you add a feature, route its
 time-dependence through `t` or it will desync between preview and export.
 
-> Note: render determinism (pixels) is guaranteed; *encoded MP4 bytes* may differ run-to-run when
+> Note: render determinism (pixels) is guaranteed; _encoded MP4 bytes_ may differ run-to-run when
 > the platform uses a hardware H.264 encoder (VideoToolbox on macOS). Don't assert byte-identity.
 
 ### 2. Scalars and keyframes
@@ -149,7 +149,9 @@ time-dependence through `t` or it will desync between preview and export.
 Every animatable number is a `Scalar` ([types.ts](src/renderer/src/types.ts)):
 
 ```ts
-type Scalar = { kind: 'const'; value: number } | { kind: 'keys'; keys: Keyframe[] }
+type Scalar =
+  | { kind: "const"; value: number }
+  | { kind: "keys"; keys: Keyframe[] };
 ```
 
 `evalScalar` interpolates between keyframes with per-keyframe easing
@@ -178,9 +180,10 @@ order. Authors write **plain** uniform names (`uAmplitude`); the composer:
   `vUv`, `vWorldPos`, `vWorldNormal`. Triplanar sampling is enabled by a `USE_TRIPLANAR` define.
 
 **Material rebuild vs. uniform update** — performance-critical distinction in `Engine`:
+
 - The material is rebuilt **only when `composed.signature` changes** (mapping, stack order/ids/kinds,
   or any GLSL body — so live shader edits and reordering recompile).
-- Changing a uniform *value* does **not** rebuild; `renderFrame` updates `material.uniforms[key].value`
+- Changing a uniform _value_ does **not** rebuild; `renderFrame` updates `material.uniforms[key].value`
   each frame via `valueOf(instanceId, name, def, t)`.
 
 GLSL compile errors are surfaced through `Engine.onShaderError` (wired to
@@ -190,6 +193,7 @@ GLSL compile errors are surfaced through `Engine.onShaderError` (wired to
 
 `Engine.reconcileSubject()` rebuilds geometry when `subjectSig` changes
 (`mode|primitive|model?|mapping|density|imageReady`):
+
 - `plane` — subdivided `PlaneGeometry`, the canvas for deformers.
 - `model` — a primitive (sphere/cylinder/torus/box/plane) **or** an imported glb/gltf/obj
   (dominant mesh, normalized; UV or **triplanar** mapping for un-UV'd meshes). Uses the composed
@@ -272,17 +276,30 @@ needs local worker bundling under Electron (CSP-friendly, offline); the textarea
 
 ## Known limitations & roadmap
 
+- **⚠️ UNRESOLVED: deformed primitives render as an open lattice (cone most visibly)** — a
+  textured primitive (notably `cone`, but any closed `DoubleSide` mesh) renders with a regular
+  **alternating-triangle dropout**: the scene background shows through every other triangle at
+  full opacity, so the surface looks like a perforated lattice instead of a solid. It is most
+  obvious on the cone and gets worse with an active deformer.
+  - **Confirmed NOT the cause:** normals (the engine has no lighting; `vWorldNormal` only feeds
+    triplanar sampling), tessellation density (reducing the cone subdivisions changed the pattern
+    but didn't fix it), and texture/fragment alpha (the holes appear at opaque alpha).
+  - **Leading theory (three.js r169 two-pass path):** the object material
+    ([Engine.ts](src/renderer/src/engine/Engine.ts) `reconcileMaterial`) is `side: DoubleSide` +
+    `transparent: true`. With `forceSinglePass` unset, three.js draws such a mesh in two passes
+    (`BackSide` then `FrontSide`) — and each pass **re-enables backface culling**
+    (`three.module.js` `renderObject` ~L30332 / `setMaterial` ~L23370). The deform shader rewrites
+    `gl_Position` ([composer.ts](src/renderer/src/engine/effects/composer.ts) ~L95), flipping
+    per-triangle winding, so triangles get misclassified/depth-rejected between the two passes.
+  - **Attempted fix that did NOT resolve it:** adding `forceSinglePass: true` to the
+    `ShaderMaterial`. It is left in place (correct in principle, harmless), but the lattice
+    persists — so the root cause is not (only) the two-pass path. Next suspects to investigate:
+    genuine winding/index issues in the deformed geometry, MSAA/`setPixelRatio(1)` interaction
+    with the dense mesh, or per-triangle degeneracy introduced by the deform aliasing the vertex
+    grid. Reproduce with primitive = `cone` + an image + any deformer.
 - **Keyframe curve editor** — only diamonds + easing presets exist; no draggable bezier graph.
-- **Image aspect ratio (requested next)** — images are currently mapped onto the plane/geometry
-  and can stretch. Desired behavior: respect the source aspect ratio, fit to **1350px height**,
-  leave width intact and **crop horizontally** to the 1080 frame, and let the user **drag the
-  image to reposition** the crop. Likely touches: the plane subject sizing + a UV/texture-offset
-  transform driven by a new `image.offset`/`fit` field on the `Project`, plus a drag handler over
-  the preview. (UV offset keeps it deterministic and keyframeable.)
 - **3D model import** uses the single dominant mesh, not a full multi-mesh merge; complex models
   lose secondary meshes. Triplanar covers models without UVs.
 - **Uniforms are float-only** (no color/vec2/vec3 uniform types yet).
-- **Post-FX catalog is minimal** (desaturate) — geometry/3D/particles were the v1 focus.
-- **No audio** (v1 scope). Exporter's ffmpeg fallback is the natural place to add audio muxing.
 - **Encoded-byte determinism** is not guaranteed (hardware encoder); render determinism is.
 - **Monaco** editor and **.dmg packaging** are configured/stubbed but not yet hardened.

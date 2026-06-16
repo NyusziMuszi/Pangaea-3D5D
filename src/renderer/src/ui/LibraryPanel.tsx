@@ -1,68 +1,132 @@
-import { useStore } from '../state/store'
-import { BUILTIN_EFFECTS } from '../engine/effects/catalog'
-import { instanceFromDef, uid } from '../state/defaults'
-import type { EffectDef, SubjectMode, PrimitiveModel, Mapping } from '../types'
-import { constant } from '../types'
-import { bytesToDataUrl, mimeForName } from './files'
-import { Section, Field, ScalarControl } from './controls'
+import { useStore } from "../state/store";
+import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
+import { defaultSecondObject, instanceFromDef, uid } from "../state/defaults";
+import type { EffectDef, PrimitiveModel, Mapping, CameraType } from "../types";
+import { constant } from "../types";
+import { bytesToDataUrl, mimeForName } from "./files";
+import { Section, Field, ScalarControl, ColorRow } from "./controls";
+
+// Primitive shapes offered for both the primary and the optional second object.
+const PRIMITIVE_OPTIONS: { value: PrimitiveModel; label: string }[] = [
+  { value: "plane", label: "Plane" },
+  { value: "sphere", label: "Sphere" },
+  { value: "cylinder", label: "Cylinder" },
+  { value: "torus", label: "Torus" },
+  { value: "box", label: "Box" },
+  { value: "cone", label: "Cone" },
+  { value: "lathe", label: "Lathe" },
+  { value: "tube", label: "Tube" },
+  { value: "polyhedron", label: "Polyhedron" },
+  { value: "dodecahedron", label: "Dodecahedron" },
+  { value: "icosahedron", label: "Icosahedron" },
+  { value: "octahedron", label: "Octahedron" },
+  { value: "tetrahedron", label: "Tetrahedron" },
+];
 
 export function LibraryPanel(): JSX.Element {
-  const project = useStore((s) => s.project)
-  const update = useStore((s) => s.update)
-  const selectEffect = useStore((s) => s.selectEffect)
-  const openShaderEditor = useStore((s) => s.openShaderEditor)
+  const project = useStore((s) => s.project);
+  const update = useStore((s) => s.update);
+  const selectEffect = useStore((s) => s.selectEffect);
+  const selectSegment = useStore((s) => s.selectSegment);
+  const selectObject = useStore((s) => s.selectObject);
+  const openShaderEditor = useStore((s) => s.openShaderEditor);
+
+  function addSecondObject(): void {
+    update((p) => {
+      p.object2 = defaultSecondObject();
+    });
+    // Focus the new object so the inspector edits its transform straight away.
+    selectObject(1);
+    selectSegment(null);
+    selectEffect(null);
+  }
+
+  function removeSecondObject(): void {
+    update((p) => {
+      p.object2 = null;
+    });
+    selectObject(0);
+  }
 
   async function loadImage(): Promise<void> {
-    const file = await window.api.openImageFile()
-    if (!file) return
-    const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name))
+    const file = await window.api.openImageFile();
+    if (!file) return;
+    const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
     update((p) => {
       // New image: reset framing to centered.
-      p.image = { name: file.name, dataUrl, offsetX: constant(0.5), offsetY: constant(0.5) }
-    })
+      p.image = {
+        name: file.name,
+        dataUrl,
+        offsetX: constant(0.5),
+        offsetY: constant(0.5),
+      };
+    });
   }
 
   async function importModel(): Promise<void> {
-    const file = await window.api.openModelFile()
-    if (!file) return
-    const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name))
+    const file = await window.api.openModelFile();
+    if (!file) return;
+    const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
     update((p) => {
-      p.subject.modelName = file.name
-      p.subject.modelDataUrl = dataUrl
-      p.subject.mode = 'model'
-    })
+      p.object.modelName = file.name;
+      p.object.modelDataUrl = dataUrl;
+    });
   }
 
   function addEffect(def: EffectDef): void {
-    const inst = instanceFromDef(def)
+    const inst = instanceFromDef(def);
     update((p) => {
-      p.effects.push(inst)
-    })
-    selectEffect(inst.instanceId)
+      p.effects.push(inst);
+    });
+    selectEffect(inst.instanceId);
   }
 
   function newCustomShader(): void {
     const def: EffectDef = {
-      id: uid('def'),
-      name: 'Custom Deformer',
-      kind: 'deform',
+      id: uid("def"),
+      name: "Custom Deformer",
+      kind: "deform",
       builtin: false,
-      uniforms: [{ name: 'uAmount', label: 'Amount', min: 0, max: 1, default: 0.3 }],
-      glslDeform: '  pos.z += sin(uv.x * 20.0 + t) * uAmount;\n  return pos;'
-    }
+      uniforms: [
+        { name: "uAmount", label: "Amount", min: 0, max: 1, default: 0.3 },
+      ],
+      glslDeform: "  pos.z += sin(uv.x * 20.0 + t) * uAmount;\n  return pos;",
+    };
     update((p) => {
-      p.customEffects.push(def)
-    })
-    openShaderEditor(def.id)
+      p.customEffects.push(def);
+    });
+    openShaderEditor(def.id);
   }
 
-  const allDefs = [...BUILTIN_EFFECTS, ...project.customEffects]
+  const allDefs = [...BUILTIN_EFFECTS, ...project.customEffects];
 
   return (
     <div className="panel library">
       <Section title="Image">
+        <ColorRow
+          label="Background"
+          value={project.scene.backgroundColor}
+          onChange={(v) =>
+            update((p) => {
+              p.scene.backgroundColor = v;
+            })
+          }
+        />
+        <Field label="Camera">
+          <select
+            value={project.scene.cameraType}
+            onChange={(e) =>
+              update((p) => {
+                p.scene.cameraType = e.target.value as CameraType;
+              })
+            }
+          >
+            <option value="perspective">Perspective</option>
+            <option value="isometric">Isometric</option>
+          </select>
+        </Field>
         <button className="full" onClick={loadImage}>
-          {project.image.name ? `Replace: ${project.image.name}` : 'Load image…'}
+          {project.image.name ? "Replace image" : "Load image"}
         </button>
         {project.image.dataUrl && (
           <img className="thumb" src={project.image.dataUrl} alt="source" />
@@ -74,144 +138,125 @@ export function LibraryPanel(): JSX.Element {
               scalar={project.image.offsetX ?? constant(0.5)}
               min={0}
               max={1}
-              onChange={(s) => update((p) => { p.image.offsetX = s })}
+              onChange={(s) =>
+                update((p) => {
+                  p.image.offsetX = s;
+                })
+              }
             />
-            <ScalarControl
+            {/* <ScalarControl
               label="Position Y"
               scalar={project.image.offsetY ?? constant(0.5)}
               min={0}
               max={1}
-              onChange={(s) => update((p) => { p.image.offsetY = s })}
-            />
+              onChange={(s) =>
+                update((p) => {
+                  p.image.offsetY = s;
+                })
+              }
+            /> */}
           </>
         )}
       </Section>
 
-      <Section title="Subject">
-        <Field label="Mode">
+      <Section title="Object">
+        <Field label="Primitive">
           <select
-            value={project.subject.mode}
+            value={project.object.primitive}
+            disabled={!!project.object.modelDataUrl}
             onChange={(e) =>
               update((p) => {
-                p.subject.mode = e.target.value as SubjectMode
+                p.object.primitive = e.target.value as PrimitiveModel;
               })
             }
           >
-            <option value="plane">Plane (deformable)</option>
-            <option value="model">3D model</option>
-            <option value="particles">Particles</option>
+            {PRIMITIVE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
         </Field>
-
-        {project.subject.mode === 'model' && (
-          <>
-            <Field label="Primitive">
-              <select
-                value={project.subject.primitive}
-                disabled={!!project.subject.modelDataUrl}
-                onChange={(e) =>
-                  update((p) => {
-                    p.subject.primitive = e.target.value as PrimitiveModel
-                  })
-                }
-              >
-                <option value="plane">Plane</option>
-                <option value="sphere">Sphere</option>
-                <option value="cylinder">Cylinder</option>
-                <option value="torus">Torus</option>
-                <option value="box">Box</option>
-                <option value="cone">Cone</option>
-                <option value="lathe">Lathe</option>
-                <option value="ring">Ring</option>
-                <option value="tube">Tube</option>
-                <option value="polyhedron">Polyhedron</option>
-                <option value="dodecahedron">Dodecahedron</option>
-                <option value="icosahedron">Icosahedron</option>
-                <option value="octahedron">Octahedron</option>
-                <option value="tetrahedron">Tetrahedron</option>
-              </select>
-            </Field>
-            <Field label="Mapping">
-              <select
-                value={project.subject.mapping}
-                onChange={(e) =>
-                  update((p) => {
-                    p.subject.mapping = e.target.value as Mapping
-                  })
-                }
-              >
-                <option value="uv">UV</option>
-                <option value="triplanar">Triplanar</option>
-              </select>
-            </Field>
-            <button className="full" onClick={importModel}>
-              {project.subject.modelName
-                ? `Replace model: ${project.subject.modelName}`
-                : 'Import model (glb/gltf/obj)…'}
-            </button>
-            {project.subject.modelDataUrl && (
-              <button
-                className="full subtle"
-                onClick={() =>
-                  update((p) => {
-                    p.subject.modelDataUrl = null
-                    p.subject.modelName = null
-                  })
-                }
-              >
-                Use primitive instead
-              </button>
-            )}
-          </>
+        <Field label="Mapping">
+          <select
+            value={project.object.mapping}
+            onChange={(e) =>
+              update((p) => {
+                p.object.mapping = e.target.value as Mapping;
+              })
+            }
+          >
+            <option value="uv">UV</option>
+            <option value="triplanar">Triplanar</option>
+          </select>
+        </Field>
+        <button className="full" onClick={importModel}>
+          {project.object.modelName
+            ? `Replace model: ${project.object.modelName}`
+            : "Import model (glb/gltf/obj)…"}
+        </button>
+        {project.object.modelDataUrl && (
+          <button
+            className="full subtle"
+            onClick={() =>
+              update((p) => {
+                p.object.modelDataUrl = null;
+                p.object.modelName = null;
+              })
+            }
+          >
+            Use primitive instead
+          </button>
         )}
 
-        {project.subject.mode === 'particles' && (
-          <Field label="Density">
-            <input
-              type="number"
-              min={16}
-              max={400}
-              step={4}
-              value={project.subject.particle.density}
-              onChange={(e) =>
-                update((p) => {
-                  p.subject.particle.density = parseInt(e.target.value || '160', 10)
-                })
-              }
-            />
-          </Field>
+        <hr className="catalog-rule" />
+        {project.object2 ? (
+          <>
+            <Field label="2nd primitive">
+              <select
+                value={project.object2.primitive}
+                onChange={(e) =>
+                  update((p) => {
+                    if (p.object2)
+                      p.object2.primitive = e.target.value as PrimitiveModel;
+                  })
+                }
+              >
+                {PRIMITIVE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <button className="full subtle" onClick={removeSecondObject}>
+              Remove second object
+            </button>
+          </>
+        ) : (
+          <button className="full" onClick={addSecondObject}>
+            Add second object
+          </button>
         )}
       </Section>
 
-      <Section
-        title="Effects"
-        right={
-          <button className="mini" onClick={newCustomShader} title="Author a new GLSL effect">
-            + Shader
+      <Section title="Effects">
+        <div className="catalog">
+          <button
+            className="catalog-item"
+            onClick={newCustomShader}
+            title="Author a new GLSL effect"
+          >
+            <span className="catalog-name">Bespoke</span>
           </button>
-        }
-      >
-        {project.subject.mode === 'particles' ? (
-          <p className="hint">
-            Particle controls live in the Inspector (Subject → Particles). Deformers apply in Plane
-            / 3D model modes.
-          </p>
-        ) : (
-          <div className="catalog">
-            {allDefs.map((def) => (
-              <div key={def.id} className="catalog-item">
-                <div className="catalog-meta">
-                  <span className="catalog-name">{def.name}</span>
-                  <span className={`tag ${def.kind}`}>{def.kind}</span>
-                </div>
-                <button className="mini" onClick={() => addEffect(def)}>
-                  Add
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+          <hr className="catalog-rule" />
+          {allDefs.map((def) => (
+            <button key={def.id} className="catalog-item" onClick={() => addEffect(def)}>
+              <span className="catalog-name">{def.name}</span>
+            </button>
+          ))}
+        </div>
       </Section>
     </div>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import type { Scalar } from '../types'
 import { useStore } from '../state/store'
 import { evalScalar, hasKeyAt, isAnimated, setValueAt, stopAnimating, toggleKeyAt } from './scalarUtils'
@@ -56,6 +56,7 @@ export function ScalarControl({
   const value = evalScalar(scalar, playhead)
   const animated = isAnimated(scalar)
   const keyed = hasKeyAt(scalar, playhead)
+  const fillPct = max > min ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : 0
 
   return (
     <div className="scalar-row">
@@ -69,6 +70,7 @@ export function ScalarControl({
         max={max}
         step={step}
         value={value}
+        style={{ ['--slider-pct' as string]: `${fillPct}%` } as CSSProperties}
         onChange={(e) => onChange(setValueAt(scalar, playhead, parseFloat(e.target.value)))}
       />
       <input

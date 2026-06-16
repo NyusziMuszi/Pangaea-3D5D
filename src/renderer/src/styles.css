@@ -1,17 +1,34 @@
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("@assets/BebasNeue-Regular.ttf") format("truetype");
+  font-weight: 400;
+}
+
 :root {
   --bg: #0b0b0f;
-  --panel: #131319;
-  --panel-2: #1b1b24;
+  --panel: #1b1b1b;
   --panel-3: #232330;
-  --border: #2a2a36;
+
   --text: #e7e7ee;
+
+  --text-btn: #ffffff;
+  --text-btn-hover: #a3d6dc;
+  --text-section: #599399;
+  --text-section-rule: #599399;
+
+  --border-btn: #f0923f;
+  --border: #6e706e;
+
+  --panel-btn: #1b1b1b;
+
   --text-dim: #9a9aab;
-  --accent: #6c7bff;
-  --accent-2: #ff5d8f;
-  --anim: #3a7bd5;
-  --textseg: #b06cff;
+  --accent: #a3d6dc;
+  --anim: #54ced5;
+  --textseg: #7e8b36;
   --ok: #56d364;
   --err: #ff6b6b;
+  --slider-fill: #a3d6dc;
+  --slider-track: #d8d8de;
 }
 
 * {
@@ -30,7 +47,8 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   font-size: 12.5px;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -39,16 +57,20 @@ body {
 button {
   font-family: inherit;
   font-size: 12px;
-  color: var(--text);
-  background: var(--panel-2);
+  color: var(--text-btn);
+  background: var(--panel-btn);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 30px;
   padding: 5px 9px;
   cursor: pointer;
+  transition: background 0.35s ease;
 }
 button:hover {
-  background: var(--panel-3);
+  color: var(--text-btn-hover);
+  border-radius: 2px;
+  box-shadow: 0 3px 0px #599399 inset;
 }
+
 button:disabled {
   opacity: 0.5;
   cursor: default;
@@ -84,10 +106,27 @@ textarea {
   border-radius: 5px;
   padding: 4px 6px;
 }
-input[type='color'] {
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+input[type="range"] {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="color"] {
   padding: 0;
   width: 28px;
   height: 24px;
+  border: none;
 }
 textarea {
   resize: vertical;
@@ -97,7 +136,6 @@ textarea {
 /* ---------- App shell ---------- */
 .app {
   display: grid;
-  grid-template-rows: 46px 1fr;
   height: 100%;
 }
 .topbar {
@@ -105,17 +143,11 @@ textarea {
   align-items: center;
   gap: 8px;
   padding: 0 12px;
-  background: var(--panel);
+  background: rgb(12, 44, 48);
   border-bottom: 1px solid var(--border);
+  height: 46px;
 }
-.brand {
-  font-weight: 700;
-  letter-spacing: 0.3px;
-}
-.brand .logo {
-  color: var(--accent-2);
-  margin-right: 4px;
-}
+
 .spacer {
   flex: 1;
 }
@@ -124,6 +156,14 @@ textarea {
   display: grid;
   grid-template-columns: 250px 1fr 320px;
   min-height: 0;
+  height: 100%;
+}
+
+.right-col {
+  display: grid;
+  grid-template-rows: 46px 1fr;
+  min-height: 0;
+  border-left: 1px solid var(--border);
 }
 .center {
   display: grid;
@@ -138,15 +178,20 @@ textarea {
 }
 .inspector {
   border-right: none;
-  border-left: 1px solid var(--border);
+  border-left: none;
+}
+.inspector-footer {
+  padding: 10px;
+  border-top: 1px solid var(--border);
 }
 
 /* ---------- Sections / fields ---------- */
 .section {
-  border-bottom: 1px solid var(--border);
+  border-top: 3px solid var(--text-section-rule);
 }
 .section-head {
   display: flex;
+
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
@@ -154,9 +199,11 @@ textarea {
 .section-toggle {
   background: none;
   border: none;
-  color: var(--text);
-  font-weight: 600;
+  color: var(--text-section);
+  font-family: "Bebas Neue", sans-serif;
+  font-weight: 400;
   padding: 2px 0;
+  font-size: 18px;
 }
 .section-body {
   padding: 4px 10px 12px;
@@ -168,6 +215,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
+
   color: var(--text-dim);
   font-weight: 600;
   margin-top: 4px;
@@ -189,7 +237,7 @@ textarea {
   flex: 1;
 }
 .field select,
-.field input[type='number'],
+.field input[type="number"],
 .field textarea {
   flex: 1;
 }
@@ -221,30 +269,14 @@ textarea {
 .catalog-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 5px 8px;
+  text-align: left;
 }
-.catalog-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.tag {
-  font-size: 9.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  color: white;
-}
-.tag.deform {
-  background: var(--anim);
-}
-.tag.shade {
-  background: var(--textseg);
+.catalog-rule {
+  width: 100%;
+  height: 0;
+  margin: 1px 0;
+  border: none;
+  border-top: 1px solid var(--border);
 }
 
 /* ---------- Preview ---------- */
@@ -277,50 +309,38 @@ textarea {
 .canvas-frame.draggable:active {
   cursor: grabbing;
 }
-.transport {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  border-top: 1px solid var(--border);
-  background: var(--panel);
-}
-.transport .play {
+.play {
   width: 34px;
 }
-.transport .time {
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-  min-width: 110px;
-}
-.scrub-wrap {
-  flex: 1;
-  position: relative;
-}
-.seg-track {
-  position: absolute;
-  top: 2px;
-  left: 0;
-  right: 0;
-  height: 5px;
-  border-radius: 3px;
-  overflow: hidden;
-}
-.seg-mark {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  border-right: 1px solid rgba(0, 0, 0, 0.5);
-}
-.seg-mark.animation {
-  background: var(--anim);
-}
-.seg-mark.text {
-  background: var(--textseg);
-}
 .scrub {
-  width: 100%;
-  margin-top: 8px;
+  /* Pull the runnable track out by half a thumb on each side so the thumb's
+     centre travels edge-to-edge, matching the playhead marker on the tracks. */
+  width: calc(100% + 14px);
+  margin-left: -7px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 14px;
+  padding: 0;
+  cursor: pointer;
+}
+.scrub::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--slider-fill) var(--slider-pct, 0%),
+    var(--slider-track) var(--slider-pct, 0%)
+  );
+}
+.scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--slider-fill);
 }
 
 /* ---------- Timeline ---------- */
@@ -338,10 +358,73 @@ textarea {
   font-weight: 600;
   margin-bottom: 5px;
 }
-.segments {
+.tl-tracks {
   display: flex;
-  gap: 3px;
+  flex-direction: column;
+  gap: 6px;
+}
+.tl-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.tl-row-label {
+  width: 48px;
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+.tl-track {
+  position: relative;
+  flex: 1;
   height: 46px;
+}
+/* The object track grows vertically as effects are stacked onto it. */
+.tl-track-object {
+  height: auto;
+}
+.tl-track.tl-track-object .segment.object {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  min-height: 46px;
+}
+/* Separate the optional second object's block from the primary one. */
+.tl-track.tl-track-object .segment.object + .segment.object {
+  margin-top: 6px;
+}
+.tl-scrub-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.tl-time {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 2px;
+}
+.tl-track .segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.tl-dur-input {
+  width: 100%;
+  max-width: 56px;
+  margin-top: 3px;
+  padding: 1px 4px;
+  font-size: 11px;
+}
+.tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  pointer-events: none;
 }
 .segment {
   position: relative;
@@ -350,13 +433,17 @@ textarea {
   padding: 5px 7px;
   cursor: pointer;
   overflow: hidden;
-  min-width: 40px;
 }
-.segment.animation {
-  background: linear-gradient(180deg, rgba(58, 123, 213, 0.35), rgba(58, 123, 213, 0.12));
+.segment.object {
+  border-color: rgba(56, 121, 212, 0.35);
 }
 .segment.text {
-  background: linear-gradient(180deg, rgba(176, 108, 255, 0.35), rgba(176, 108, 255, 0.12));
+  border-color: rgba(49, 206, 211, 0.35);
+}
+.segment.break {
+  border-style: dashed;
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.02);
 }
 .segment.sel {
   border-color: var(--accent);
@@ -370,19 +457,23 @@ textarea {
   color: var(--text-dim);
   font-size: 11px;
 }
-.segment-chip {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+.object-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fx-empty {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 4px 0 0;
 }
 .fx-stack {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  margin-top: 6px;
 }
 .fx-row {
   display: flex;
@@ -417,6 +508,31 @@ textarea {
 .scalar-slider {
   flex: 1;
   min-width: 40px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 14px;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.scalar-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--slider-fill) var(--slider-pct, 0%),
+    var(--slider-track) var(--slider-pct, 0%)
+  );
+}
+.scalar-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--slider-fill);
 }
 .scalar-num {
   width: 56px;
@@ -493,7 +609,7 @@ textarea {
 }
 textarea.code {
   flex: 1;
-  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
   font-size: 12.5px;
   line-height: 1.5;
   white-space: pre;
@@ -502,7 +618,7 @@ textarea.code {
 .shader-error,
 .shader-ok {
   margin: 0;
-  font-family: 'SF Mono', Menlo, monospace;
+  font-family: "SF Mono", Menlo, monospace;
   font-size: 11px;
   white-space: pre-wrap;
   max-height: 110px;

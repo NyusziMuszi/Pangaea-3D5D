@@ -1,4 +1,10 @@
-import type { EffectDef, EffectInstance, Project, Scalar } from "../types";
+import type {
+  EffectDef,
+  EffectInstance,
+  ObjectState,
+  Project,
+  Scalar,
+} from "../types";
 import { constant } from "../types";
 
 export function uid(prefix = "id"): string {
@@ -11,15 +17,31 @@ export function instanceFromDef(def: EffectDef): EffectInstance {
   return { instanceId: uid("fx"), defId: def.id, enabled: true, values };
 }
 
+// A fresh optional second object. Defaults to a small sphere parked to the
+// right of the primary object so it reads as a distinct, separate shape.
+export function defaultSecondObject(): ObjectState {
+  return {
+    primitive: "sphere",
+    modelName: null,
+    modelDataUrl: null,
+    mapping: "uv",
+    rotX: constant(0),
+    rotY: constant(0),
+    rotZ: constant(0),
+    scale: constant(0.6),
+    posX: constant(1.2),
+    posY: constant(0),
+    posZ: constant(0),
+  };
+}
+
 export function defaultProject(): Project {
   return {
     version: 1,
     output: { width: 1080, height: 1350, fps: 30 },
     scene: {
-      backgroundColor: "#0b0b0f",
-      sceneTimeDuringCards: "continue",
-      textBackdrop: "none",
-      textBackdropColor: "#000000",
+      backgroundColor: "#281b6c",
+      cameraType: "perspective",
     },
     image: {
       name: null,
@@ -27,8 +49,7 @@ export function defaultProject(): Project {
       offsetX: constant(0.5),
       offsetY: constant(0.5),
     },
-    subject: {
-      mode: "plane",
+    object: {
       primitive: "plane",
       modelName: null,
       modelDataUrl: null,
@@ -37,38 +58,28 @@ export function defaultProject(): Project {
       rotY: constant(0),
       rotZ: constant(0),
       scale: constant(1.02),
-      particle: {
-        density: 160,
-        pointSize: constant(3),
-        dissolve: constant(0),
-        explode: constant(0),
-        swirl: constant(0),
-      },
-    },
-    effects: [],
-    camera: {
-      fov: constant(45),
       posX: constant(0),
       posY: constant(0),
-      posZ: constant(2.45),
-      targetX: constant(0),
-      targetY: constant(0),
-      targetZ: constant(0),
+      posZ: constant(0),
     },
+    object2: null,
+    effects: [],
     segments: [
       { id: uid("seg"), kind: "animation", label: "Intro", durationSec: 2.5 },
       {
         id: uid("seg"),
         kind: "text",
-        label: "Text 1",
+        label: "Unique message",
         durationSec: 2.5,
         text: {
-          content: "Your first line",
+          content: "Making ideas visible. Giving thinking form.",
           fontSize: 96,
           align: "center",
           textColor: "#000000",
           backgroundColor: "#A3D6DC",
           reveal: "fade",
+          textBackdrop: "silhouette",
+          textBackdropColor: "#64e36e",
         },
       },
       {
@@ -80,7 +91,7 @@ export function defaultProject(): Project {
       {
         id: uid("seg"),
         kind: "text",
-        label: "Text 2",
+        label: "Sculpture as a Tool",
         durationSec: 2.5,
         text: {
           content: "Sculpture as a Tool for Wider Learning",
@@ -89,6 +100,8 @@ export function defaultProject(): Project {
           textColor: "#000000",
           backgroundColor: "#A3D6DC",
           reveal: "fade",
+          textBackdrop: "silhouette",
+          textBackdropColor: "#64e36e",
         },
       },
       {
@@ -100,7 +113,7 @@ export function defaultProject(): Project {
       {
         id: uid("seg"),
         kind: "text",
-        label: "Closing",
+        label: "3D–5D Learning Revolution",
         durationSec: 2.5,
         text: {
           content: "3D–5D Learning Revolution",
@@ -109,6 +122,8 @@ export function defaultProject(): Project {
           textColor: "#000000",
           backgroundColor: "#A3D6DC",
           reveal: "fade",
+          textBackdrop: "silhouette",
+          textBackdropColor: "#64e36e",
         },
       },
     ],

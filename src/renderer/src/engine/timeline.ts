@@ -27,28 +27,16 @@ export function computeTimeline(project: Project, t: number): TimelineState {
   const segment = segments[idx]
   const localT = clamped - starts[idx]
 
-  // Scene clock: either runs continuously or holds during text cards.
-  let sceneTime: number
-  if (project.scene.sceneTimeDuringCards === 'continue') {
-    sceneTime = clamped
-  } else {
-    sceneTime = 0
-    for (let i = 0; i < idx; i++) {
-      if (segments[i].kind === 'animation') sceneTime += segments[i].durationSec
-    }
-    if (segment.kind === 'animation') sceneTime += localT
-  }
+  const sceneTime = clamped
 
   let textCard: TimelineState['textCard'] = null
   if (segment.kind === 'text' && segment.text) {
     let opacity = 1
     if (segment.text.reveal === 'fade') {
+      // Every card fades in, then cuts back at the end (no fade-out) — the
+      // segment simply ends at full opacity.
       const fade = Math.min(0.4, segment.durationSec * 0.3)
-      const fadeIn = fade > 0 ? Math.min(1, localT / fade) : 1
-      const isClosing = idx === segments.length - 1
-      const fadeOut =
-        !isClosing && fade > 0 ? Math.min(1, (segment.durationSec - localT) / fade) : 1
-      opacity = Math.min(fadeIn, fadeOut)
+      opacity = fade > 0 ? Math.min(1, localT / fade) : 1
     }
     textCard = { segmentId: segment.id, style: segment.text, opacity }
   }

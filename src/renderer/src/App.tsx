@@ -52,14 +52,16 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app">
-      <TopBar onOpenExport={() => setExportOpen(true)} />
       <div className="workspace">
         <LibraryPanel />
         <div className="center">
           <PreviewPanel />
           <TimelinePanel />
         </div>
-        <InspectorPanel />
+        <div className="right-col">
+          <TopBar onOpenExport={() => setExportOpen(true)} />
+          <InspectorPanel />
+        </div>
       </div>
       <ShaderEditorModal />
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}

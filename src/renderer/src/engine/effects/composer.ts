@@ -26,7 +26,7 @@ function aliasLines(prefix: string, def: EffectDef): string {
   return def.uniforms.map((u) => `  float ${u.name} = ${prefix}_${u.name};`).join('\n')
 }
 
-export function composeSubjectShader(
+export function composeObjectShader(
   effects: ResolvedEffect[],
   mapping: Mapping
 ): ComposedShader {
@@ -111,7 +111,7 @@ varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 ${commonBlock}
-vec4 pg_sampleSubject(vec2 uv) {
+vec4 pg_sampleObject(vec2 uv) {
 #ifdef USE_TRIPLANAR
   vec3 n = normalize(abs(vWorldNormal)) + 1e-5;
   n /= (n.x + n.y + n.z);
@@ -128,7 +128,7 @@ vec4 pg_sampleSubject(vec2 uv) {
 }
 ${shadeFns.join('\n')}
 void main() {
-  vec4 color = pg_sampleSubject(vUv);
+  vec4 color = pg_sampleObject(vUv);
 ${shadeCalls.join('\n')}
   if (uSilhouette > 0.5) color = vec4(uFlatColor, 1.0);
   color.a *= uOpacity;

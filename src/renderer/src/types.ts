@@ -60,7 +60,7 @@ export interface EffectInstance {
   values: Record<string, Scalar> // keyed by uniform name
 }
 
-export type SubjectMode = 'plane' | 'model' | 'particles'
+export type CameraType = 'perspective' | 'isometric'
 export type Mapping = 'uv' | 'triplanar'
 export type PrimitiveModel =
   | 'plane'
@@ -70,7 +70,6 @@ export type PrimitiveModel =
   | 'box'
   | 'cone'
   | 'lathe'
-  | 'ring'
   | 'tube'
   | 'polyhedron'
   | 'dodecahedron'
@@ -78,8 +77,8 @@ export type PrimitiveModel =
   | 'octahedron'
   | 'tetrahedron'
 
-// Backdrop drawn behind a text card, in place of the textured subject.
-// 'none' keeps today's opaque card. The subject's deformers still animate
+// Backdrop drawn behind a text card, in place of the textured object.
+// 'none' keeps today's opaque card. The object's deformers still animate
 // the backdrop, so it moves in sync with the (hidden) scene.
 export type TextBackdrop = 'none' | 'silhouette' | 'wireframe'
 
@@ -90,6 +89,8 @@ export interface TextStyle {
   textColor: string
   backgroundColor: string
   reveal: 'fade' | 'cut'
+  textBackdrop: TextBackdrop
+  textBackdropColor: string
 }
 
 export type SegmentKind = 'animation' | 'text'
@@ -102,26 +103,7 @@ export interface Segment {
   text?: TextStyle
 }
 
-export interface CameraState {
-  fov: Scalar
-  posX: Scalar
-  posY: Scalar
-  posZ: Scalar
-  targetX: Scalar
-  targetY: Scalar
-  targetZ: Scalar
-}
-
-export interface ParticleControls {
-  density: number // grid resolution (points per axis); structural
-  pointSize: Scalar
-  dissolve: Scalar // 0..1 scatter amount
-  explode: Scalar // outward burst
-  swirl: Scalar // rotational swirl
-}
-
-export interface SubjectState {
-  mode: SubjectMode
+export interface ObjectState {
   primitive: PrimitiveModel
   modelName: string | null
   modelDataUrl: string | null
@@ -130,7 +112,11 @@ export interface SubjectState {
   rotY: Scalar
   rotZ: Scalar
   scale: Scalar
-  particle: ParticleControls
+  // World-space offset, so a second object can sit beside the first. Older
+  // projects predate these fields, so readers fall back to constant(0).
+  posX: Scalar
+  posY: Scalar
+  posZ: Scalar
 }
 
 export interface Project {
@@ -138,9 +124,7 @@ export interface Project {
   output: { width: number; height: number; fps: number }
   scene: {
     backgroundColor: string
-    sceneTimeDuringCards: 'continue' | 'hold'
-    textBackdrop: TextBackdrop
-    textBackdropColor: string
+    cameraType: CameraType
   }
   image: {
     name: string | null
@@ -151,13 +135,26 @@ export interface Project {
     offsetX: Scalar
     offsetY: Scalar
   }
-  subject: SubjectState
+  object: ObjectState
+  // Optional second object placed alongside the first. It shares the primary
+  // object's material (effects, texture, mapping) and only differs in shape and
+  // transform. `null` keeps the single-object scene.
+  object2: ObjectState | null
   effects: EffectInstance[]
-  camera: CameraState
   segments: Segment[] // exactly 6 by default: 3 animation + 3 text, alternating
   customEffects: EffectDef[]
 }
 
 export function totalDuration(p: Project): number {
   return p.segments.reduce((s, seg) => s + seg.durationSec, 0)
+}
+
+// Human-readable name for an object, shown on the timeline ("Sphere", "Plane",
+// or the imported model's file name). Used so each object is labelled with what
+// it actually is.
+export function objectLabel(o: ObjectState): string {
+  if (o.modelDataUrl && o.modelName) {
+    return o.modelName.replace(/\.[^./\\]+$/, '')
+  }
+  return o.primitive.charAt(0).toUpperCase() + o.primitive.slice(1)
 }
