@@ -85,17 +85,7 @@ export function ScalarControl({
   onChange: (s: Scalar) => void;
 }): JSX.Element {
   const playhead = useStore((s) => s.playhead);
-  const project = useStore((s) => s.project);
-  const setPlaying = useStore((s) => s.setPlaying);
-  const total = totalDuration(project) || 1;
 
-  const trackRef = useRef<HTMLDivElement | null>(null);
-  const [drag, setDrag] = useState<{ origT: number; curT: number } | null>(
-    null,
-  );
-  const dragRef = useRef<{ origT: number; curT: number } | null>(null);
-  const movedRef = useRef(false);
-  const suppressClickRef = useRef(false);
   const value = evalScalar(scalar, playhead);
   const animated = isAnimated(scalar);
   const keyed = hasKeyAt(scalar, playhead);
@@ -103,53 +93,6 @@ export function ScalarControl({
     max > min
       ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))
       : 0;
-
-  // The only correct way to move the playhead: seekTo renders the frame and
-  // fires onTick -> setPlayhead. Pause first so playback doesn't drift off it.
-  const seek = (t: number): void => {
-    if (engine.isPlaying) {
-      engine.pause();
-      setPlaying(false);
-    }
-    engine.seekTo(t);
-  };
-
-  // Drag a marker horizontally to retime its keyframe. Uses window listeners
-  // (like startResize in App.tsx) so a re-render mid-drag can't break the
-  // gesture, and commits only on release for a single clean history entry.
-  const onMarkerPointerDown = (
-    e: React.PointerEvent<HTMLButtonElement>,
-    t: number,
-  ): void => {
-    if (e.button !== 0) return;
-    const rect = trackRef.current?.getBoundingClientRect();
-    if (!rect || rect.width <= 0) return;
-    e.preventDefault();
-    const startX = e.clientX;
-    movedRef.current = false;
-    dragRef.current = { origT: t, curT: t };
-    setDrag({ origT: t, curT: t });
-
-    const onMove = (ev: PointerEvent): void => {
-      if (Math.abs(ev.clientX - startX) > 3) movedRef.current = true;
-      const ratio = (ev.clientX - rect.left) / rect.width;
-      const nt = Math.max(0, Math.min(total, ratio * total));
-      dragRef.current = { origT: t, curT: nt };
-      setDrag({ origT: t, curT: nt });
-    };
-    const onUp = (): void => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      if (movedRef.current && dragRef.current) {
-        suppressClickRef.current = true;
-        onChange(moveKeyAt(scalar, dragRef.current.origT, dragRef.current.curT));
-      }
-      dragRef.current = null;
-      setDrag(null);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
 
   const diamondTitle = !animated
     ? "Animate (add first keyframe)"
@@ -196,34 +139,105 @@ export function ScalarControl({
           ◆
         </button>
       </div>
-      {animated && (
-        <div className="kf-track" ref={trackRef}>
-          {keyTimes(scalar).map((t) => {
-            const dragging = drag != null && Math.abs(t - drag.origT) < 1e-3;
-            const left = dragging ? drag.curT : t;
-            return (
-              <button
-                key={t}
-                className={`kf-marker ${Math.abs(t - playhead) < 1e-3 ? "active" : ""} ${dragging ? "dragging" : ""}`}
-                style={{ left: `${(left / total) * 100}%` }}
-                title="Drag to move · click to jump · double-click to delete"
-                onPointerDown={(e) => onMarkerPointerDown(e, t)}
-                onClick={() => {
-                  if (suppressClickRef.current) {
-                    suppressClickRef.current = false;
-                    return;
-                  }
-                  seek(t);
-                }}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  onChange(removeKeyAt(scalar, t));
-                }}
-              />
-            );
-          })}
-        </div>
-      )}
+    </div>
+  );
+}
+
+export function KeyframeTrack({
+  scalar,
+  onChange,
+  className,
+}: {
+  scalar: Scalar;
+  onChange: (s: Scalar) => void;
+  className?: string;
+}): JSX.Element {
+  const playhead = useStore((s) => s.playhead);
+  const project = useStore((s) => s.project);
+  const setPlaying = useStore((s) => s.setPlaying);
+  const total = totalDuration(project) || 1;
+
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [drag, setDrag] = useState<{ origT: number; curT: number } | null>(null);
+  const dragRef = useRef<{ origT: number; curT: number } | null>(null);
+  const movedRef = useRef(false);
+  const suppressClickRef = useRef(false);
+
+  // The only correct way to move the playhead: seekTo renders the frame and
+  // fires onTick -> setPlayhead. Pause first so playback doesn't drift off it.
+  const seek = (t: number): void => {
+    if (engine.isPlaying) {
+      engine.pause();
+      setPlaying(false);
+    }
+    engine.seekTo(t);
+  };
+
+  // Drag a marker horizontally to retime its keyframe. Uses window listeners
+  // (like startResize in App.tsx) so a re-render mid-drag can't break the
+  // gesture, and commits only on release for a single clean history entry.
+  const onMarkerPointerDown = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    t: number,
+  ): void => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    movedRef.current = false;
+    dragRef.current = { origT: t, curT: t };
+    setDrag({ origT: t, curT: t });
+
+    const onMove = (ev: PointerEvent): void => {
+      if (Math.abs(ev.clientX - startX) > 3) movedRef.current = true;
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      const nt = Math.max(0, Math.min(total, ratio * total));
+      dragRef.current = { origT: t, curT: nt };
+      setDrag({ origT: t, curT: nt });
+    };
+    const onUp = (): void => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (movedRef.current && dragRef.current) {
+        suppressClickRef.current = true;
+        onChange(moveKeyAt(scalar, dragRef.current.origT, dragRef.current.curT));
+      }
+      dragRef.current = null;
+      setDrag(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  return (
+    <div className={`kf-track ${className ?? ""}`} ref={trackRef}>
+      {keyTimes(scalar).map((t) => {
+        const dragging = drag != null && Math.abs(t - drag.origT) < 1e-3;
+        const left = dragging ? drag.curT : t;
+        return (
+          <button
+            key={t}
+            className={`kf-marker ${Math.abs(t - playhead) < 1e-3 ? "active" : ""} ${dragging ? "dragging" : ""}`}
+            style={{ left: `${(left / total) * 100}%` }}
+            title="Drag to move · click to jump · double-click to delete"
+            onPointerDown={(e) => onMarkerPointerDown(e, t)}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                return;
+              }
+              seek(t);
+            }}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              onChange(removeKeyAt(scalar, t));
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

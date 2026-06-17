@@ -3,8 +3,10 @@ import playIcon from "../assets/play_arrow_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz2
 import pauseIcon from "../assets/pause_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
-import { findEffectDef } from "../engine/effects/catalog";
-import { totalDuration, type ObjectState } from "../types";
+import { KeyframeTrack } from "./controls";
+import { objectKeyframeChannels } from "./keyframeChannels";
+import { isAnimated } from "./scalarUtils";
+import { totalDuration, type ObjectState, type Scalar } from "../types";
 
 function fmt(t: number): string {
   const s = Math.floor(t);
@@ -58,29 +60,41 @@ export function TimelinePanel(): JSX.Element {
     }
   }
 
-  // Read-only effect labels for an object. Editing (reorder/toggle/delete and
-  // per-effect uniforms) lives in the inspector now.
-  function renderEffects(obj: ObjectState): JSX.Element {
-    if (obj.effects.length === 0) {
-      return (
-        <p className="fx-empty">
-          No effects. Add deformers/shaders from the Library.
-        </p>
-      );
+  function updateObject(
+    index: 0 | 1,
+    apply: (o: ObjectState, s: Scalar) => void,
+    s: Scalar,
+  ): void {
+    update((p) => {
+      const o = index === 1 ? p.object2 : p.object;
+      if (o) apply(o, s);
+    });
+  }
+
+  // One draggable marker strip per animated property, captioned with its
+  // section + property name on the shared time scale.
+  function renderKeyframes(obj: ObjectState, index: 0 | 1): JSX.Element {
+    const channels = objectKeyframeChannels(obj, project.customEffects).filter(
+      (c) => isAnimated(c.scalar),
+    );
+    if (channels.length === 0) {
+      return <p className="fx-empty">No keyframes.</p>;
     }
     return (
-      <div className="fx-stack">
-        {obj.effects.map((inst) => {
-          const def = findEffectDef(inst.defId, project.customEffects);
-          return (
-            <div
-              key={inst.instanceId}
-              className={`fx-row read-only ${inst.enabled ? "" : "fx-disabled"}`}
-            >
-              <span className="fx-name">{def?.name ?? inst.defId}</span>
+      <div className="kf-stack">
+        {channels.map((c) => (
+          <div className="kf-channel" key={c.key}>
+            <KeyframeTrack
+              className="tl-kf-track"
+              scalar={c.scalar}
+              onChange={(s) => updateObject(index, c.apply, s)}
+            />
+            <div className="kf-channel-label">
+              <span className="kf-channel-section">{c.section}</span>
+              <span className="kf-channel-prop">{c.property}</span>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     );
   }
@@ -182,7 +196,7 @@ export function TimelinePanel(): JSX.Element {
                   <span className="segment-label">Object A</span>
                   <span className="segment-dur">{total.toFixed(1)}s</span>
                 </div>
-                {renderEffects(project.object)}
+                {renderKeyframes(project.object, 0)}
               </div>
               {project.object2 && (
                 <div
@@ -192,7 +206,7 @@ export function TimelinePanel(): JSX.Element {
                   <div className="object-head">
                     <span className="segment-label">Object B</span>
                   </div>
-                  {renderEffects(project.object2)}
+                  {renderKeyframes(project.object2, 1)}
                 </div>
               )}
               <div className="tl-playhead" style={{ left: pct(playhead) }} />

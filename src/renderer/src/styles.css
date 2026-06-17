@@ -819,6 +819,35 @@ textarea {
   margin-right: 24px;
   border-bottom: 2px dotted;
 }
+/* Timeline keyframe strips live inside the full-width object block, so they
+   drop the inspector-era left/right alignment margins. */
+.tl-kf-track {
+  margin-left: 0;
+  margin-right: 0;
+}
+.kf-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.kf-channel {
+  display: flex;
+  flex-direction: column;
+}
+.kf-channel-label {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.kf-channel-section {
+  color: var(--text);
+  font-weight: 600;
+}
+.kf-channel-prop {
+  color: var(--text-dim);
+}
 .kf-marker {
   position: absolute;
   top: 2px;
