@@ -2,11 +2,12 @@ import { useStore } from "../state/store";
 import arrowUpIcon from "../assets/arrow_drop_up_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
 import arrowDownIcon from "../assets/arrow_drop_down_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
 import closeIcon from "../assets/close_small_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
-import deleteIcon from "../assets/delete_forever_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
+import deleteIcon from "../assets/cancel.svg";
 
 import { findEffectDef } from "../engine/effects/catalog";
 import {
   constant,
+  objectLabel,
   type ObjectState,
   type Scalar,
   type TextBackdrop,
@@ -95,145 +96,178 @@ export function InspectorPanel(): JSX.Element {
   return (
     <div className="panel inspector">
       {segment && (
-        <Section
-          title={
-            segment.kind === "text" ? `Text — ${segment.label}` : "Text — None"
-          }
-        >
-          <Field label="Duration">
-            <input
-              type="number"
-              min={0.2}
-              max={20}
-              step={0.1}
-              value={segment.durationSec}
-              onChange={(e) =>
-                update((p) => {
-                  const s = p.segments.find((x) => x.id === segment.id);
-                  if (s)
-                    s.durationSec = Math.max(
-                      0.2,
-                      parseFloat(e.target.value || "1"),
-                    );
-                })
-              }
-            />
-          </Field>
+        <>
+          <div className="inspector-object-header id-text">
+            <span className="inspector-object-title">
+              {segment.kind === "text"
+                ? `Text — ${segment.label}`
+                : "Text — None"}
+            </span>
+          </div>
 
-          {segment.kind === "text" && segment.text && (
+          {segment.kind === "text" && segment.text ? (
             <>
-              <Field label="Message">
-                <textarea
-                  rows={3}
-                  value={segment.text.content}
-                  onChange={(e) =>
-                    update((p) => {
-                      const s = p.segments.find((x) => x.id === segment.id);
-                      if (s?.text) s.text.content = e.target.value;
-                    })
-                  }
-                />
-              </Field>
-              <Field label="Font size">
-                <input
-                  type="number"
-                  min={20}
-                  max={300}
-                  value={segment.text.fontSize}
-                  onChange={(e) =>
-                    update((p) => {
-                      const s = p.segments.find((x) => x.id === segment.id);
-                      if (s?.text)
-                        s.text.fontSize = parseInt(e.target.value || "96", 10);
-                    })
-                  }
-                />
-              </Field>
-              <Field label="Alignment">
-                <select
-                  value={segment.text.align}
-                  onChange={(e) =>
-                    update((p) => {
-                      const s = p.segments.find((x) => x.id === segment.id);
-                      if (s?.text)
-                        s.text.align = e.target.value as
-                          | "left"
-                          | "center"
-                          | "right";
-                    })
-                  }
-                >
-                  <option value="left">Left</option>
-                  <option value="center">Center</option>
-                  <option value="right">Right</option>
-                </select>
-              </Field>
-              <ColorRow
-                label="Text colour"
-                value={segment.text.textColor}
-                onChange={(v) =>
-                  update((p) => {
-                    const s = p.segments.find((x) => x.id === segment.id);
-                    if (s?.text) s.text.textColor = v;
-                  })
-                }
-              />
-              <ColorRow
-                label="Background colour"
-                value={segment.text.backgroundColor}
-                onChange={(v) =>
-                  update((p) => {
-                    const s = p.segments.find((x) => x.id === segment.id);
-                    if (s?.text) s.text.backgroundColor = v;
-                  })
-                }
-              />
-              <Field label="Model styling">
-                <select
-                  value={segment.text.textBackdrop}
-                  onChange={(e) =>
-                    update((p) => {
-                      const s = p.segments.find((x) => x.id === segment.id);
-                      if (s?.text)
-                        s.text.textBackdrop = e.target.value as TextBackdrop;
-                    })
-                  }
-                >
-                  <option value="none">None</option>
-                  <option value="silhouette">Silhouette</option>
-                  <option value="wireframe">Wireframe</option>
-                </select>
-              </Field>
-              {segment.text.textBackdrop !== "none" && (
+              <Section title="Message" className="id-text">
+                <Field label="Duration">
+                  <input
+                    type="number"
+                    min={0.2}
+                    max={20}
+                    step={0.1}
+                    value={segment.durationSec}
+                    onChange={(e) =>
+                      update((p) => {
+                        const s = p.segments.find((x) => x.id === segment.id);
+                        if (s)
+                          s.durationSec = Math.max(
+                            0.2,
+                            parseFloat(e.target.value || "1"),
+                          );
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Message">
+                  <textarea
+                    rows={3}
+                    value={segment.text.content}
+                    onChange={(e) =>
+                      update((p) => {
+                        const s = p.segments.find((x) => x.id === segment.id);
+                        if (s?.text) s.text.content = e.target.value;
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Font size">
+                  <input
+                    type="number"
+                    min={20}
+                    max={300}
+                    value={segment.text.fontSize}
+                    onChange={(e) =>
+                      update((p) => {
+                        const s = p.segments.find((x) => x.id === segment.id);
+                        if (s?.text)
+                          s.text.fontSize = parseInt(
+                            e.target.value || "96",
+                            10,
+                          );
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Alignment">
+                  <select
+                    value={segment.text.align}
+                    onChange={(e) =>
+                      update((p) => {
+                        const s = p.segments.find((x) => x.id === segment.id);
+                        if (s?.text)
+                          s.text.align = e.target.value as
+                            | "left"
+                            | "center"
+                            | "right";
+                      })
+                    }
+                  >
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                  </select>
+                </Field>
                 <ColorRow
-                  label="Model colour"
-                  value={segment.text.textBackdropColor}
+                  label="Text colour"
+                  value={segment.text.textColor}
                   onChange={(v) =>
                     update((p) => {
                       const s = p.segments.find((x) => x.id === segment.id);
-                      if (s?.text) s.text.textBackdropColor = v;
+                      if (s?.text) s.text.textColor = v;
                     })
                   }
                 />
-              )}
-              <Field label="Reveal">
-                <select
-                  value={segment.text.reveal}
+              </Section>
+
+              <Section title="Background" className="id-text">
+                <ColorRow
+                  label="Background colour"
+                  value={segment.text.backgroundColor}
+                  onChange={(v) =>
+                    update((p) => {
+                      const s = p.segments.find((x) => x.id === segment.id);
+                      if (s?.text) s.text.backgroundColor = v;
+                    })
+                  }
+                />
+                {segment.text.textBackdrop !== "none" && (
+                  <ColorRow
+                    label="Object colour"
+                    value={segment.text.textBackdropColor}
+                    onChange={(v) =>
+                      update((p) => {
+                        const s = p.segments.find((x) => x.id === segment.id);
+                        if (s?.text) s.text.textBackdropColor = v;
+                      })
+                    }
+                  />
+                )}
+                <Field label="Object styling">
+                  <select
+                    value={segment.text.textBackdrop}
+                    onChange={(e) =>
+                      update((p) => {
+                        const s = p.segments.find((x) => x.id === segment.id);
+                        if (s?.text)
+                          s.text.textBackdrop = e.target.value as TextBackdrop;
+                      })
+                    }
+                  >
+                    <option value="none">None</option>
+                    <option value="silhouette">Silhouette</option>
+                    <option value="wireframe">Wireframe</option>
+                  </select>
+                </Field>
+                <Field label="Reveal">
+                  <select
+                    value={segment.text.reveal}
+                    onChange={(e) =>
+                      update((p) => {
+                        const s = p.segments.find((x) => x.id === segment.id);
+                        if (s?.text)
+                          s.text.reveal = e.target.value as "fade" | "cut";
+                      })
+                    }
+                  >
+                    <option value="fade">Fade</option>
+                    <option value="cut">Cut</option>
+                  </select>
+                </Field>
+              </Section>
+            </>
+          ) : (
+            <Section title="None" className="id-text">
+              <Field label="Duration">
+                <input
+                  type="number"
+                  min={0.2}
+                  max={20}
+                  step={0.1}
+                  value={segment.durationSec}
                   onChange={(e) =>
                     update((p) => {
                       const s = p.segments.find((x) => x.id === segment.id);
-                      if (s?.text)
-                        s.text.reveal = e.target.value as "fade" | "cut";
+                      if (s)
+                        s.durationSec = Math.max(
+                          0.2,
+                          parseFloat(e.target.value || "1"),
+                        );
                     })
                   }
-                >
-                  <option value="fade">Fade</option>
-                  <option value="cut">Cut</option>
-                </select>
+                />
               </Field>
-            </>
+            </Section>
           )}
-        </Section>
+        </>
       )}
 
       {!segment && (
@@ -242,7 +276,8 @@ export function InspectorPanel(): JSX.Element {
             className={`inspector-object-header ${activeObjectIndex === 0 ? "object-a" : "object-b"}`}
           >
             <span className="inspector-object-title">
-              {activeObjectIndex === 0 ? "Object A" : "Object B"}
+              {activeObjectIndex === 0 ? "Object A" : "Object B"} —{" "}
+              {objectLabel(activeObject)}
             </span>
             {activeObject.image?.dataUrl && (
               <img
@@ -253,7 +288,10 @@ export function InspectorPanel(): JSX.Element {
             )}
           </div>
 
-          <Section title="Transform">
+          <Section
+            title="Transform"
+            className={activeObjectIndex === 0 ? "object-a" : "object-b"}
+          >
             <ScalarControl
               label="Rotate X"
               scalar={activeObject.rotX}
@@ -291,7 +329,7 @@ export function InspectorPanel(): JSX.Element {
               label="Scale"
               scalar={activeObject.scale}
               min={0.1}
-              max={3}
+              max={4}
               onChange={(s) =>
                 updateObject((o) => {
                   o.scale = s;
@@ -338,6 +376,7 @@ export function InspectorPanel(): JSX.Element {
             return (
               <Section
                 key={inst.instanceId}
+                className={activeObjectIndex === 0 ? "object-a" : "object-b"}
                 title={def?.name ?? inst.defId}
                 right={
                   <div className="fx-row-controls">
@@ -373,7 +412,11 @@ export function InspectorPanel(): JSX.Element {
                         className="btn-icon"
                         onClick={() => deleteEffect(inst.instanceId)}
                       >
-                        <img src={deleteIcon} alt="delete" />
+                        <img
+                          src={deleteIcon}
+                          alt="delete"
+                          style={{ width: "75%", height: "75%" }}
+                        />
                       </button>
                     </div>
                   </div>
@@ -408,7 +451,9 @@ export function InspectorPanel(): JSX.Element {
       )}
 
       <div className="inspector-footer">
-        <button onClick={resetToDefault}>Reset to default</button>
+        <button className="secondary" onClick={resetToDefault}>
+          Reset to default
+        </button>
       </div>
     </div>
   );

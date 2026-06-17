@@ -4,9 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pangaea</title>
+    <!--
+      script-src has no 'unsafe-inline'/'unsafe-eval': Vite emits module scripts,
+      the shader editor is a plain <textarea> (Monaco is unused), and no renderer
+      code uses eval/WebAssembly. If a future eval-dependent dep (e.g. Monaco or a
+      wasm loader) is added and breaks at runtime, restore 'unsafe-eval' only.
+      connect-src is local-only (no http(s)); ws:/wss: are kept for dev HMR.
+      'unsafe-inline' is kept on style-src only.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; worker-src 'self' blob:; connect-src 'self' ws: wss: http: https: data: blob:;"
+      content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; worker-src 'self' blob:; connect-src 'self' ws: wss: data: blob:;"
     />
   </head>
   <body>

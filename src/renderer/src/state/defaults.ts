@@ -32,19 +32,19 @@ export function defaultObjectImage(): ObjectImage {
 // right of the primary object so it reads as a distinct, separate shape.
 export function defaultSecondObject(): ObjectState {
   return {
-    primitive: "sphere",
+    primitive: "portal",
     modelName: null,
     modelDataUrl: null,
     mapping: "uv",
     image: defaultObjectImage(),
     effects: [],
-    rotX: constant(0),
-    rotY: constant(0),
-    rotZ: constant(0),
-    scale: constant(0.6),
-    posX: constant(1.2),
+    rotX: constant(-4.493),
+    rotY: constant(-4.443),
+    rotZ: constant(-3.413),
+    scale: constant(0.54),
+    posX: constant(0),
     posY: constant(0),
-    posZ: constant(0),
+    posZ: constant(0.42),
   };
 }
 
@@ -136,5 +136,6 @@ export function defaultProject(): Project {
       },
     ],
     customEffects: [],
+    lucky: { colors: [], images: [], heat: 0.3 },
   };
 }

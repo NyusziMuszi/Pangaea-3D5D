@@ -53,11 +53,13 @@ function primitiveGeometry(primitive: string): THREE.BufferGeometry {
     case "plane":
       return new THREE.PlaneGeometry(1.6, 2.0, 256, 256);
     case "sphere":
-    default:
       return new THREE.SphereGeometry(1.0, 128, 128);
     case "cylinder":
       return new THREE.CylinderGeometry(0.85, 0.85, 2.0, 80, 18, true);
 
+    case "portal":
+    default:
+      return new THREE.CylinderGeometry(1, 1, 3, 4, 2, true);
     case "torus":
       return new THREE.TorusGeometry(0.78, 0.34, 60, 80);
     case "box":
@@ -376,7 +378,8 @@ class ObjectSlot {
   }
 
   setOtherTexture(tex: THREE.Texture | null): void {
-    if (this.material) this.material.uniforms.uTextureB.value = tex ?? this.placeholder;
+    if (this.material)
+      this.material.uniforms.uTextureB.value = tex ?? this.placeholder;
   }
 
   // Per-frame: drive this object's transform, time, effect uniforms, and the

@@ -65,6 +65,7 @@ export type Mapping = "uv" | "triplanar";
 export type PrimitiveModel =
   | "plane"
   | "sphere"
+  | "portal"
   | "cylinder"
   | "torus"
   | "box"
@@ -145,6 +146,10 @@ export interface Project {
   object2: ObjectState | null;
   segments: Segment[]; // exactly 6 by default: 3 animation + 3 text, alternating
   customEffects: EffectDef[];
+  // "Feeling lucky" presets: colour swatches, uploaded source images (stored as
+  // absolute file paths, resolved to data URLs on use), and a heat value
+  // steering how complex a generated scene is.
+  lucky: { colors: string[]; images: string[]; heat: number };
 }
 
 export function totalDuration(p: Project): number {

@@ -135,7 +135,7 @@ export function TimelinePanel(): JSX.Element {
                 return (
                   <div
                     key={seg.id}
-                    className={`segment ${isText ? "text" : "break"} ${selectedSegmentId === seg.id ? "sel" : ""}`}
+                    className={`segment ${isText ? "text id-text" : "break"} ${selectedSegmentId === seg.id ? "sel" : ""}`}
                     style={{
                       left: pct(starts[i]),
                       width: pct(seg.durationSec),

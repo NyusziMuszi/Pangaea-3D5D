@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import { defaultSecondObject, instanceFromDef, uid } from "../state/defaults";
@@ -10,12 +11,19 @@ import type {
 } from "../types";
 import { constant } from "../types";
 import { bytesToDataUrl, mimeForName } from "./files";
+import { generateLuckyScene } from "../state/lucky";
 import { Section, Field, ScalarControl, ColorRow } from "./controls";
+import cancelIcon from "@assets/cancel.svg";
+
+const MAX_COLORS = 12;
+const MAX_IMAGES = 10;
 
 // Primitive shapes offered for both the primary and the optional second object.
 const PRIMITIVE_OPTIONS: { value: PrimitiveModel; label: string }[] = [
   { value: "plane", label: "Plane" },
   { value: "sphere", label: "Sphere" },
+  { value: "portal", label: "Portal" },
+
   { value: "cylinder", label: "Cylinder" },
   { value: "torus", label: "Torus" },
   { value: "box", label: "Box" },
@@ -34,7 +42,87 @@ export function LibraryPanel(): JSX.Element {
   const selectSegment = useStore((s) => s.selectSegment);
   const selectObject = useStore((s) => s.selectObject);
   const setToast = useStore((s) => s.setToast);
+  const setProject = useStore((s) => s.setProject);
+  const setPlayhead = useStore((s) => s.setPlayhead);
   const openShaderEditor = useStore((s) => s.openShaderEditor);
+
+  const lucky = project.lucky;
+  const [generating, setGenerating] = useState(false);
+
+  // lucky.images stores absolute file paths. Each path is resolved to a data
+  // URL on demand (renderer is sandboxed and the engine taints on raw URLs, so
+  // only data URLs are safe). This ephemeral cache (not serialized) maps
+  // path -> data URL so each file is read at most once per session; thumbResolved
+  // mirrors it into state so thumbnails re-render once a read completes.
+  const dataUrlCache = useRef<Map<string, string>>(new Map());
+  const [thumbResolved, setThumbResolved] = useState(0);
+
+  // Resolve a path to a data URL, using the cache or the ungated image-read IPC.
+  // Returns null if the file can't be read (moved/deleted/unreadable).
+  async function resolvePath(path: string): Promise<string | null> {
+    const cached = dataUrlCache.current.get(path);
+    if (cached) return cached;
+    const res = await window.api.readImagePath(path);
+    if (!res.ok || !res.data || !res.mime) return null;
+    const dataUrl = bytesToDataUrl(res.data, res.mime);
+    dataUrlCache.current.set(path, dataUrl);
+    return dataUrl;
+  }
+
+  // Resolve any uncached preset paths (e.g. after reopening a project) so
+  // thumbnails reappear without re-picking via dialog.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let changed = false;
+      for (const path of lucky.images) {
+        if (dataUrlCache.current.has(path)) continue;
+        const dataUrl = await resolvePath(path);
+        if (dataUrl) changed = true;
+      }
+      if (changed && !cancelled) setThumbResolved((n) => n + 1);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lucky.images]);
+
+  // Upload an image from disk and store its file path as a preset. The picked
+  // bytes seed the cache so the thumbnail is instant and no re-read is needed.
+  async function addLuckyImage(): Promise<void> {
+    const file = await window.api.openImageFile();
+    if (!file) return;
+    dataUrlCache.current.set(
+      file.path,
+      bytesToDataUrl(file.data, mimeForName(file.name)),
+    );
+    update((p) => {
+      p.lucky.images.push(file.path);
+    });
+  }
+
+  async function onGenerate(): Promise<void> {
+    setGenerating(true);
+    try {
+      const dataUrls: string[] = [];
+      for (const path of lucky.images) {
+        const dataUrl = await resolvePath(path);
+        if (dataUrl) dataUrls.push(dataUrl);
+        else setToast(`Skipped ${path.split(/[\\/]/).pop()}`);
+      }
+      const next = generateLuckyScene(
+        project,
+        lucky.colors,
+        dataUrls,
+        lucky.heat,
+      );
+      // New identity re-syncs the engine via App.tsx's useEffect([project]).
+      setProject(next);
+      setPlayhead(0);
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   function addSecondObject(): void {
     update((p) => {
@@ -162,7 +250,10 @@ export function LibraryPanel(): JSX.Element {
             <option value="triplanar">Triplanar</option>
           </select>
         </Field>
-        <button className="full secondary" onClick={() => importModelFor(index)}>
+        <button
+          className="full secondary"
+          onClick={() => importModelFor(index)}
+        >
           {obj.modelName
             ? `Replace model: ${obj.modelName}`
             : "Import 3D model"}
@@ -281,6 +372,116 @@ export function LibraryPanel(): JSX.Element {
         )}
       </Section>
 
+      <Section title="Explore" className="lucky">
+        <div className="subhead">Palette</div>
+        <div className="swatch-grid">
+          {lucky.colors.map((c, i) => (
+            <div className="swatch-cell" key={i}>
+              <input
+                type="color"
+                value={c}
+                onChange={(e) =>
+                  update((p) => {
+                    p.lucky.colors[i] = e.target.value;
+                  })
+                }
+              />
+              <button
+                className="btn-icon swatch-del"
+                title="Remove colour"
+                onClick={() =>
+                  update((p) => {
+                    p.lucky.colors.splice(i, 1);
+                  })
+                }
+              >
+                <img src={cancelIcon} alt="remove" />
+              </button>
+            </div>
+          ))}
+        </div>
+        {lucky.colors.length < MAX_COLORS && (
+          <button
+            className="full"
+            onClick={() =>
+              update((p) => {
+                p.lucky.colors.push("#a3d6dc");
+              })
+            }
+          >
+            Add to palette
+          </button>
+        )}
+
+        <div className="subhead">Images</div>
+        {lucky.images.length > 0 && (
+          <div className="lucky-img-grid" data-resolved={thumbResolved}>
+            {lucky.images.map((path, i) => {
+              const dataUrl = dataUrlCache.current.get(path);
+              return (
+                <div className="lucky-img-cell" key={path + i}>
+                  {dataUrl ? (
+                    <img src={dataUrl} alt="" />
+                  ) : (
+                    <span className="lucky-img-missing" title={path}>
+                      {path.split(/[\\/]/).pop()}
+                    </span>
+                  )}
+                  <button
+                    className="btn-icon swatch-del"
+                    title="Remove image"
+                    onClick={() =>
+                      update((p) => {
+                        p.lucky.images.splice(i, 1);
+                      })
+                    }
+                  >
+                    <img src={cancelIcon} alt="remove" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {lucky.images.length < MAX_IMAGES && (
+          <button className="full default" onClick={addLuckyImage}>
+            Add image
+          </button>
+        )}
+
+        <div className="subhead">Heat</div>
+        <input
+          className="scalar-slider"
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={lucky.heat}
+          style={
+            {
+              ["--slider-pct" as string]: `${lucky.heat * 100}%`,
+            } as CSSProperties
+          }
+          onChange={(e) =>
+            update((p) => {
+              p.lucky.heat = parseFloat(e.target.value);
+            })
+          }
+        />
+        <div className="heat-labels">
+          <span>Simple </span>
+          <span>Intense</span>
+        </div>
+
+        <button
+          className="full important"
+          disabled={generating}
+          onClick={onGenerate}
+        >
+          Feeling lucky
+        </button>
+      </Section>
+
       <Section title="Effects">
         <div className="catalog">
           <button
@@ -293,10 +494,7 @@ export function LibraryPanel(): JSX.Element {
           <ZigzagRule patId="zigzag-bespoke" />
           {allDefs.map((def) => (
             <div key={def.id}>
-              <button
-                className="catalog-item"
-                onClick={() => addEffect(def)}
-              >
+              <button className="catalog-item" onClick={() => addEffect(def)}>
                 <span className="catalog-name">{def.name}</span>
               </button>
               {(def.id === "relief" || def.id === "jitter") && (

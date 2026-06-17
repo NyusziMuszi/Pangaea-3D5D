@@ -24,6 +24,10 @@ const api = {
       filters: [{ name: 'Pangaea Project', extensions: ['pangaea', 'json'] }]
     }),
   readFile: (path: string): Promise<OpenedFile> => ipcRenderer.invoke('file:read', path),
+  readImagePath: (
+    path: string
+  ): Promise<{ ok: boolean; data?: Uint8Array; mime?: string; error?: string }> =>
+    ipcRenderer.invoke('image:readPath', path),
   saveFileDialog: (opts: {
     defaultName?: string
     filters?: { name: string; extensions: string[] }[]

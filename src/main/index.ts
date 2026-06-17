@@ -1,9 +1,40 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
-import { join, basename } from 'path'
+import { join, basename, resolve } from 'path'
 import { readFile, writeFile, mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import ffmpegPath from 'ffmpeg-static'
 import ffmpeg from 'fluent-ffmpeg'
+
+// Paths the user has explicitly chosen via a native open/save dialog this
+// session. file:read / file:write / ffmpeg:encodeFrames are gated to this set
+// so a compromised renderer can't read/write arbitrary disk locations.
+const approvedPaths = new Set<string>()
+
+// Image extension -> mime allowlist for image:readPath. The renderer's
+// mimeForName isn't importable from main, so we mirror the picker's filters.
+const IMAGE_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp'
+}
+
+// Resolve a renderer-supplied path and reject anything not dialog-approved or
+// still containing '..' after resolution.
+function assertApproved(p: string): string {
+  const resolved = resolve(p)
+  if (resolved.includes('..')) throw new Error('Rejected path (traversal): ' + p)
+  if (!approvedPaths.has(resolved)) throw new Error('Rejected unapproved path: ' + p)
+  return resolved
+}
+
+// ffmpeg-static resolves inside app.asar in production, but the binary is
+// unpacked (see asarUnpack in package.json) and must be run from there.
+function resolveFfmpeg(): string {
+  const p = (ffmpegPath as unknown as string) ?? 'ffmpeg'
+  return app.isPackaged ? p.replace('app.asar', 'app.asar.unpacked') : p
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -20,7 +51,7 @@ function createWindow(): void {
     backgroundColor: '#0b0b0f',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       // WebCodecs / OffscreenCanvas are available by default in Electron's Chromium.
@@ -34,8 +65,27 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // Only hand http(s) URLs to the OS; ignore file:// and other schemes.
+    try {
+      const { protocol } = new URL(details.url)
+      if (protocol === 'http:' || protocol === 'https:') shell.openExternal(details.url)
+    } catch {
+      // malformed URL — ignore
+    }
     return { action: 'deny' }
+  })
+
+  // Block in-window navigation to anything that isn't the app's own origin.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const devUrl = process.env['ELECTRON_RENDERER_URL']
+    let allowed = false
+    try {
+      const target = new URL(url)
+      allowed = devUrl ? target.origin === new URL(devUrl).origin : target.protocol === 'file:'
+    } catch {
+      allowed = false
+    }
+    if (!allowed) event.preventDefault()
   })
 
   const search = SELFTEST ? 'selftest=1' : undefined
@@ -51,6 +101,13 @@ interface OpenFileOpts {
 }
 
 function registerIpc(): void {
+  // The self-test harness writes to fixed /tmp paths without a dialog; approve
+  // them up front so the gating doesn't break PANGAEA_SELFTEST runs.
+  if (SELFTEST) {
+    approvedPaths.add(resolve('/tmp/pangaea-selftest.mp4'))
+    approvedPaths.add(resolve('/tmp/pangaea-selftest.status'))
+  }
+
   // Open a file via native dialog; return its path + bytes.
   ipcMain.handle('dialog:openFile', async (_e, opts: OpenFileOpts) => {
     const res = await dialog.showOpenDialog({
@@ -59,14 +116,36 @@ function registerIpc(): void {
     })
     if (res.canceled || res.filePaths.length === 0) return null
     const path = res.filePaths[0]
+    approvedPaths.add(resolve(path))
     const data = await readFile(path)
     return { path, name: basename(path), data: new Uint8Array(data) }
   })
 
-  // Read an arbitrary file by path.
+  // Read a file by path — only if it was dialog-approved this session.
   ipcMain.handle('file:read', async (_e, path: string) => {
-    const data = await readFile(path)
-    return { path, name: basename(path), data: new Uint8Array(data) }
+    const resolved = assertApproved(path)
+    const data = await readFile(resolved)
+    return { path: resolved, name: basename(resolved), data: new Uint8Array(data) }
+  })
+
+  // Read an image by path WITHOUT dialog-approval gating. This is the one
+  // deliberate, user-approved relaxation of the read sandbox: it lets
+  // "Feeling lucky" presets (which store absolute file paths) resolve to bytes
+  // after reopening a saved project, without forcing the user to re-pick each
+  // file via dialog. To bound that relaxation, reads are restricted to known
+  // image extensions (defense-in-depth) and traversal paths are rejected.
+  ipcMain.handle('image:readPath', async (_e, path: string) => {
+    try {
+      const resolved = resolve(path)
+      if (resolved.includes('..')) return { ok: false, error: 'Rejected path (traversal)' }
+      const ext = resolved.slice(resolved.lastIndexOf('.')).toLowerCase()
+      const mime = IMAGE_MIME[ext]
+      if (!mime) return { ok: false, error: 'Not an image path: ' + path }
+      const data = await readFile(resolved)
+      return { ok: true, data: new Uint8Array(data), mime }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   // Save dialog -> chosen path (or null).
@@ -78,14 +157,16 @@ function registerIpc(): void {
         filters: opts?.filters
       })
       if (res.canceled || !res.filePath) return null
+      approvedPaths.add(resolve(res.filePath))
       return res.filePath
     }
   )
 
-  // Write bytes to a path.
+  // Write bytes to a path — only if it was dialog-approved this session.
   ipcMain.handle('file:write', async (_e, args: { path: string; data: Uint8Array }) => {
-    await writeFile(args.path, Buffer.from(args.data))
-    return { ok: true, path: args.path }
+    const resolved = assertApproved(args.path)
+    await writeFile(resolved, Buffer.from(args.data))
+    return { ok: true, path: resolved }
   })
 
   // Fallback encoder: write a batch of PNG frames to a temp dir, encode with bundled ffmpeg.
@@ -96,6 +177,7 @@ function registerIpc(): void {
       _e,
       args: { frames: Uint8Array[]; fps: number; outputPath: string }
     ): Promise<{ ok: boolean; outputPath: string }> => {
+      const outputPath = assertApproved(args.outputPath)
       const dir = join(tmpdir(), `pangaea-${Date.now()}`)
       await mkdir(dir, { recursive: true })
       try {
@@ -106,16 +188,16 @@ function registerIpc(): void {
         )
         await new Promise<void>((resolve, reject) => {
           ffmpeg()
-            .setFfmpegPath((ffmpegPath as unknown as string) ?? 'ffmpeg')
+            .setFfmpegPath(resolveFfmpeg())
             .input(join(dir, 'frame_%06d.png'))
             .inputFPS(args.fps)
             .videoCodec('libx264')
             .outputOptions(['-pix_fmt yuv420p', '-movflags +faststart', '-r', String(args.fps)])
-            .save(args.outputPath)
+            .save(outputPath)
             .on('end', () => resolve())
             .on('error', (err) => reject(err))
         })
-        return { ok: true, outputPath: args.outputPath }
+        return { ok: true, outputPath }
       } finally {
         await rm(dir, { recursive: true, force: true })
       }

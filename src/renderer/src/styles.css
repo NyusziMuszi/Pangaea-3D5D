@@ -30,16 +30,33 @@
   --slider-track: #bfd1d3;
 
   --objectA-text-border: #997a59;
-  --objectA-highlight: #997a5911;
+  --objectA-highlight: #997a5926;
   --objectB-text-border: #955999;
-  --objectB-highlight: #9559991a;
+  --objectB-highlight: #9559992f;
+  --objectText-text-border: #599399; /* teal — used for the coloured label/title */
+  --objectText-highlight: #59939926; /* teal tint for the inspector header bg */
 }
 
-/* Object A / B identity colours. Applied to the Library section, the timeline
-   block, and the inspector header so each object keeps the same accent across
-   panels. These locally override --text-section(-rule) — already consumed by
-   section titles, segment labels and the inspector title — so the colour
-   cascades for free; hover states use literal colours and keep working. */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--panel);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+/* Block-identity colours. The three classes .object-a / .object-b / .id-text
+   are applied to the Library section, the timeline block, and the inspector
+   header so each block keeps the same accent across panels. These locally
+   override --text-section(-rule) — already consumed by section titles, segment
+   labels and the inspector title — so the colour cascades for free; hover
+   states use literal colours and keep working. */
 .object-a {
   --text-section: var(--objectA-text-border);
   --text-section-rule: var(--objectA-text-border);
@@ -49,6 +66,11 @@
   --text-section: var(--objectB-text-border);
   --text-section-rule: var(--objectB-text-border);
   --obj-highlight: var(--objectB-highlight);
+}
+.id-text {
+  --text-section: var(--objectText-text-border);
+  --text-section-rule: var(--objectText-text-border);
+  --obj-highlight: var(--objectText-highlight);
 }
 
 * {
@@ -206,7 +228,7 @@ textarea {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   padding: 0 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
@@ -258,23 +280,22 @@ textarea {
   border-top: 1px solid var(--border);
 }
 .inspector-object-header {
-  padding: 10px 10px 8px;
-  border-bottom: 1px solid var(--border);
+  padding: 10px 10px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 /* Tint the header in the active object's colour (title uses --text-section). */
 .inspector-object-header.object-a,
-.inspector-object-header.object-b {
+.inspector-object-header.object-b,
+.inspector-object-header.id-text {
   background: var(--obj-highlight);
-  border-bottom-color: var(--text-section);
+  border-top: 1px solid var(--text-section);
+  border-bottom: 1px solid var(--text-section);
 }
 .inspector-object-title {
   font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-weight: 700;
   color: var(--text-section);
 }
 .inspector-object-thumb {
@@ -293,15 +314,18 @@ textarea {
    (These elements use literal colours, so set them explicitly rather than
    relying on the --text-section cascade.) */
 .section.object-a,
-.section.object-b {
+.section.object-b,
+.section.id-text {
   border-top-color: var(--text-section);
 }
 .section.object-a .section-toggle,
-.section.object-b .section-toggle {
+.section.object-b .section-toggle,
+.section.id-text .section-toggle {
   color: var(--text-section);
 }
 .section.object-a .section-toggle:hover,
-.section.object-b .section-toggle:hover {
+.section.object-b .section-toggle:hover,
+.section.id-text .section-toggle:hover {
   color: white;
 }
 .section-head {
@@ -309,13 +333,14 @@ textarea {
 
   align-items: center;
   justify-content: space-between;
-  padding: 0px 10px 3px 10px;
+  padding: 0px 4px;
 }
 .section-toggle {
   background: none;
   border: none;
   color: rgb(170, 169, 169);
   font-family: "Bebas Neue", sans-serif;
+  letter-spacing: 0.01em;
   font-weight: 400;
   padding: 2px 0;
   font-size: 18px;
@@ -333,7 +358,7 @@ textarea {
   box-shadow: none;
 }
 .section:has(.section-toggle:hover) {
-  border-top-color: var(--text-btn-hover);
+  border-top-color: white;
 }
 .section-body {
   padding: 4px 10px 12px;
@@ -508,20 +533,9 @@ textarea {
 .tl-track.tl-track-object .segment.object + .segment.object {
   margin-top: 6px;
 }
-/* Coloured border so A and B read apart at a glance. */
-.tl-track.tl-track-object .segment.object.object-a,
-.tl-track.tl-track-object .segment.object.object-b {
-  border-color: var(--text-section);
-}
-/* Hover and selection use the per-object highlight tint instead of the generic teal. */
-.tl-track.tl-track-object .segment.object.object-a:hover,
-.tl-track.tl-track-object .segment.object.object-b:hover,
-.tl-track.tl-track-object .segment.object.sel {
-  background: var(--obj-highlight);
-}
-/* Selection also shows an inner ring. */
-.tl-track.tl-track-object .segment.object.sel {
-  box-shadow: inset 0 0 0 1px var(--text-section);
+.tl-scrub-row .tl-row-label {
+  align-self: flex-start;
+  margin-top: 12px;
 }
 .tl-scrub-area {
   flex: 1;
@@ -529,7 +543,7 @@ textarea {
   flex-direction: column;
 }
 .tl-time {
-  color: var(--text-dim);
+  color: var(--text);
   font-variant-numeric: tabular-nums;
   margin-bottom: 2px;
 }
@@ -549,15 +563,16 @@ textarea {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 2px;
+  width: 5px;
   margin-left: -1px;
-  background: var(--slider-fill);
+  background: rgba(255, 255, 255, 0.443);
   pointer-events: none;
 }
 .segment {
   position: relative;
-  border-radius: 5px;
   border: 1px solid var(--border);
+  border-radius: 1px;
+
   padding: 5px 7px;
   cursor: pointer;
   overflow: hidden;
@@ -565,20 +580,26 @@ textarea {
 .segment.break {
   background: rgba(86, 70, 4, 0.055);
 }
+/* All three identity blocks (Text, Object A, Object B) share one interaction:
+   neutral grey border, a top line in the block's accent on hover that stays
+   once selected. Break segments fall back to the root --text-section. */
 .segment:hover,
 .segment.sel {
-  background: rgba(49, 157, 163, 0.1);
-}
-.segment.sel {
-  border-color: var(--slider-fill);
-  box-shadow: inset 0 0 0 1px var(--slider-fill);
+  box-shadow: 0 3px 0px var(--text-section) inset;
+  border-radius: 10px;
 }
 .segment-label {
   display: block;
   font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+
+  color: var(--text);
+}
+/* Identity blocks colour their label with the block's accent; break segments
+   keep the default white label. */
+.segment.id-text .segment-label,
+.segment.object.object-a .segment-label,
+.segment.object.object-b .segment-label {
   color: var(--text-section);
 }
 .segment-dur {
@@ -634,13 +655,13 @@ textarea {
 .fx-row-controls {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 0px;
   margin-left: auto;
 }
 
 .fx-row-actions {
   display: flex;
-  align-items: center;
+  align-items: right;
   gap: 0px;
 }
 
@@ -687,6 +708,15 @@ textarea {
   margin-top: -5px;
   border-radius: 50%;
   background: var(--slider-fill);
+  transition: background 0.15s ease;
+}
+.scrub::-webkit-slider-thumb:hover,
+.scalar-slider::-webkit-slider-thumb:hover {
+  background: var(--accent);
+}
+.scrub::-moz-range-thumb:hover,
+.scalar-slider::-moz-range-thumb:hover {
+  background: var(--accent);
 }
 .scalar-num {
   width: 56px;
@@ -922,4 +952,80 @@ textarea.code {
   padding: 8px 14px;
   z-index: 60;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Feeling lucky ---------- */
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.swatch-cell {
+  position: relative;
+}
+.swatch-cell input[type="color"] {
+  width: 100%;
+  height: 28px;
+  padding: 0;
+}
+.swatch-del {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--panel-3);
+  border: 1px solid var(--border);
+}
+.swatch-del img {
+  width: 12px;
+  height: 12px;
+}
+.swatch-add {
+  height: 28px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-dim);
+}
+.lucky-img-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.lucky-img-cell {
+  position: relative;
+  aspect-ratio: 1;
+}
+.lucky-img-cell > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  display: block;
+}
+.lucky-img-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+  font-size: 9px;
+  text-align: center;
+  word-break: break-all;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.heat-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
 }
