@@ -67,6 +67,17 @@ export function removeKeyAt(s: Scalar, t: number): Scalar {
   return { kind: 'keys', keys }
 }
 
+// Move the key nearest oldT to newT, preserving its value and easing.
+export function moveKeyAt(s: Scalar, oldT: number, newT: number): Scalar {
+  if (s.kind !== 'keys') return s
+  const keys = s.keys.map((k) => ({ ...k }))
+  const i = keys.findIndex((k) => Math.abs(k.t - oldT) < EPS)
+  if (i < 0) return s
+  keys[i] = { ...keys[i], t: newT }
+  keys.sort((a, b) => a.t - b.t)
+  return { kind: 'keys', keys }
+}
+
 // Toggle a keyframe at the playhead (diamond button behavior).
 export function toggleKeyAt(s: Scalar, t: number): Scalar {
   if (s.kind === 'const') return startAnimating(s, t)

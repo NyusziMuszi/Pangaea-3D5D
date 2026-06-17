@@ -136,6 +136,20 @@ export function defaultProject(): Project {
       },
     ],
     customEffects: [],
-    lucky: { colors: [], images: [], heat: 0.3 },
+    lucky: {
+      colors: [
+        "#ffffff",
+        "#000000",
+        "#878787",
+        "#a3d6dc",
+        "#6fec79",
+        "#291b6f",
+        "#d9f066",
+        "#eeb720",
+        "#816575",
+      ],
+      images: [],
+      heat: 0.3,
+    },
   };
 }

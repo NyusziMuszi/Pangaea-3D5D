@@ -348,6 +348,13 @@ textarea {
   align-items: center;
   gap: 4px;
 }
+.section-caret {
+  transform: rotate(180deg);
+  transition: transform 0.22s ease;
+}
+.section-caret.open {
+  transform: rotate(0deg);
+}
 .section-toggle:hover {
   color: white;
   border-radius: 0;
@@ -360,7 +367,20 @@ textarea {
 .section:has(.section-toggle:hover) {
   border-top-color: white;
 }
-.section-body {
+.section-body-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.22s ease;
+}
+.section-body-wrap.open {
+  grid-template-rows: 1fr;
+}
+.section-body-wrap > .section-body {
+  overflow: hidden;
+  min-height: 0;
+}
+.section-body-inner {
   padding: 4px 10px 12px;
   display: flex;
   flex-direction: column;
@@ -661,8 +681,42 @@ textarea {
 
 .fx-row-actions {
   display: flex;
-  align-items: right;
+  align-items: center;
   gap: 0px;
+}
+
+/* Effect enable/disable checkbox */
+.fx-row-actions input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0 4px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.fx-row-actions input[type="checkbox"]:hover {
+  border-color: var(--accent);
+}
+.fx-row-actions input[type="checkbox"]:checked {
+  background: var(--slider-fill);
+  border-color: var(--slider-fill);
+}
+.fx-row-actions input[type="checkbox"]:checked::after {
+  content: "";
+  width: 3px;
+  height: 7px;
+  margin-top: -1px;
+  border: solid var(--bg);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 /* ---------- Scalar control ---------- */
@@ -776,7 +830,11 @@ textarea {
   background: var(--slider-fill);
   transform: translateX(-50%) rotate(45deg);
   transition: none;
-  cursor: pointer;
+  cursor: grab;
+}
+.kf-marker.dragging {
+  cursor: grabbing;
+  z-index: 2;
 }
 /* Markers are not buttons visually — neutralize the global button hover/active
    chrome (border-radius morph, inset shadow, translateY) so the diamond keeps
@@ -955,18 +1013,22 @@ textarea.code {
 }
 
 /* ---------- Feeling lucky ---------- */
-.swatch-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
+.swatch-list {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
-.swatch-cell {
-  position: relative;
+.swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.swatch-cell input[type="color"] {
-  width: 100%;
-  height: 28px;
-  padding: 0;
+.swatch-row .hex {
+  flex: 1;
+}
+.swatch-row .btn-icon img {
+  width: 18px;
+  height: 18px;
 }
 .swatch-del {
   position: absolute;
@@ -980,8 +1042,8 @@ textarea.code {
   border: 1px solid var(--border);
 }
 .swatch-del img {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 .swatch-add {
   height: 28px;

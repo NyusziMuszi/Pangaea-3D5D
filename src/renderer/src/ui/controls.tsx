@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { totalDuration, type Scalar } from "../types";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
@@ -7,6 +7,7 @@ import {
   hasKeyAt,
   isAnimated,
   keyTimes,
+  moveKeyAt,
   removeKeyAt,
   setValueAt,
   toggleKeyAt,
@@ -30,20 +31,25 @@ export function Section({
     <div className={`section ${className ?? ""}`}>
       <div className="section-head">
         <button className="section-toggle" onClick={() => setOpen((o) => !o)}>
-          {open ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 5.5L17 17.5H7L12 5.5Z" fill="currentColor"/>
-            </svg>
-          ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 17.5L17 5.5H7L12 17.5Z" fill="currentColor"/>
-            </svg>
-          )}{" "}
+          <svg
+            className={`section-caret ${open ? "open" : ""}`}
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M12 5.5L17 17.5H7L12 5.5Z" fill="currentColor" />
+          </svg>{" "}
           {title}
         </button>
         {right}
       </div>
-      {open && <div className="section-body">{children}</div>}
+      <div className={`section-body-wrap ${open ? "open" : ""}`}>
+        <div className="section-body">
+          <div className="section-body-inner">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -82,6 +88,14 @@ export function ScalarControl({
   const project = useStore((s) => s.project);
   const setPlaying = useStore((s) => s.setPlaying);
   const total = totalDuration(project) || 1;
+
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [drag, setDrag] = useState<{ origT: number; curT: number } | null>(
+    null,
+  );
+  const dragRef = useRef<{ origT: number; curT: number } | null>(null);
+  const movedRef = useRef(false);
+  const suppressClickRef = useRef(false);
   const value = evalScalar(scalar, playhead);
   const animated = isAnimated(scalar);
   const keyed = hasKeyAt(scalar, playhead);
@@ -98,6 +112,43 @@ export function ScalarControl({
       setPlaying(false);
     }
     engine.seekTo(t);
+  };
+
+  // Drag a marker horizontally to retime its keyframe. Uses window listeners
+  // (like startResize in App.tsx) so a re-render mid-drag can't break the
+  // gesture, and commits only on release for a single clean history entry.
+  const onMarkerPointerDown = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    t: number,
+  ): void => {
+    if (e.button !== 0) return;
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    movedRef.current = false;
+    dragRef.current = { origT: t, curT: t };
+    setDrag({ origT: t, curT: t });
+
+    const onMove = (ev: PointerEvent): void => {
+      if (Math.abs(ev.clientX - startX) > 3) movedRef.current = true;
+      const ratio = (ev.clientX - rect.left) / rect.width;
+      const nt = Math.max(0, Math.min(total, ratio * total));
+      dragRef.current = { origT: t, curT: nt };
+      setDrag({ origT: t, curT: nt });
+    };
+    const onUp = (): void => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (movedRef.current && dragRef.current) {
+        suppressClickRef.current = true;
+        onChange(moveKeyAt(scalar, dragRef.current.origT, dragRef.current.curT));
+      }
+      dragRef.current = null;
+      setDrag(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   const diamondTitle = !animated
@@ -146,23 +197,82 @@ export function ScalarControl({
         </button>
       </div>
       {animated && (
-        <div className="kf-track">
-          {keyTimes(scalar).map((t) => (
-            <button
-              key={t}
-              className={`kf-marker ${Math.abs(t - playhead) < 1e-3 ? "active" : ""}`}
-              style={{ left: `${(t / total) * 100}%` }}
-              title="Click to jump, double-click to delete"
-              onClick={() => seek(t)}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                onChange(removeKeyAt(scalar, t));
-              }}
-            />
-          ))}
+        <div className="kf-track" ref={trackRef}>
+          {keyTimes(scalar).map((t) => {
+            const dragging = drag != null && Math.abs(t - drag.origT) < 1e-3;
+            const left = dragging ? drag.curT : t;
+            return (
+              <button
+                key={t}
+                className={`kf-marker ${Math.abs(t - playhead) < 1e-3 ? "active" : ""} ${dragging ? "dragging" : ""}`}
+                style={{ left: `${(left / total) * 100}%` }}
+                title="Drag to move · click to jump · double-click to delete"
+                onPointerDown={(e) => onMarkerPointerDown(e, t)}
+                onClick={() => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false;
+                    return;
+                  }
+                  seek(t);
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onChange(removeKeyAt(scalar, t));
+                }}
+              />
+            );
+          })}
         </div>
       )}
     </div>
+  );
+}
+
+/** Normalize a user-typed hex string to `#rrggbb`, or null if it isn't valid. */
+export function normalizeHex(input: string): string | null {
+  let s = input.trim().replace(/^#/, "").toLowerCase();
+  if (/^[0-9a-f]{3}$/.test(s)) {
+    s = s
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  if (/^[0-9a-f]{6}$/.test(s)) return "#" + s;
+  return null;
+}
+
+/**
+ * Hex text field that lets the user type freely and only commits a colour once
+ * it parses to a valid hex value (3- or 6-digit, with or without a leading #).
+ */
+export function HexInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}): JSX.Element {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commit = (raw: string): void => {
+    const normalized = normalizeHex(raw);
+    if (normalized) onChange(normalized);
+    setDraft(null);
+  };
+
+  return (
+    <input
+      className="hex"
+      type="text"
+      value={draft ?? value}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={(e) => commit(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        else if (e.key === "Escape") setDraft(null);
+      }}
+      spellCheck={false}
+    />
   );
 }
 
@@ -182,13 +292,7 @@ export function ColorRow({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
-      <input
-        className="hex"
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        spellCheck={false}
-      />
+      <HexInput value={value} onChange={onChange} />
     </Field>
   );
 }

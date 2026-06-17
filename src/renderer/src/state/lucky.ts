@@ -81,6 +81,50 @@ function hexToRgb01(hex: string): [number, number, number] {
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
+// Perceived lightness 0..1 (sRGB luma). >= 0.5 reads as a "light" colour.
+function lightness(hex: string): number {
+  const [r, g, b] = hexToRgb01(hex);
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+// A distinct working palette of at most `budget` colours, guaranteed to contain
+// at least one light and one dark colour so text contrast is always satisfiable
+// without exceeding the budget.
+function buildScenePalette(palette: string[], budget: number): string[] {
+  const uniq = Array.from(new Set(palette));
+  for (const f of ["#A3D6DC", "#64e36e", "#6473e3", "#000000", "#ffffff"]) {
+    if (uniq.length >= budget) break;
+    if (!uniq.includes(f)) uniq.push(f);
+  }
+  const chosen = pickDistinct(uniq, budget);
+  if (!chosen.some((c) => lightness(c) >= 0.5)) chosen[chosen.length - 1] = "#ffffff";
+  if (!chosen.some((c) => lightness(c) < 0.5)) chosen[chosen.length - 1] = "#000000";
+  return chosen;
+}
+
+// Pick { backdropColor, background, text } for one text card so background +
+// silhouette share one lightness side and text takes the other.
+function pickTextColors(pool: string[]): {
+  backdropColor: string;
+  background: string;
+  text: string;
+} {
+  const light = pool.filter((c) => lightness(c) >= 0.5);
+  const dark = pool.filter((c) => lightness(c) < 0.5);
+  // background + silhouette must come from a side with >= 2 colours so they can
+  // be distinct; text takes the opposite side. With a budget >= 3 and at least
+  // one colour on each side, one side always has >= 2 (pigeonhole), so we steer
+  // lightTheme toward it rather than flipping a blind coin (which could land on
+  // a single-colour side and collapse background + silhouette to one colour).
+  const canLight = light.length >= 2;
+  const canDark = dark.length >= 2;
+  const lightTheme = canLight && canDark ? Math.random() < 0.5 : canLight;
+  const sameSide = lightTheme ? light : dark; // background + silhouette
+  const opposite = lightTheme ? dark : light; // text
+  const [background, second] = pickDistinct(sameSide, 2);
+  return { background, backdropColor: second ?? background, text: pick(opposite) };
+}
+
 // Build an animated scalar of `n` keys spread evenly across [0, dur], easing
 // "easeInOut". valFn(i, frac) supplies each value, where frac = i/(n-1). A
 // zero-length timeline collapses to a single key at t=0.
@@ -144,13 +188,17 @@ export function generateLuckyScene(
     ? colors
     : [base.scene.backgroundColor, "#A3D6DC", "#64e36e", "#6473e3"];
 
+  // Distinct colours a single generation may use: 3 cold → 5 hot.
+  const colorBudget = clamp(3 + Math.round(h * 2), 3, 5);
+  const scenePalette = buildScenePalette(palette, colorBudget);
+
   // A texture source: a fetched image if available, else a solid palette colour.
   const appearance = (): string =>
     imageDataUrls.length
       ? pick(imageDataUrls)
-      : solidColorDataUrl(pick(palette));
+      : solidColorDataUrl(pick(scenePalette));
 
-  next.scene.backgroundColor = pick(palette);
+  next.scene.backgroundColor = pick(scenePalette);
 
   // Look up an effect's keyframeable intensity uniform and its [min,max].
   function keyframeIntensity(inst: EffectInstance): void {
@@ -255,7 +303,7 @@ export function generateLuckyScene(
   // Tint any fresnel instance from a palette colour.
   for (const inst of instances) {
     if (inst.defId === "fresnel") {
-      const [r, g, b] = hexToRgb01(pick(palette));
+      const [r, g, b] = hexToRgb01(pick(scenePalette));
       inst.values.uTintR = constant(r);
       inst.values.uTintG = constant(g);
       inst.values.uTintB = constant(b);
@@ -277,21 +325,13 @@ export function generateLuckyScene(
   if (instances.length) keyframeIntensity(pick(instances));
 
   // ----- Text recolour (content preserved) -----
-  // A text card always needs three *different* colours: the silhouette/wireframe
-  // backdrop, the card background, and the text itself. Pick distinct swatches,
-  // padding from a fallback set if the palette has fewer than three uniques.
-  const textColorPool = (() => {
-    const uniq = Array.from(new Set(palette));
-    for (const f of ["#A3D6DC", "#64e36e", "#6473e3", "#000000", "#ffffff"]) {
-      if (uniq.length >= 3) break;
-      if (!uniq.includes(f)) uniq.push(f);
-    }
-    return uniq;
-  })();
+  // Each text card draws from scenePalette so the whole generation stays within
+  // budget. pickTextColors keeps background + silhouette on one lightness side
+  // and the text on the other, so the text always reads.
   for (const seg of next.segments) {
     if (seg.kind === "text" && seg.text) {
-      const [backdrop, background, text] = pickDistinct(textColorPool, 3);
-      seg.text.textBackdropColor = backdrop;
+      const { backdropColor, background, text } = pickTextColors(scenePalette);
+      seg.text.textBackdropColor = backdropColor;
       seg.text.backgroundColor = background;
       seg.text.textColor = text;
     }

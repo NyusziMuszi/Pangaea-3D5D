@@ -12,7 +12,7 @@ import type {
 import { constant } from "../types";
 import { bytesToDataUrl, mimeForName } from "./files";
 import { generateLuckyScene } from "../state/lucky";
-import { Section, Field, ScalarControl, ColorRow } from "./controls";
+import { Section, Field, ScalarControl, ColorRow, HexInput } from "./controls";
 import cancelIcon from "@assets/cancel.svg";
 
 const MAX_COLORS = 12;
@@ -374,9 +374,9 @@ export function LibraryPanel(): JSX.Element {
 
       <Section title="Explore" className="lucky">
         <div className="subhead">Palette</div>
-        <div className="swatch-grid">
+        <div className="swatch-list">
           {lucky.colors.map((c, i) => (
-            <div className="swatch-cell" key={i}>
+            <div className="swatch-row" key={i}>
               <input
                 type="color"
                 value={c}
@@ -386,8 +386,16 @@ export function LibraryPanel(): JSX.Element {
                   })
                 }
               />
+              <HexInput
+                value={c}
+                onChange={(v) =>
+                  update((p) => {
+                    p.lucky.colors[i] = v;
+                  })
+                }
+              />
               <button
-                className="btn-icon swatch-del"
+                className="btn-icon"
                 title="Remove colour"
                 onClick={() =>
                   update((p) => {
