@@ -5,6 +5,65 @@
 }
 
 :root {
+  /* ===== Design tokens =====
+     Normalized scales referenced throughout the file. Spacing/radius/type
+     steps below; geometry (slider thumb sizes, badge/row dimensions, pixel
+     offsets) stays as literals and is NOT pulled into these scales. */
+
+  /* ----- spacing (gap / padding / margin only — NOT geometry) ----- */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+
+  /* ----- radius ----- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 30px;
+  --radius-round: 50%;
+
+  /* ----- type ----- */
+  --font-2xs: 9px;
+  --font-xs: 11px;
+  --font-sm: 12px;
+  --font-base: 12.5px;
+  --font-lg: 16px;
+  --font-display: 18px;
+
+  /* ----- duration / easing ----- */
+  --dur-fast: 150ms;
+  --dur: 200ms;
+  --dur-slow: 350ms;
+  --ease: ease;
+
+  /* ----- z-index (relative order is what matters) ----- */
+  --z-raised: 1;
+  --z-badge: 10;
+  --z-tab: 10;
+  --z-modal: 100;
+  --z-toast: 200;
+
+  /* ----- shadows ----- */
+  --shadow-press: inset 0 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-canvas: 0 10px 40px rgba(0, 0, 0, 0.5);
+  --shadow-toast: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.6);
+
+  /* ----- color gap-fills (previously hardcoded) ----- */
+  --white: #fff; /* intentional brighten-on-hover; keep literal, NOT --text-section */
+  --black: #000; /* canvas-frame bg; button.important text */
+  --bg-stage: #08080c; /* .preview */
+  --toggle-rest: rgb(170, 169, 169);
+  --diamond: #50505f;
+  --playhead: rgba(255, 255, 255, 0.443);
+  --segment-break-bg: rgba(86, 70, 4, 0.055);
+  --backdrop: rgba(0, 0, 0, 0.55);
+  --err-bg: rgba(255, 107, 107, 0.08);
+
   --bg: #0b0b0f;
   --panel: #1b1b1b;
   --panel-3: #232330;
@@ -45,7 +104,7 @@
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm); /* snap 3→4 */
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-dim);
@@ -91,7 +150,7 @@ body {
   color: var(--text);
   font-family:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-  font-size: 12.5px;
+  font-size: var(--font-base);
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
@@ -104,27 +163,27 @@ button {
   --btn-border: var(--border-btn);
   --btn-text: var(--text-btn);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-sm);
   color: var(--btn-text);
   background: var(--btn-fill);
   border: 1px solid var(--btn-border);
-  border-radius: 30px;
-  padding: 5px 9px;
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) 9px; /* 5→6 vertical; 9px horizontal stays literal */
   cursor: pointer;
   transition:
-    background 0.35s ease,
-    border-radius 0.2s ease,
-    box-shadow 0.15s ease;
+    background var(--dur-slow) var(--ease),
+    border-radius var(--dur) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
 }
 button:hover {
-  color: white;
-  border-radius: 2px;
-  box-shadow: 0 3px 0px white inset;
+  color: var(--white);
+  border-radius: var(--radius-xs);
+  box-shadow: 0 3px 0px var(--white) inset;
 }
 /* Clicked state: nudge the button down with a small inset shadow. */
 button:active {
   transform: translateY(1px);
-  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-press);
 }
 
 button:disabled {
@@ -136,7 +195,7 @@ button.important {
   --btn-fill: var(--text-section);
   border: none;
   --btn-border: transparent;
-  --btn-text: #000000;
+  --btn-text: var(--black);
   font-weight: 600;
 }
 button.secondary {
@@ -146,8 +205,8 @@ button.secondary {
 
 /* Orthogonal modifiers — compose with any type. */
 button.mini {
-  padding: 2px 6px;
-  font-size: 11px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-xs);
 }
 button.full {
   width: 100%;
@@ -157,7 +216,7 @@ button.btn-icon {
   background: transparent;
   border: none;
   outline: none;
-  padding: 2px;
+  padding: var(--space-1);
 
   display: flex;
   align-items: center;
@@ -165,7 +224,7 @@ button.btn-icon {
 }
 button.btn-icon:hover {
   background: transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   box-shadow: none;
   color: inherit;
 }
@@ -175,7 +234,7 @@ button.btn-icon:active {
 }
 button.btn-icon img {
   display: block;
-  transition: filter 0.2s ease;
+  transition: filter var(--dur) var(--ease);
 }
 button.btn-icon:hover img {
   filter: brightness(0) saturate(100%) invert(54%) sepia(28%) saturate(521%)
@@ -186,12 +245,12 @@ input,
 select,
 textarea {
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-sm);
   color: var(--text);
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 4px 6px;
+  border-radius: var(--radius-sm); /* snap 5→4 */
+  padding: var(--space-2) var(--space-3);
 }
 input:focus,
 select:focus,
@@ -228,8 +287,8 @@ textarea {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 12px;
+  gap: var(--space-5);
+  padding: 0 var(--space-5);
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   height: 46px;
@@ -241,9 +300,61 @@ textarea {
 
 .workspace {
   display: grid;
-  grid-template-columns: 250px 1fr 320px;
+  grid-template-columns: var(--library-width, 250px) 1fr 320px;
+  transition: grid-template-columns var(--dur) var(--ease);
   min-height: 0;
   height: 100%;
+}
+.workspace.library-collapsed {
+  --library-width: 40px;
+}
+
+/* The library column wraps the scrollable panel plus a collapse tab that
+   overhangs the panel's right edge (so it must live outside the panel's
+   own overflow). */
+.library-wrap {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+}
+.library-wrap > .panel.library {
+  height: 100%;
+}
+/* Collapsed, the panel is a thin rail; double-click anywhere on it expands. */
+.library-wrap.collapsed > .panel.library {
+  cursor: pointer;
+}
+/* Square tab sitting just outside the panel, in line with the first
+   (Scene) section toggle. Same fill + border as the panels. */
+.library-collapse-tab {
+  position: absolute;
+  top: 2px;
+  left: calc(
+    100% - 1px
+  ); /* overlap the panel's right border into a single seam */
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  z-index: var(--z-tab);
+}
+/* The chevron is an inline currentColor SVG, so recolor it via `color`
+   (the shared .btn-icon hover filter only applies to <img> children). */
+button.library-collapse-btn {
+  cursor: pointer;
+  color: var(--text-btn);
+}
+button.library-collapse-btn:hover {
+  color: var(--text-btn-hover);
+}
+.library-collapse-btn svg {
+  transition: transform var(--dur) var(--ease);
+}
+.library-wrap.collapsed .library-collapse-btn svg {
+  transform: rotate(180deg);
 }
 
 .right-col {
@@ -260,7 +371,7 @@ textarea {
 .timeline-resize-handle {
   cursor: ns-resize;
   background: transparent;
-  transition: background 0.15s;
+  transition: background var(--dur-fast);
 }
 .timeline-resize-handle:hover {
   background: var(--accent);
@@ -276,25 +387,23 @@ textarea {
   border-left: none;
 }
 .inspector-footer {
-  padding: 10px;
+  padding: var(--space-5); /* snap 10→12 */
   border-top: 1px solid var(--border);
 }
 .inspector-object-header {
-  padding: 10px 10px 10px;
+  padding: var(--space-5); /* snap 10→12 */
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
 }
 /* Tint the header in the active object's colour (title uses --text-section). */
-.inspector-object-header.object-a,
-.inspector-object-header.object-b,
-.inspector-object-header.id-text {
+.inspector-object-header:is(.object-a, .object-b, .id-text) {
   background: var(--obj-highlight);
   border-top: 1px solid var(--text-section);
   border-bottom: 1px solid var(--text-section);
 }
 .inspector-object-title {
-  font-size: 11px;
+  font-size: var(--font-xs);
   font-weight: 700;
   color: var(--text-section);
 }
@@ -302,7 +411,7 @@ textarea {
   width: 56px;
   height: 56px;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
 
@@ -313,50 +422,44 @@ textarea {
 /* Object A / B sections carry the object's accent on their rule + title.
    (These elements use literal colours, so set them explicitly rather than
    relying on the --text-section cascade.) */
-.section.object-a,
-.section.object-b,
-.section.id-text {
+.section:is(.object-a, .object-b, .id-text) {
   border-top-color: var(--text-section);
 }
-.section.object-a .section-toggle,
-.section.object-b .section-toggle,
-.section.id-text .section-toggle {
+.section:is(.object-a, .object-b, .id-text) .section-toggle {
   color: var(--text-section);
 }
-.section.object-a .section-toggle:hover,
-.section.object-b .section-toggle:hover,
-.section.id-text .section-toggle:hover {
-  color: white;
+.section:is(.object-a, .object-b, .id-text) .section-toggle:hover {
+  color: var(--white);
 }
 .section-head {
   display: flex;
 
   align-items: center;
   justify-content: space-between;
-  padding: 0px 4px;
+  padding: 0 var(--space-2);
 }
 .section-toggle {
   background: none;
   border: none;
-  color: rgb(170, 169, 169);
+  color: var(--toggle-rest);
   font-family: "Bebas Neue", sans-serif;
   letter-spacing: 0.01em;
   font-weight: 400;
-  padding: 2px 0;
-  font-size: 18px;
+  padding: var(--space-1) 0;
+  font-size: var(--font-display);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
 }
 .section-caret {
   transform: rotate(180deg);
-  transition: transform 0.22s ease;
+  transition: transform var(--dur) var(--ease);
 }
 .section-caret.open {
   transform: rotate(0deg);
 }
 .section-toggle:hover {
-  color: white;
+  color: var(--white);
   border-radius: 0;
   box-shadow: none;
 }
@@ -365,13 +468,13 @@ textarea {
   box-shadow: none;
 }
 .section:has(.section-toggle:hover) {
-  border-top-color: white;
+  border-top-color: var(--white);
 }
 .section-body-wrap {
   display: grid;
   grid-template-rows: 0fr;
   overflow: hidden;
-  transition: grid-template-rows 0.22s ease;
+  transition: grid-template-rows var(--dur) var(--ease);
 }
 .section-body-wrap.open {
   grid-template-rows: 1fr;
@@ -381,10 +484,10 @@ textarea {
   min-height: 0;
 }
 .section-body-inner {
-  padding: 4px 10px 12px;
+  padding: var(--space-2) var(--space-5) var(--space-5); /* snap 10→12 */
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .subhead {
   display: flex;
@@ -393,12 +496,12 @@ textarea {
 
   color: var(--text-dim);
   font-weight: 600;
-  margin-top: 4px;
+  margin-top: var(--space-2);
 }
 .field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   justify-content: space-between;
 }
 .field-label {
@@ -408,7 +511,7 @@ textarea {
 .field-control {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   flex: 1;
 }
 .field select,
@@ -421,7 +524,7 @@ textarea {
 }
 .hint {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--font-xs);
   line-height: 1.4;
   margin: 0;
 }
@@ -430,16 +533,10 @@ textarea {
 }
 
 /* ---------- Library ---------- */
-.thumb {
-  width: 100%;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  margin-top: 6px;
-}
 .catalog {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-3); /* snap 5→6 */
 }
 .catalog-item {
   display: flex;
@@ -449,33 +546,35 @@ textarea {
 .catalog-rule {
   display: block;
   width: 100%;
-  margin: 10px 0;
+  margin: var(--space-5) 0; /* snap 10→12 */
   border: none;
   overflow: visible;
 }
+/* .catalog-name (LibraryPanel) intentionally has no rule — it inherits the
+   panel's body type/colour; listed here so the class isn't silently undefined. */
 
 /* ---------- Preview ---------- */
 .preview {
   display: grid;
   grid-template-rows: 1fr auto;
   min-height: 0;
-  background: #08080c;
+  background: var(--bg-stage);
 }
 .preview-stage {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 0;
-  padding: 16px;
+  padding: var(--space-6);
 }
 .canvas-frame {
   aspect-ratio: 1080 / 1350;
   height: 100%;
   max-width: 100%;
-  background: #000;
-  border-radius: 6px;
+  background: var(--black);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-canvas);
 }
 .canvas-frame.draggable {
   cursor: grab;
@@ -503,36 +602,54 @@ textarea {
 
 /* ---------- Timeline ---------- */
 .timeline {
-  overflow-y: auto;
+  position: relative;
+  /* overflow stays visible so the play badge can straddle the top edge without
+     being clipped; the scroll lives on .timeline-section instead. */
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
   background: var(--panel);
   border-top: 1px solid var(--border);
-  padding: 8px 12px;
+  padding: var(--space-4) var(--space-5);
+}
+/* Circular play badge, centred on the panel's top border line so it straddles
+   the edge. Its panel-coloured fill + border mask the border line behind it,
+   and it sits out of the row flow so the scrub bar lines up with the tracks. */
+.tl-play {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  transform: translateY(-50%);
+  z-index: var(--z-badge);
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-round);
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+.tl-play .play {
+  width: auto;
+}
+.tl-play .play img {
+  width: 18px;
 }
 .timeline-section {
-  margin-bottom: 10px;
-}
-.timeline-title {
-  color: var(--text-dim);
-  font-weight: 600;
-  margin-bottom: 5px;
+  flex: 1;
+  min-height: 0;
+  /* overflow-y: auto; */
 }
 .tl-tracks {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .tl-row {
   display: flex;
   align-items: stretch;
-  gap: 8px;
-}
-.tl-row-label {
-  width: 48px;
-  flex-shrink: 0;
-  align-self: center;
-  color: var(--text-dim);
-  font-size: 11px;
-  font-weight: 600;
+  gap: var(--space-4);
 }
 .tl-track {
   position: relative;
@@ -551,21 +668,23 @@ textarea {
 }
 /* Separate the optional second object's block from the primary one. */
 .tl-track.tl-track-object .segment.object + .segment.object {
-  margin-top: 6px;
-}
-.tl-scrub-row .tl-row-label {
-  align-self: flex-start;
-  margin-top: 12px;
+  margin-top: var(--space-3);
 }
 .tl-scrub-area {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
+/* The time sits on the same band as the floating play button, pushed right.
+   Reserving the button's height keeps the scrub bar clear of it. */
 .tl-time {
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 12px;
+  margin-bottom: var(--space-1);
 }
 .tl-track .segment {
   position: absolute;
@@ -575,9 +694,9 @@ textarea {
 .tl-dur-input {
   width: 100%;
   max-width: 56px;
-  margin-top: 3px;
-  padding: 1px 4px;
-  font-size: 11px;
+  margin-top: var(--space-2); /* snap 3→4 */
+  padding: 1px var(--space-2);
+  font-size: var(--font-xs);
 }
 .tl-playhead {
   position: absolute;
@@ -585,20 +704,20 @@ textarea {
   bottom: 0;
   width: 5px;
   margin-left: -1px;
-  background: rgba(255, 255, 255, 0.443);
+  background: var(--playhead);
   pointer-events: none;
 }
 .segment {
   position: relative;
   border: 1px solid var(--border);
-  border-radius: 1px;
+  border-radius: var(--radius-xs); /* snap 1→2 */
 
-  padding: 5px 7px;
+  padding: var(--space-3) var(--space-4); /* snap 5→6, 7→8 */
   cursor: pointer;
   overflow: hidden;
 }
 .segment.break {
-  background: rgba(86, 70, 4, 0.055);
+  background: var(--segment-break-bg);
 }
 /* All three identity blocks (Text, Object A, Object B) share one interaction:
    neutral grey border, a top line in the block's accent on hover that stays
@@ -606,71 +725,59 @@ textarea {
 .segment:hover,
 .segment.sel {
   box-shadow: 0 3px 0px var(--text-section) inset;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
 }
 .segment-label {
   display: block;
-  font-size: 11px;
+  font-size: var(--font-xs);
   font-weight: 700;
 
   color: var(--text);
 }
 /* Identity blocks colour their label with the block's accent; break segments
    keep the default white label. */
-.segment.id-text .segment-label,
-.segment.object.object-a .segment-label,
-.segment.object.object-b .segment-label {
+/* Split rather than folded: the object arms and the id-text arm had different
+   specificity, so a single :is() would lift the id-text arm. */
+.segment:is(.object-a, .object-b) .segment-label {
+  color: var(--text-section);
+}
+.segment.id-text .segment-label {
   color: var(--text-section);
 }
 .segment-dur {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--font-xs);
+}
+/* Text + gap segments lay out as a wrapping row: label on the left, duration
+   pushed to the right. When there isn't room for both side by side, the input
+   wraps onto its own line below (still right-aligned). */
+.segment.id-text,
+.segment.break {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  gap: var(--space-1) var(--space-3);
+}
+.segment.id-text .tl-dur-input,
+.segment.break .tl-dur-input {
+  width: 52px;
+  flex: 0 0 auto;
+  max-width: 100%;
+  margin-top: 0;
+  margin-left: auto;
 }
 .object-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .fx-empty {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--font-xs);
   line-height: 1.4;
-  margin: 4px 0 0;
-}
-.fx-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
-}
-.fx-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--panel-3);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 8px;
-  cursor: pointer;
-}
-.fx-row.sel {
-  border-color: var(--accent);
-}
-/* Timeline shows effects as plain read-only labels — no box outline. */
-.fx-row.read-only {
-  cursor: default;
-  background: none;
-  border: none;
-  border-radius: 0;
-  padding: 0;
-  color: var(--text-dim);
-}
-.fx-row.fx-disabled {
-  opacity: 0.45;
-}
-.fx-name {
-  font-weight: 600;
+  margin: var(--space-2) 0 0;
 }
 .fx-row-controls {
   display: flex;
@@ -691,16 +798,16 @@ textarea {
   appearance: none;
   width: 14px;
   height: 14px;
-  margin: 0 4px 0 0;
+  margin: 0 var(--space-2) 0 0;
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm); /* snap 3→4 */
   background: var(--bg);
   cursor: pointer;
   display: grid;
   place-content: center;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
 }
 .fx-row-actions input[type="checkbox"]:hover {
   border-color: var(--accent);
@@ -723,7 +830,7 @@ textarea {
 .scalar-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .scalar-label {
   color: var(--text-dim);
@@ -746,7 +853,7 @@ textarea {
 .scrub::-webkit-slider-runnable-track,
 .scalar-slider::-webkit-slider-runnable-track {
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: linear-gradient(
     to right,
     var(--slider-fill) var(--slider-pct, 0%),
@@ -760,9 +867,9 @@ textarea {
   width: 14px;
   height: 14px;
   margin-top: -5px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: var(--slider-fill);
-  transition: background 0.15s ease;
+  transition: background var(--dur-fast) var(--ease);
 }
 .scrub::-webkit-slider-thumb:hover,
 .scalar-slider::-webkit-slider-thumb:hover {
@@ -793,9 +900,9 @@ textarea {
 .diamond {
   background: none;
   border: none;
-  color: #50505f;
-  padding: 2px 3px;
-  font-size: 12px;
+  color: var(--diamond);
+  padding: var(--space-1) var(--space-2); /* snap 3→4 */
+  font-size: var(--font-sm);
 }
 .diamond:hover {
   color: var(--accent);
@@ -828,8 +935,8 @@ textarea {
 .kf-stack {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }
 .kf-channel {
   display: flex;
@@ -837,8 +944,8 @@ textarea {
 }
 .kf-channel-label {
   display: flex;
-  gap: 6px;
-  font-size: 11px;
+  gap: var(--space-3);
+  font-size: var(--font-xs);
   line-height: 1.3;
 }
 .kf-channel-section {
@@ -878,43 +985,43 @@ textarea {
   box-shadow: none;
 }
 .kf-marker.active {
-  background: white;
-  box-shadow: 0 0 4px white;
+  background: var(--white);
+  box-shadow: 0 0 4px var(--white);
 }
 .kf-marker.active:active {
-  box-shadow: 0 0 4px white;
+  box-shadow: 0 0 4px var(--white);
 }
 
 /* ---------- Modals ---------- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  z-index: var(--z-modal);
 }
 .modal {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
 }
 .modal-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6); /* snap 10→12, 14→16 */
   border-bottom: 1px solid var(--border);
 }
 .modal-head h3 {
   margin: 0;
 }
 .modal-foot {
-  padding: 10px 14px;
+  padding: var(--space-5) var(--space-6); /* snap 10→12, 14→16 */
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
@@ -937,14 +1044,14 @@ textarea {
 .shader-code {
   display: flex;
   flex-direction: column;
-  padding: 10px;
-  gap: 8px;
+  padding: var(--space-5); /* snap 10→12 */
+  gap: var(--space-4);
   min-height: 0;
 }
 textarea.code {
   flex: 1;
   font-family: "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12.5px;
+  font-size: var(--font-base);
   line-height: 1.5;
   white-space: pre;
   tab-size: 2;
@@ -953,41 +1060,43 @@ textarea.code {
 .shader-ok {
   margin: 0;
   font-family: "SF Mono", Menlo, monospace;
-  font-size: 11px;
+  font-size: var(--font-xs);
   white-space: pre-wrap;
   max-height: 110px;
   overflow: auto;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
 }
 .shader-error {
   color: var(--err);
-  background: rgba(255, 107, 107, 0.08);
+  background: var(--err-bg);
 }
 .shader-ok {
   color: var(--ok);
 }
 .shader-uniforms {
   border-left: 1px solid var(--border);
-  padding: 10px;
+  padding: var(--space-5); /* snap 10→12 */
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .uniform-edit {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2);
   background: var(--panel-3);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
 }
 .uniform-edit .u-nums {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2);
 }
+/* .u-name / .u-label (ShaderEditorModal) intentionally have no rules — they
+   inherit body type/colour; listed here so the classes aren't silently undefined. */
 .uniform-edit .u-nums input {
   width: 100%;
 }
@@ -997,10 +1106,10 @@ textarea.code {
   width: 460px;
 }
 .export-body {
-  padding: 14px;
+  padding: var(--space-6); /* snap 14→16 */
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-5); /* snap 10→12 */
 }
 .export-summary {
   color: var(--text-dim);
@@ -1008,13 +1117,13 @@ textarea.code {
 .progress {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-5); /* snap 10→12 */
 }
 .progress .bar {
   flex: 1;
   height: 8px;
   background: var(--panel-3);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .progress .fill {
@@ -1023,7 +1132,7 @@ textarea.code {
 }
 .status {
   color: var(--text-dim);
-  font-size: 11.5px;
+  font-size: var(--font-sm); /* snap 11.5→12 */
   word-break: break-all;
 }
 
@@ -1035,29 +1144,44 @@ textarea.code {
   transform: translateX(-50%);
   background: var(--panel-3);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 14px;
-  z-index: 60;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-md); /* snap 8→6 */
+  padding: var(--space-4) var(--space-6); /* snap 14→16 */
+  z-index: var(--z-toast);
+  box-shadow: var(--shadow-toast);
 }
 
 /* ---------- Feeling lucky ---------- */
 .swatch-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3) var(--space-4);
 }
 .swatch-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
+}
+/* Narrower colour square so the square + hex input + delete all fit within
+   each half-width grid cell. */
+.swatch-row input[type="color"] {
+  width: 18px;
+  flex: none;
 }
 .swatch-row .hex {
-  flex: 1;
+  flex: none;
+  width: 60px;
+  min-width: 0;
+  font-size: var(--font-xs);
+  padding-left: var(--space-2); /* snap 3→4 */
+  padding-right: var(--space-2); /* snap 3→4 */
+}
+.swatch-row .btn-icon {
+  flex: none;
+  padding: 0;
 }
 .swatch-row .btn-icon img {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 .swatch-del {
   position: absolute;
@@ -1066,7 +1190,7 @@ textarea.code {
   width: 16px;
   height: 16px;
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: var(--panel-3);
   border: 1px solid var(--border);
 }
@@ -1074,16 +1198,10 @@ textarea.code {
   width: 14px;
   height: 14px;
 }
-.swatch-add {
-  height: 28px;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--text-dim);
-}
 .lucky-img-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  gap: var(--space-3);
 }
 .lucky-img-cell {
   position: relative;
@@ -1093,7 +1211,7 @@ textarea.code {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   display: block;
 }
@@ -1103,11 +1221,11 @@ textarea.code {
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: 4px;
-  border-radius: 4px;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
   border: 1px dashed var(--border);
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: var(--font-2xs);
   text-align: center;
   word-break: break-all;
   overflow: hidden;
@@ -1116,7 +1234,7 @@ textarea.code {
 .heat-labels {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-4);
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--font-xs);
 }

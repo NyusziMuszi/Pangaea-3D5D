@@ -25,6 +25,7 @@ const PRIMITIVE_OPTIONS: { value: PrimitiveModel; label: string }[] = [
   { value: "portal", label: "Portal" },
 
   { value: "cylinder", label: "Cylinder" },
+  { value: "capsule", label: "Capsule" },
   { value: "torus", label: "Torus" },
   { value: "box", label: "Box" },
   { value: "lathe", label: "Lathe" },
@@ -35,7 +36,13 @@ const PRIMITIVE_OPTIONS: { value: PrimitiveModel; label: string }[] = [
   { value: "dodecahedron", label: "Dodecahedron" },
 ];
 
-export function LibraryPanel(): JSX.Element {
+export function LibraryPanel({
+  collapsed,
+  onToggleCollapse,
+}: {
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}): JSX.Element {
   const project = useStore((s) => s.project);
   const update = useStore((s) => s.update);
   const selectEffect = useStore((s) => s.selectEffect);
@@ -327,191 +334,232 @@ export function LibraryPanel(): JSX.Element {
   const allDefs = [...BUILTIN_EFFECTS, ...project.customEffects];
 
   return (
-    <div className="panel library">
-      <Section title="Scene">
-        <ColorRow
-          label="Background"
-          value={project.scene.backgroundColor}
-          onChange={(v) =>
-            update((p) => {
-              p.scene.backgroundColor = v;
-            })
-          }
-        />
-        <Field label="Camera">
-          <select
-            value={project.scene.cameraType}
-            onChange={(e) =>
-              update((p) => {
-                p.scene.cameraType = e.target.value as CameraType;
-              })
-            }
-          >
-            <option value="perspective">Perspective</option>
-            <option value="isometric">Isometric</option>
-          </select>
-        </Field>
-      </Section>
-
-      <Section title="Object A" className="object-a">
-        <ObjectMenu index={0} />
-      </Section>
-
-      <Section title="Object B" className="object-b">
-        {project.object2 ? (
+    <div className={`library-wrap ${collapsed ? "collapsed" : ""}`}>
+      <div
+        className="panel library"
+        // When collapsed the panel is just a thin rail; double-clicking
+        // anywhere on it re-expands the library.
+        onDoubleClick={collapsed ? onToggleCollapse : undefined}
+      >
+        {!collapsed && (
           <>
-            <ObjectMenu index={1} />
-            <button className="full secondary" onClick={removeSecondObject}>
-              Remove second object
-            </button>
-          </>
-        ) : (
-          <button className="full" onClick={addSecondObject}>
-            Add second object
-          </button>
-        )}
-      </Section>
-
-      <Section title="Explore" className="lucky">
-        <div className="subhead">Palette</div>
-        <div className="swatch-list">
-          {lucky.colors.map((c, i) => (
-            <div className="swatch-row" key={i}>
-              <input
-                type="color"
-                value={c}
-                onChange={(e) =>
-                  update((p) => {
-                    p.lucky.colors[i] = e.target.value;
-                  })
-                }
-              />
-              <HexInput
-                value={c}
+            <Section title="Scene">
+              <ColorRow
+                label="Background"
+                value={project.scene.backgroundColor}
                 onChange={(v) =>
                   update((p) => {
-                    p.lucky.colors[i] = v;
+                    p.scene.backgroundColor = v;
                   })
                 }
               />
-              <button
-                className="btn-icon"
-                title="Remove colour"
-                onClick={() =>
+              <Field label="Camera">
+                <select
+                  value={project.scene.cameraType}
+                  onChange={(e) =>
+                    update((p) => {
+                      p.scene.cameraType = e.target.value as CameraType;
+                    })
+                  }
+                >
+                  <option value="perspective">Perspective</option>
+                  <option value="isometric">Isometric</option>
+                </select>
+              </Field>
+            </Section>
+
+            <Section title="Object A" className="object-a">
+              <ObjectMenu index={0} />
+            </Section>
+
+            <Section title="Object B" className="object-b">
+              {project.object2 ? (
+                <>
+                  <ObjectMenu index={1} />
+                  <button
+                    className="full secondary"
+                    onClick={removeSecondObject}
+                  >
+                    Remove second object
+                  </button>
+                </>
+              ) : (
+                <button className="full" onClick={addSecondObject}>
+                  Add second object
+                </button>
+              )}
+            </Section>
+
+            <Section title="Explore" className="lucky">
+              <div className="subhead">Colour Palette</div>
+              <div className="swatch-list">
+                {lucky.colors.map((c, i) => (
+                  <div className="swatch-row" key={i}>
+                    <input
+                      type="color"
+                      value={c}
+                      onChange={(e) =>
+                        update((p) => {
+                          p.lucky.colors[i] = e.target.value;
+                        })
+                      }
+                    />
+                    <HexInput
+                      value={c}
+                      onChange={(v) =>
+                        update((p) => {
+                          p.lucky.colors[i] = v;
+                        })
+                      }
+                    />
+                    <button
+                      className="btn-icon"
+                      title="Remove colour"
+                      onClick={() =>
+                        update((p) => {
+                          p.lucky.colors.splice(i, 1);
+                        })
+                      }
+                    >
+                      <img src={cancelIcon} alt="remove" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {lucky.colors.length < MAX_COLORS && (
+                <button
+                  className="full"
+                  onClick={() =>
+                    update((p) => {
+                      p.lucky.colors.push("#a3d6dc");
+                    })
+                  }
+                >
+                  Add a colour
+                </button>
+              )}
+
+              <div className="subhead">Image Palette</div>
+              {lucky.images.length > 0 && (
+                <div className="lucky-img-grid" data-resolved={thumbResolved}>
+                  {lucky.images.map((path, i) => {
+                    const dataUrl = dataUrlCache.current.get(path);
+                    return (
+                      <div className="lucky-img-cell" key={path + i}>
+                        {dataUrl ? (
+                          <img src={dataUrl} alt="" />
+                        ) : (
+                          <span className="lucky-img-missing" title={path}>
+                            {path.split(/[\\/]/).pop()}
+                          </span>
+                        )}
+                        <button
+                          className="btn-icon swatch-del"
+                          title="Remove image"
+                          onClick={() =>
+                            update((p) => {
+                              p.lucky.images.splice(i, 1);
+                            })
+                          }
+                        >
+                          <img src={cancelIcon} alt="remove" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {lucky.images.length < MAX_IMAGES && (
+                <button className="full default" onClick={addLuckyImage}>
+                  Add an image
+                </button>
+              )}
+
+              <div className="subhead">Heat</div>
+              <input
+                className="scalar-slider"
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={lucky.heat}
+                style={
+                  {
+                    ["--slider-pct" as string]: `${lucky.heat * 100}%`,
+                  } as CSSProperties
+                }
+                onChange={(e) =>
                   update((p) => {
-                    p.lucky.colors.splice(i, 1);
+                    p.lucky.heat = parseFloat(e.target.value);
                   })
                 }
+              />
+              <div className="heat-labels">
+                <span>Simple </span>
+                <span>Intense</span>
+              </div>
+
+              <button
+                className="full important"
+                disabled={generating}
+                onClick={onGenerate}
               >
-                <img src={cancelIcon} alt="remove" />
+                Feeling lucky
               </button>
-            </div>
-          ))}
-        </div>
-        {lucky.colors.length < MAX_COLORS && (
-          <button
-            className="full"
-            onClick={() =>
-              update((p) => {
-                p.lucky.colors.push("#a3d6dc");
-              })
-            }
-          >
-            Add to palette
-          </button>
-        )}
+            </Section>
 
-        <div className="subhead">Images</div>
-        {lucky.images.length > 0 && (
-          <div className="lucky-img-grid" data-resolved={thumbResolved}>
-            {lucky.images.map((path, i) => {
-              const dataUrl = dataUrlCache.current.get(path);
-              return (
-                <div className="lucky-img-cell" key={path + i}>
-                  {dataUrl ? (
-                    <img src={dataUrl} alt="" />
-                  ) : (
-                    <span className="lucky-img-missing" title={path}>
-                      {path.split(/[\\/]/).pop()}
-                    </span>
-                  )}
-                  <button
-                    className="btn-icon swatch-del"
-                    title="Remove image"
-                    onClick={() =>
-                      update((p) => {
-                        p.lucky.images.splice(i, 1);
-                      })
-                    }
-                  >
-                    <img src={cancelIcon} alt="remove" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+            <Section title="Effects">
+              <div className="catalog">
+                <button
+                  className="catalog-item"
+                  onClick={newCustomShader}
+                  title="Author a new GLSL effect"
+                >
+                  <span className="catalog-name">Bespoke</span>
+                </button>
+                <ZigzagRule patId="zigzag-bespoke" />
+                {allDefs.map((def) => (
+                  <div key={def.id}>
+                    <button
+                      className="catalog-item"
+                      onClick={() => addEffect(def)}
+                    >
+                      <span className="catalog-name">{def.name}</span>
+                    </button>
+                    {(def.id === "relief" || def.id === "jitter") && (
+                      <ZigzagRule patId={`zigzag-${def.id}`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Section>
+          </>
         )}
-        {lucky.images.length < MAX_IMAGES && (
-          <button className="full default" onClick={addLuckyImage}>
-            Add image
-          </button>
-        )}
-
-        <div className="subhead">Heat</div>
-        <input
-          className="scalar-slider"
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={lucky.heat}
-          style={
-            {
-              ["--slider-pct" as string]: `${lucky.heat * 100}%`,
-            } as CSSProperties
-          }
-          onChange={(e) =>
-            update((p) => {
-              p.lucky.heat = parseFloat(e.target.value);
-            })
-          }
-        />
-        <div className="heat-labels">
-          <span>Simple </span>
-          <span>Intense</span>
-        </div>
-
+      </div>
+      <div className="library-collapse-tab">
         <button
-          className="full important"
-          disabled={generating}
-          onClick={onGenerate}
+          className="btn-icon library-collapse-btn"
+          onClick={onToggleCollapse}
+          title={collapsed ? "Expand library" : "Collapse library"}
+          aria-label={collapsed ? "Expand library" : "Collapse library"}
         >
-          Feeling lucky
-        </button>
-      </Section>
-
-      <Section title="Effects">
-        <div className="catalog">
-          <button
-            className="catalog-item"
-            onClick={newCustomShader}
-            title="Author a new GLSL effect"
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
           >
-            <span className="catalog-name">Bespoke</span>
-          </button>
-          <ZigzagRule patId="zigzag-bespoke" />
-          {allDefs.map((def) => (
-            <div key={def.id}>
-              <button className="catalog-item" onClick={() => addEffect(def)}>
-                <span className="catalog-name">{def.name}</span>
-              </button>
-              {(def.id === "relief" || def.id === "jitter") && (
-                <ZigzagRule patId={`zigzag-${def.id}`} />
-              )}
-            </div>
-          ))}
-        </div>
-      </Section>
+            <path
+              d="M15 18L9 12L15 6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }

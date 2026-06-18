@@ -14,6 +14,7 @@ import {
 } from "../types";
 import { Section, Field, ScalarControl, ColorRow } from "./controls";
 import { defaultProject } from "../state/defaults";
+import type { CSSProperties } from "react";
 
 const TAU = Math.PI * 2;
 
@@ -227,6 +228,36 @@ export function InspectorPanel(): JSX.Element {
                     <option value="wireframe">Wireframe</option>
                   </select>
                 </Field>
+                {segment.text.textBackdrop === "wireframe" && (
+                  <Field label="Line weight">
+                    <input
+                      className="scalar-slider"
+                      type="range"
+                      min={1}
+                      max={3}
+                      step={0.1}
+                      value={segment.text.textBackdropWireWidth ?? 1.5}
+                      style={
+                        {
+                          ["--slider-pct" as string]: `${
+                            (((segment.text.textBackdropWireWidth ?? 1.5) - 1) /
+                              2) *
+                            100
+                          }%`,
+                        } as CSSProperties
+                      }
+                      onChange={(e) =>
+                        update((p) => {
+                          const s = p.segments.find((x) => x.id === segment.id);
+                          if (s?.text)
+                            s.text.textBackdropWireWidth = parseFloat(
+                              e.target.value || "1.5",
+                            );
+                        })
+                      }
+                    />
+                  </Field>
+                )}
                 <Field label="Reveal">
                   <select
                     value={segment.text.reveal}

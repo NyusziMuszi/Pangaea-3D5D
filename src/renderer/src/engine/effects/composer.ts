@@ -82,10 +82,13 @@ ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
+attribute vec3 aBary;
+varying vec3 vBary;
 ${commonBlock}
 ${deformFns.join('\n')}
 void main() {
   vUv = uv;
+  vBary = aBary;
   vec3 pos = position;
   vec3 nrm = normal;
 ${deformCalls.join('\n')}
@@ -107,10 +110,13 @@ uniform vec2 uImageOffset;
 uniform float uSilhouette;
 uniform vec3 uFlatColor;
 uniform float uOpacity;
+uniform float uWireframe;
+uniform float uWireWidth;
 ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
+varying vec3 vBary;
 ${commonBlock}
 vec4 pg_sampleObject(vec2 uv) {
 #ifdef USE_TRIPLANAR
@@ -133,6 +139,12 @@ void main() {
   vec4 color = pg_sampleObject(vUv);
 ${shadeCalls.join('\n')}
   if (uSilhouette > 0.5) color = vec4(uFlatColor, 1.0);
+  if (uWireframe > 0.5) {
+    vec3 d = fwidth(vBary);
+    vec3 a3 = smoothstep(vec3(0.0), d * uWireWidth, vBary);
+    float edge = 1.0 - min(min(a3.x, a3.y), a3.z);
+    color = vec4(uFlatColor, edge);
+  }
   color.a *= uOpacity;
   gl_FragColor = color;
 }`

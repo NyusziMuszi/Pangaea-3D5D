@@ -38,7 +38,7 @@ export function defaultSecondObject(): ObjectState {
     mapping: "uv",
     image: defaultObjectImage(),
     effects: [],
-    rotX: constant(-4.493),
+    rotX: constant(0),
     rotY: constant(-4.443),
     rotZ: constant(-3.413),
     scale: constant(0.54),
@@ -88,6 +88,7 @@ export function defaultProject(): Project {
           reveal: "fade",
           textBackdrop: "silhouette",
           textBackdropColor: "#64e36e",
+          textBackdropWireWidth: 1.5,
         },
       },
       {
@@ -110,6 +111,7 @@ export function defaultProject(): Project {
           reveal: "fade",
           textBackdrop: "wireframe",
           textBackdropColor: "#6473e3",
+          textBackdropWireWidth: 1.5,
         },
       },
       {
@@ -132,6 +134,7 @@ export function defaultProject(): Project {
           reveal: "fade",
           textBackdrop: "silhouette",
           textBackdropColor: "#64e36e",
+          textBackdropWireWidth: 1.5,
         },
       },
     ],

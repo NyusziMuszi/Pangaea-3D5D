@@ -67,6 +67,7 @@ export type PrimitiveModel =
   | "sphere"
   | "portal"
   | "cylinder"
+  | "capsule"
   | "torus"
   | "box"
   | "lathe"
@@ -89,6 +90,7 @@ export interface TextStyle {
   reveal: "fade" | "cut";
   textBackdrop: TextBackdrop;
   textBackdropColor: string;
+  textBackdropWireWidth: number; // wireframe line weight, ~screen px
 }
 
 export type SegmentKind = "animation" | "text";

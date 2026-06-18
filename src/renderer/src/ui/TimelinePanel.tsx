@@ -101,17 +101,17 @@ export function TimelinePanel(): JSX.Element {
 
   return (
     <div className="timeline">
+      <div className="tl-play">
+        <button className="btn-icon play" onClick={togglePlay}>
+          <img
+            src={playing ? pauseIcon : playIcon}
+            alt={playing ? "pause" : "play"}
+          />
+        </button>
+      </div>
       <div className="timeline-section">
         <div className="tl-tracks">
           <div className="tl-row tl-scrub-row">
-            <div className="tl-row-label">
-              <button className="btn-icon play" onClick={togglePlay}>
-                <img
-                  src={playing ? pauseIcon : playIcon}
-                  alt={playing ? "pause" : "play"}
-                />
-              </button>
-            </div>
             <div className="tl-scrub-area">
               <div className="tl-time">
                 {fmt(playhead)} / {fmt(total)}
@@ -142,7 +142,6 @@ export function TimelinePanel(): JSX.Element {
           </div>
 
           <div className="tl-row">
-            <div className="tl-row-label">Text</div>
             <div className="tl-track">
               {project.segments.map((seg, i) => {
                 const isText = seg.kind === "text";
@@ -156,9 +155,7 @@ export function TimelinePanel(): JSX.Element {
                     }}
                     onClick={() => selectOnly(seg.id)}
                   >
-                    <span className="segment-label">
-                      {isText ? "Text" : "—"}
-                    </span>
+                    {isText && <span className="segment-label">Text</span>}
                     <input
                       type="number"
                       className="tl-dur-input"
@@ -186,7 +183,6 @@ export function TimelinePanel(): JSX.Element {
           </div>
 
           <div className="tl-row">
-            <div className="tl-row-label">Object</div>
             <div className="tl-track tl-track-object">
               <div
                 className={`segment object object-a ${objectActive && selectedObjectIndex === 0 ? "sel" : ""}`}

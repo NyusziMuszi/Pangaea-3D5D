@@ -48,24 +48,39 @@ class TubePathCurve extends THREE.Curve<THREE.Vector3> {
   }
 }
 
+function withBarycentric(geo: THREE.BufferGeometry): THREE.BufferGeometry {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const count = g.getAttribute("position").count;
+  const bary = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const v = i % 3; // 0,1,2 per triangle
+    bary[i * 3 + v] = 1;
+  }
+  g.setAttribute("aBary", new THREE.BufferAttribute(bary, 3));
+  return g;
+}
+
 function primitiveGeometry(primitive: string): THREE.BufferGeometry {
   switch (primitive) {
     case "plane":
-      return new THREE.PlaneGeometry(1.6, 2.0, 256, 256);
+      return new THREE.PlaneGeometry(1.6, 2.0, 96, 96);
     case "sphere":
-      return new THREE.SphereGeometry(1.0, 128, 128);
-    case "cylinder":
-      return new THREE.CylinderGeometry(0.85, 0.85, 2.0, 80, 18, true);
-
+      return new THREE.SphereGeometry(1.0, 96, 96);
     case "portal":
     default:
-      return new THREE.CylinderGeometry(1, 1, 3, 4, 2, true);
+      return new THREE.CylinderGeometry(1, 1, 3, 4, 96, true);
+    case "cylinder":
+      return new THREE.CylinderGeometry(0.85, 0.85, 2.0, 96, 48, true);
+
+    case "capsule":
+      return new THREE.CapsuleGeometry(1, 3, 14, 34, 5);
+
     case "torus":
       return new THREE.TorusGeometry(0.78, 0.34, 60, 80);
     case "box":
-      return new THREE.BoxGeometry(1.4, 1.8, 1.4, 8, 8, 8);
+      return new THREE.BoxGeometry(1.4, 1.8, 1.4, 12, 12, 12);
     case "lathe":
-      return new THREE.LatheGeometry(latheProfile(), 128);
+      return new THREE.LatheGeometry(latheProfile(), 96);
     case "knot":
       return new THREE.TubeGeometry(new TubePathCurve(), 200, 0.32, 32, true);
     case "twist":
@@ -145,6 +160,14 @@ function valueOf(
   return evalScalar(scalar, t);
 }
 
+// Hidden per-primitive base rotation, added on top of the user's Rotate X.
+// The portal geometry only faces the camera when tilted, but we don't want
+// that baked into the user-facing control — so it lives here instead, leaving
+// the rotX value clean when switching to another shape.
+function primitiveRotXOffset(primitive: string): number {
+  return primitive === "portal" ? -1.533 : 0;
+}
+
 // Apply an object's animated rotation/scale/position to its group. Position
 // is optional on older projects, so it falls back to the origin.
 function applyObjectTransform(
@@ -153,7 +176,7 @@ function applyObjectTransform(
   t: number,
 ): void {
   group.rotation.set(
-    evalScalar(o.rotX, t),
+    evalScalar(o.rotX, t) + primitiveRotXOffset(o.primitive),
     evalScalar(o.rotY, t),
     evalScalar(o.rotZ, t),
   );
@@ -295,7 +318,7 @@ class ObjectSlot {
         object.modelName ?? "model.glb",
       );
     } else {
-      const geo = primitiveGeometry(object.primitive);
+      const geo = withBarycentric(primitiveGeometry(object.primitive));
       this.mesh = new THREE.Mesh(geo, this.material!);
       this.group.add(this.mesh);
     }
@@ -309,8 +332,9 @@ class ObjectSlot {
     }
     const token = ++this.modelToken;
     loadModelGeometry(dataUrl, name)
-      .then((geo) => {
+      .then((rawGeo) => {
         if (token !== this.modelToken) return;
+        const geo = withBarycentric(rawGeo);
         this.loadedModelGeo = geo;
         this.loadedModelUrl = dataUrl;
         this.clearMesh();
@@ -343,6 +367,8 @@ class ObjectSlot {
       uSilhouette: { value: 0 },
       uFlatColor: { value: new THREE.Vector3(0, 0, 0) },
       uOpacity: { value: 1 },
+      uWireframe: { value: 0 },
+      uWireWidth: { value: 1.5 },
     };
     this.activeBindings = [];
     for (const b of composed.bindings) {
@@ -436,11 +462,14 @@ class ObjectSlot {
       // The backdrop cuts in/out at full strength — only the card's background
       // colour and text fade, so the silhouette/wireframe stays fully opaque.
       mat.uniforms.uOpacity.value = 1;
-      mat.wireframe = tl.textCard.style.textBackdrop === "wireframe";
+      const isWire = tl.textCard.style.textBackdrop === "wireframe";
+      mat.uniforms.uWireframe.value = isWire ? 1 : 0;
+      mat.uniforms.uWireWidth.value =
+        tl.textCard.style.textBackdropWireWidth ?? 1.5;
     } else {
       mat.uniforms.uSilhouette.value = 0;
       mat.uniforms.uOpacity.value = 1;
-      mat.wireframe = false;
+      mat.uniforms.uWireframe.value = 0;
     }
   }
 
