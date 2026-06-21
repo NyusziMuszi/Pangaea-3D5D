@@ -1,8 +1,15 @@
 import * as THREE from "three";
-import type { EffectDef, ObjectState, Project, Scalar } from "../types";
+import type {
+  EffectDef,
+  EffectInstance,
+  ObjectState,
+  Project,
+  Scalar,
+} from "../types";
 import { totalDuration, constant } from "../types";
 import { evalScalar } from "./animatable";
-import { computeTimeline } from "./timeline";
+import { computeTimeline, buildTimelineIndex } from "./timeline";
+import type { TimelineIndex } from "./timeline";
 import {
   composeObjectShader,
   type ResolvedEffect,
@@ -13,8 +20,12 @@ import { TextOverlay, renderTextCard } from "./textOverlay";
 import { loadTextCardFont } from "./fonts";
 import { loadImage, loadModelGeometry } from "./loaders";
 
+// A composed uniform binding resolved once at material-build time: holds a
+// direct reference to the owning effect instance and the uniform's default
+// scalar, so the per-frame uniform loop never searches the effect stack.
 interface ActiveBinding extends UniformBinding {
-  def: EffectDef;
+  instance: EffectInstance;
+  defaultScalar: Scalar;
 }
 
 type Timeline = ReturnType<typeof computeTimeline>;
@@ -110,11 +121,12 @@ function normalizeToSrgb(img: HTMLImageElement): CanvasImageSource {
   return canvas;
 }
 
-// Parse a #rrggbb / #rgb hex string into literal 0..1 sRGB components.
+// Parse a #rrggbb / #rgb hex string into literal 0..1 sRGB components, writing
+// into `target` (no allocation per call).
 // Deliberately NOT THREE.Color: the object shader outputs raw bytes via
 // NoColorSpace (see ObjectSlot.reloadImage), so colour-managed sRGB->linear
 // conversion here would make uFlatColor render too dark.
-function hexToRgb01(hex: string): THREE.Vector3 {
+function hexToRgb01(hex: string, target: THREE.Vector3): THREE.Vector3 {
   let h = hex.replace("#", "").trim();
   if (h.length === 3)
     h = h
@@ -122,7 +134,7 @@ function hexToRgb01(hex: string): THREE.Vector3 {
       .map((c) => c + c)
       .join("");
   const n = parseInt(h.padEnd(6, "0").slice(0, 6), 16);
-  return new THREE.Vector3(
+  return target.set(
     ((n >> 16) & 255) / 255,
     ((n >> 8) & 255) / 255,
     (n & 255) / 255,
@@ -141,23 +153,6 @@ function resolvedEffects(
     if (def) out.push({ instance: inst, def });
   }
   return out;
-}
-
-// Current value of a single uniform for an object's effect instance at time t.
-function valueOf(
-  object: ObjectState,
-  instanceId: string,
-  uniformName: string,
-  def: EffectDef,
-  t: number,
-): number {
-  const inst = object.effects.find((e) => e.instanceId === instanceId);
-  let scalar: Scalar | undefined = inst?.values[uniformName];
-  if (!scalar) {
-    const u = def.uniforms.find((x) => x.name === uniformName);
-    scalar = constant(u?.default ?? 0);
-  }
-  return evalScalar(scalar, t);
 }
 
 // Hidden per-primitive base rotation, added on top of the user's Rotate X.
@@ -352,7 +347,14 @@ class ObjectSlot {
   ): void {
     const effects = resolvedEffects(object, customEffects);
     const composed = composeObjectShader(effects, object.mapping);
-    if (composed.signature === this.materialSig && this.material) return;
+    // The shader signature ignores scalar values, so a value-only edit reuses
+    // the material. But `setProject` hands us freshly cloned EffectInstances,
+    // so we must re-resolve the cached binding refs even on this fast path —
+    // otherwise applyFrame would keep reading the previous project's values.
+    if (composed.signature === this.materialSig && this.material) {
+      this.bindActive(composed.bindings, effects);
+      return;
+    }
     this.materialSig = composed.signature;
     // Optimistically clear any previous compile error; reportShaderError re-fires if it fails.
     this.reportShaderError(null);
@@ -370,14 +372,12 @@ class ObjectSlot {
       uWireframe: { value: 0 },
       uWireWidth: { value: 1.5 },
     };
-    this.activeBindings = [];
-    for (const b of composed.bindings) {
-      uniforms[b.uniformKey] = { value: 0 };
-      const def = effects.find(
-        (e) => e.instance.instanceId === b.instanceId,
-      )!.def;
-      this.activeBindings.push({ ...b, def });
-    }
+    for (const b of composed.bindings) uniforms[b.uniformKey] = { value: 0 };
+    this.bindActive(composed.bindings, effects);
+
+    // Replacing the material without disposing the old ShaderMaterial leaks its
+    // compiled GPU program; dispose the previous one first.
+    this.material?.dispose();
 
     const mat = new THREE.ShaderMaterial({
       vertexShader: composed.vertexShader,
@@ -397,6 +397,24 @@ class ObjectSlot {
     if (this.mesh && (this.mesh as THREE.Mesh).isMesh) {
       (this.mesh as THREE.Mesh).material = mat;
     }
+  }
+
+  // Resolve each composed binding to a direct EffectInstance reference and the
+  // uniform's default scalar, so applyFrame can read values without scanning
+  // the effect stack. Called on every reconcile (the cloned instances change).
+  private bindActive(
+    bindings: UniformBinding[],
+    effects: ResolvedEffect[],
+  ): void {
+    this.activeBindings = bindings.map((b) => {
+      const re = effects.find((e) => e.instance.instanceId === b.instanceId)!;
+      const ud = re.def.uniforms.find((u) => u.name === b.uniformName);
+      return {
+        ...b,
+        instance: re.instance,
+        defaultScalar: constant(ud?.default ?? 0),
+      };
+    });
   }
 
   get currentTexture(): THREE.Texture | null {
@@ -423,7 +441,11 @@ class ObjectSlot {
     mat.uniforms.uTime.value = tl.sceneTime;
     for (const b of this.activeBindings) {
       const u = mat.uniforms[b.uniformKey];
-      if (u) u.value = valueOf(object, b.instanceId, b.uniformName, b.def, t);
+      if (u)
+        u.value = evalScalar(
+          b.instance.values[b.uniformName] ?? b.defaultScalar,
+          t,
+        );
     }
 
     const scaleU = mat.uniforms.uImageScale.value as THREE.Vector2;
@@ -456,8 +478,9 @@ class ObjectSlot {
     if (!mat) return;
     if (active && tl.textCard) {
       mat.uniforms.uSilhouette.value = 1;
-      (mat.uniforms.uFlatColor.value as THREE.Vector3).copy(
-        hexToRgb01(tl.textCard.style.textBackdropColor),
+      hexToRgb01(
+        tl.textCard.style.textBackdropColor,
+        mat.uniforms.uFlatColor.value as THREE.Vector3,
       );
       // The backdrop cuts in/out at full strength — only the card's background
       // colour and text fade, so the silhouette/wireframe stays fully opaque.
@@ -476,13 +499,23 @@ class ObjectSlot {
   private clearMesh(): void {
     if (this.mesh) {
       this.group.remove(this.mesh);
+      // Dispose the mesh's geometry to free its GPU buffers — but never the
+      // cached model geometry, which is reused across rebuilds. The material is
+      // owned/disposed separately (reconcileMaterial / clearAll).
+      const geo = (this.mesh as THREE.Mesh).geometry;
+      if (geo && geo !== this.loadedModelGeo) geo.dispose();
       this.mesh = null;
     }
   }
 
   private clearAll(): void {
     this.clearMesh();
+    this.material?.dispose();
     this.material = null;
+    this.loadedModelGeo?.dispose();
+    this.loadedModelGeo = null;
+    this.loadedModelUrl = null;
+    this.imageTexture?.dispose();
     this.objectSig = "";
     this.materialSig = "";
     this.activeBindings = [];
@@ -498,18 +531,38 @@ export class Engine {
   private perspectiveCamera: THREE.PerspectiveCamera;
   private isometricCamera: THREE.OrthographicCamera;
   private camera: THREE.Camera;
-  // Primary object and the optional second object — independent peers, each
-  // with its own geometry, material, texture and effect stack.
-  private slot0: ObjectSlot;
-  private slot1: ObjectSlot;
+  // One slot per project object — independent peers, each with its own
+  // geometry, material, texture and effect stack. Slots are created on demand
+  // (and reused/cleared) as the object count changes.
+  private slots: ObjectSlot[] = [];
   private overlay = new TextOverlay();
 
   private project: Project | null = null;
 
   private placeholder: THREE.Texture;
 
+  // Cumulative segment starts, rebuilt only when segments change (setProject)
+  // rather than every frame.
+  private timelineIndex: TimelineIndex = { starts: [], total: 0 };
+
+  // Persistent scratch instances reused every frame to avoid per-frame
+  // allocation in the hot render path.
+  private clearColorScratch = new THREE.Color();
+  private cardColorScratch = new THREE.Color();
+
   // text cache
   private textCache = new Map<string, THREE.CanvasTexture>();
+  // Memoize the (expensive) JSON.stringify of a style object by identity. The
+  // style object is stable across all frames of a project version, so this
+  // collapses a per-frame stringify into one per edit.
+  private styleKeyCache = new WeakMap<object, string>();
+
+  // Logical output size (camera framing + uResolution) is independent of the
+  // render-buffer size. During interactive playback we shrink the buffer
+  // (renderScale < 1) and let CSS upscale it; still frames render full-res.
+  private logicalWidth = 1080;
+  private logicalHeight = 1350;
+  private renderScale = 1;
 
   // playback
   private playing = false;
@@ -519,6 +572,24 @@ export class Engine {
   onTick: ((t: number) => void) | null = null;
   onError: ((msg: string) => void) | null = null;
   onShaderError: ((msg: string | null) => void) | null = null;
+
+  private requestRender = (): void => this.renderFrame(this.playhead);
+  private reportError = (msg: string): void => this.onError?.(msg);
+  private reportShaderError = (msg: string | null): void =>
+    this.onShaderError?.(msg);
+
+  // Create a new slot wired to this engine's placeholder + callbacks and add
+  // its group to the scene. Slots are pooled across object-count changes.
+  private createSlot(): ObjectSlot {
+    const slot = new ObjectSlot(
+      this.placeholder,
+      this.requestRender,
+      this.reportError,
+      this.reportShaderError,
+    );
+    this.scene.add(slot.group);
+    return slot;
+  }
 
   constructor() {
     this.renderer = new THREE.WebGLRenderer({
@@ -570,25 +641,6 @@ export class Engine {
     );
     this.placeholder.needsUpdate = true;
 
-    const requestRender = (): void => this.renderFrame(this.playhead);
-    const reportError = (msg: string): void => this.onError?.(msg);
-    const reportShaderError = (msg: string | null): void =>
-      this.onShaderError?.(msg);
-    this.slot0 = new ObjectSlot(
-      this.placeholder,
-      requestRender,
-      reportError,
-      reportShaderError,
-    );
-    this.slot1 = new ObjectSlot(
-      this.placeholder,
-      requestRender,
-      reportError,
-      reportShaderError,
-    );
-    this.scene.add(this.slot0.group);
-    this.scene.add(this.slot1.group);
-
     // Load the custom text-card font, then refresh any cards already drawn with
     // the system fallback so they pick up Parabole.
     loadTextCardFont()
@@ -611,7 +663,10 @@ export class Engine {
   }
 
   setOutputSize(w: number, h: number): void {
-    this.renderer.setSize(w, h, false);
+    // Camera framing comes from the *logical* size, so aspect/framing stay
+    // identical regardless of the render-buffer scale.
+    this.logicalWidth = w;
+    this.logicalHeight = h;
     const aspect = w / h;
     this.perspectiveCamera.aspect = aspect;
     this.perspectiveCamera.updateProjectionMatrix();
@@ -619,6 +674,26 @@ export class Engine {
     this.isometricCamera.left = -isoHalfHeight * aspect;
     this.isometricCamera.right = isoHalfHeight * aspect;
     this.isometricCamera.updateProjectionMatrix();
+    this.applyRenderSize();
+  }
+
+  // Size the actual drawing buffer to logical size × renderScale. CSS keeps the
+  // canvas at 100%, so a sub-1 scale is upscaled by the browser for free.
+  private applyRenderSize(): void {
+    this.renderer.setSize(
+      Math.max(1, Math.round(this.logicalWidth * this.renderScale)),
+      Math.max(1, Math.round(this.logicalHeight * this.renderScale)),
+      false,
+    );
+  }
+
+  // Change the interactive render-buffer scale (1 = full res). Re-renders the
+  // current frame at the new resolution. Export forces this back to 1.
+  setRenderScale(scale: number): void {
+    if (scale === this.renderScale) return;
+    this.renderScale = scale;
+    this.applyRenderSize();
+    this.renderFrame(this.playhead);
   }
 
   getCanvas(): HTMLCanvasElement {
@@ -632,9 +707,17 @@ export class Engine {
     const prev = this.project;
     this.project = project;
     this.setOutputSize(project.output.width, project.output.height);
+    this.timelineIndex = buildTimelineIndex(project.segments);
 
-    this.slot0.update(project.object, project.customEffects, project.output);
-    this.slot1.update(project.object2, project.customEffects, project.output);
+    const objects = project.objects;
+    for (let i = 0; i < objects.length; i++) {
+      if (!this.slots[i]) this.slots[i] = this.createSlot();
+      this.slots[i].update(objects[i], project.customEffects, project.output);
+    }
+    // Clear (but keep) any pooled slots beyond the current object count.
+    for (let i = objects.length; i < this.slots.length; i++) {
+      this.slots[i].update(null, project.customEffects, project.output);
+    }
 
     if (!prev) this.renderFrame(this.playhead);
   }
@@ -650,27 +733,38 @@ export class Engine {
       p.scene.cameraType === "isometric"
         ? this.isometricCamera
         : this.perspectiveCamera;
-    const tl = computeTimeline(p, t);
+    const tl = computeTimeline(p, t, this.timelineIndex);
 
     // per-object transforms + material uniforms
-    this.slot0.applyFrame(p.object, t, tl, p.output);
-    this.slot1.group.visible = !!p.object2 && this.slot1.hasMesh;
-    if (p.object2) this.slot1.applyFrame(p.object2, t, tl, p.output);
+    const objects = p.objects;
+    for (let i = 0; i < this.slots.length; i++) {
+      const slot = this.slots[i];
+      const obj = objects[i];
+      slot.group.visible = !!obj && slot.hasMesh;
+      if (obj) slot.applyFrame(obj, t, tl, p.output);
+    }
 
     // Cross-wire each slot's "other" texture every frame so blend effects
-    // survive material rebuilds (e.g. toggling an effect re-creates the material).
-    this.slot0.setOtherTexture(this.slot1.currentTexture);
-    this.slot1.setOtherTexture(this.slot0.currentTexture);
+    // survive material rebuilds (e.g. toggling an effect re-creates the
+    // material). Object 0 samples object 1; every later object samples object
+    // 0's texture (the semantic the multiply/mask effects rely on).
+    const tex0 = this.slots[0]?.currentTexture ?? null;
+    const tex1 = this.slots[1]?.currentTexture ?? null;
+    for (let i = 0; i < this.slots.length; i++) {
+      if (objects[i]) this.slots[i].setOtherTexture(i === 0 ? tex1 : tex0);
+    }
 
     // Text-card backdrop: render each object as a flat silhouette or wireframe
     // under the text, over the card's background color.
     const backdropActive =
       !!tl.textCard &&
+      !tl.textCard.behind &&
       tl.textCard.style.textBackdrop !== "none" &&
-      this.slot0.hasMaterial;
+      (this.slots[0]?.hasMaterial ?? false);
 
-    this.slot0.applyBackdrop(backdropActive, tl);
-    if (p.object2) this.slot1.applyBackdrop(backdropActive, tl);
+    for (let i = 0; i < this.slots.length; i++) {
+      if (objects[i]) this.slots[i].applyBackdrop(backdropActive, tl);
+    }
 
     // text overlay
     if (tl.textCard) {
@@ -680,7 +774,7 @@ export class Engine {
       const tex = this.textTexture(
         tl.textCard.segmentId,
         tl.textCard.style,
-        backdropActive,
+        backdropActive || tl.textCard.behind,
       );
       this.overlay.setTexture(tex);
       this.overlay.setOpacity(tl.textCard.opacity);
@@ -689,21 +783,32 @@ export class Engine {
     }
 
     // render
-    let clearColor = new THREE.Color(p.scene.backgroundColor);
+    const clearColor = this.clearColorScratch.set(p.scene.backgroundColor);
     if (backdropActive) {
       // Fade from the scene background to the card's color, same curve as
       // the card itself, so the backdrop appears to fade in with the card.
-      clearColor = clearColor.lerp(
-        new THREE.Color(tl.textCard!.style.backgroundColor),
+      clearColor.lerp(
+        this.cardColorScratch.set(tl.textCard!.style.backgroundColor),
         tl.textCard!.opacity,
       );
     }
     this.renderer.setClearColor(clearColor, 1);
     this.renderer.clear();
-    this.renderer.render(this.scene, this.camera);
-    if (this.overlay.opacity > 0.001 && this.overlay.hasTexture) {
-      this.renderer.clearDepth();
+    const overlayVisible =
+      this.overlay.opacity > 0.001 && this.overlay.hasTexture;
+    if (tl.textCard?.behind && overlayVisible) {
+      // Fade-out tail: paint the glyphs first, then draw the scene on top so the
+      // live shape occludes the dissolving text (text fades out *behind* it).
+      // autoClear is false, so the scene render doesn't wipe the glyphs.
       this.renderer.render(this.overlay.scene, this.overlay.camera);
+      this.renderer.clearDepth();
+      this.renderer.render(this.scene, this.camera);
+    } else {
+      this.renderer.render(this.scene, this.camera);
+      if (overlayVisible) {
+        this.renderer.clearDepth();
+        this.renderer.render(this.overlay.scene, this.overlay.camera);
+      }
     }
   }
 
@@ -712,7 +817,12 @@ export class Engine {
     style: import("../types").TextStyle,
     transparentBg = false,
   ): THREE.CanvasTexture {
-    const key = `${segmentId}|${transparentBg ? "t" : "o"}|${JSON.stringify(style)}`;
+    let styleKey = this.styleKeyCache.get(style);
+    if (styleKey === undefined) {
+      styleKey = JSON.stringify(style);
+      this.styleKeyCache.set(style, styleKey);
+    }
+    const key = `${segmentId}|${transparentBg ? "t" : "o"}|${styleKey}`;
     const cached = this.textCache.get(key);
     if (cached) return cached;
     // drop stale textures for this segment
@@ -744,6 +854,10 @@ export class Engine {
   play(): void {
     if (this.playing) return;
     this.playing = true;
+    // Drop to a smaller render buffer during playback (CSS upscales it); the
+    // crisp full-res frame is restored on pause/seek.
+    this.renderScale = 0.5;
+    this.applyRenderSize();
     this.lastTs = performance.now();
     const loop = (ts: number): void => {
       if (!this.playing) return;
@@ -763,6 +877,12 @@ export class Engine {
   pause(): void {
     this.playing = false;
     cancelAnimationFrame(this.raf);
+    // Restore full resolution so the paused frame is crisp.
+    if (this.renderScale !== 1) {
+      this.renderScale = 1;
+      this.applyRenderSize();
+      this.renderFrame(this.playhead);
+    }
   }
 
   get isPlaying(): boolean {
@@ -771,6 +891,11 @@ export class Engine {
 
   seekTo(t: number): void {
     this.playhead = t;
+    // A seek lands on a still frame — render it full-res.
+    if (this.renderScale !== 1) {
+      this.renderScale = 1;
+      this.applyRenderSize();
+    }
     this.renderFrame(t);
     this.onTick?.(t);
   }

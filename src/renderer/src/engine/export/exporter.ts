@@ -124,6 +124,9 @@ export async function exportVideo(
   const { width, height } = project.output
   const totalFrames = Math.max(1, Math.round(opts.durationSec * opts.fps))
   const canvas = engine.getCanvas()
+  // Export always renders at full resolution — the interactive downscale must
+  // never leak into the encoded frames.
+  engine.setRenderScale(1)
   engine.setOutputSize(width, height)
 
   const hasWebCodecs =

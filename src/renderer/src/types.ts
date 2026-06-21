@@ -32,6 +32,10 @@ export interface UniformDef {
   max: number;
   default: number;
   step?: number;
+  // Marks the uniform that reads as this effect's "intensity" — the one worth
+  // animating. "Feeling lucky" keyframes it. At most one per effect; when none
+  // is flagged, callers fall back to the first uniform.
+  isIntensity?: boolean;
 }
 
 export type EffectKind = "deform" | "shade";
@@ -61,7 +65,7 @@ export interface EffectInstance {
 }
 
 export type CameraType = "perspective" | "isometric";
-export type Mapping = "uv" | "triplanar";
+export type Mapping = "uv" | "triplanar" | "spherical" | "cylindrical" | "reflection";
 export type PrimitiveModel =
   | "plane"
   | "sphere"
@@ -141,11 +145,11 @@ export interface Project {
     backgroundColor: string;
     cameraType: CameraType;
   };
-  object: ObjectState;
-  // Optional second object placed alongside the first. A full peer of the
-  // primary object with its own shape, transform, texture and effects.
-  // `null` keeps the single-object scene.
-  object2: ObjectState | null;
+  // Renderable objects, in render order. Length 1 or 2 today; the array shape
+  // leaves room for more. Each is a full peer — its own shape, transform,
+  // texture and effect stack. A later object may sample objects[0]'s texture
+  // (used by the multiply/mask effects).
+  objects: ObjectState[];
   segments: Segment[]; // exactly 6 by default: 3 animation + 3 text, alternating
   customEffects: EffectDef[];
   // "Feeling lucky" presets: colour swatches, uploaded source images (stored as
@@ -167,3 +171,10 @@ export function objectLabel(o: ObjectState): string {
   }
   return o.primitive.charAt(0).toUpperCase() + o.primitive.slice(1);
 }
+
+// CSS accent class + display letter for an object by index, so the per-object
+// colour accent ("Object A"/"Object B") stays consistent across panels.
+export const objectAccentClass = (index: number): string =>
+  index === 0 ? "object-a" : "object-b";
+export const objectLetterLabel = (index: number): string =>
+  String.fromCharCode(65 + index);

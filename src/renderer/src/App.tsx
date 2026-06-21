@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "./state/store";
 import { engine } from "./engine/engineSingleton";
-import { TopBar } from "./ui/TopBar";
+import { ProjectActions } from "./ui/ProjectActions";
 import { LibraryPanel } from "./ui/LibraryPanel";
 import { PreviewPanel } from "./ui/PreviewPanel";
 import { TimelinePanel } from "./ui/TimelinePanel";
@@ -47,7 +47,18 @@ export default function App(): JSX.Element {
 
   // Wire engine callbacks once.
   useEffect(() => {
-    engine.onTick = (t) => useStore.getState().setPlayhead(t);
+    // The engine renders at 60fps; pushing every tick into the store would
+    // re-render the timeline/inspector each frame and compete with the engine.
+    // Throttle store updates during playback (the playhead indicator + live
+    // slider values stay responsive at ~12fps); seeks while paused push
+    // immediately so scrubbing feels exact.
+    let lastPush = 0;
+    engine.onTick = (t) => {
+      const now = performance.now();
+      if (engine.isPlaying && now - lastPush < 80) return;
+      lastPush = now;
+      useStore.getState().setPlayhead(t);
+    };
     engine.onError = (m) => useStore.getState().setToast(m);
     engine.onShaderError = (m) => useStore.getState().setShaderError(m);
     return () => {
@@ -101,7 +112,7 @@ export default function App(): JSX.Element {
           <TimelinePanel />
         </div>
         <div className="right-col">
-          <TopBar onOpenExport={() => setExportOpen(true)} />
+          <ProjectActions onOpenExport={() => setExportOpen(true)} />
           <InspectorPanel />
         </div>
       </div>

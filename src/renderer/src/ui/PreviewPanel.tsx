@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useStore } from '../state/store'
+import { getActiveObject, useActiveObject, useStore } from '../state/store'
 import { engine } from '../engine/engineSingleton'
 import { constant, type ObjectState, type Project } from '../types'
 import { evalScalar, setValueAt } from './scalarUtils'
@@ -7,25 +7,22 @@ import { evalScalar, setValueAt } from './scalarUtils'
 export function PreviewPanel(): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ x: number; y: number } | null>(null)
-  const project = useStore((s) => s.project)
   const update = useStore((s) => s.update)
-  const selectedObjectIndex = useStore((s) => s.selectedObjectIndex)
   // The image being panned belongs to whichever object is selected.
-  const activeObject =
-    selectedObjectIndex === 1 && project.object2 ? project.object2 : project.object
-  const hasImage = !!activeObject.image.dataUrl
+  const activeObject = useActiveObject()
+  const hasImage = !!activeObject?.image.dataUrl
 
   // Resolve the active object from the live store (drag handlers run outside the
-  // render closure, so read the current selection each time).
-  function liveActiveObject(p: Project): ObjectState {
-    const idx = useStore.getState().selectedObjectIndex
-    return idx === 1 && p.object2 ? p.object2 : p.object
+  // render closure, so read the current selection each time). Undefined when the
+  // scene has no objects.
+  function liveActiveObject(p: Project): ObjectState | undefined {
+    return getActiveObject(p, useStore.getState().selectedObjectIndex)
   }
 
   // Drag over the preview to reposition the image's cover-fit window. Only the
   // overflowing axis responds (the fitted axis ignores its offset in-shader).
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>): void {
-    if (!liveActiveObject(useStore.getState().project).image.dataUrl) return
+    if (!liveActiveObject(useStore.getState().project)?.image.dataUrl) return
     dragRef.current = { x: e.clientX, y: e.clientY }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
@@ -38,7 +35,9 @@ export function PreviewPanel(): JSX.Element {
     const dy = (e.clientY - start.y) / rect.height
     dragRef.current = { x: e.clientX, y: e.clientY }
     const ph = useStore.getState().playhead
-    const img = liveActiveObject(useStore.getState().project).image
+    const active = liveActiveObject(useStore.getState().project)
+    if (!active) return
+    const img = active.image
     // Grab-and-drag: image content follows the cursor.
     const curX = evalScalar(img.offsetX ?? constant(0.5), ph)
     const curY = evalScalar(img.offsetY ?? constant(0.5), ph)
@@ -46,6 +45,7 @@ export function PreviewPanel(): JSX.Element {
     const nextY = Math.min(1, Math.max(0, curY + dy))
     update((p) => {
       const o = liveActiveObject(p)
+      if (!o) return
       o.image.offsetX = setValueAt(o.image.offsetX ?? constant(0.5), ph, nextX)
       o.image.offsetY = setValueAt(o.image.offsetY ?? constant(0.5), ph, nextY)
     })

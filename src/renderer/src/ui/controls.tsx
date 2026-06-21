@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { totalDuration, type Scalar } from "../types";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
@@ -69,7 +69,41 @@ export function Field({
   );
 }
 
-export function ScalarControl({
+// Segment-duration number input, shared by the inspector and timeline. The
+// timeline renders it bare (no Field wrapper) inside a clickable segment block,
+// so it can opt out of the label and swallow the click.
+export function DurationField({
+  value,
+  onChange,
+  className,
+  wrapInField = true,
+  stopClickPropagation = false,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  className?: string;
+  wrapInField?: boolean;
+  stopClickPropagation?: boolean;
+}): JSX.Element {
+  const input = (
+    <input
+      type="number"
+      className={className}
+      min={0.2}
+      max={20}
+      step={0.1}
+      value={value}
+      onClick={stopClickPropagation ? (e) => e.stopPropagation() : undefined}
+      onChange={(e) => onChange(Math.max(0.2, parseFloat(e.target.value || "1")))}
+    />
+  );
+  return wrapInField ? <Field label="Duration">{input}</Field> : input;
+}
+
+// Memoized: with a stable `onChange` this skips re-rendering when an unrelated
+// part of the project changes (it still re-renders on playhead change, which it
+// subscribes to directly).
+export const ScalarControl = memo(function ScalarControl({
   label,
   scalar,
   min,
@@ -141,7 +175,7 @@ export function ScalarControl({
       </div>
     </div>
   );
-}
+});
 
 export function KeyframeTrack({
   scalar,
@@ -290,7 +324,7 @@ export function HexInput({
   );
 }
 
-export function ColorRow({
+export const ColorRow = memo(function ColorRow({
   label,
   value,
   onChange,
@@ -309,4 +343,4 @@ export function ColorRow({
       <HexInput value={value} onChange={onChange} />
     </Field>
   );
-}
+});

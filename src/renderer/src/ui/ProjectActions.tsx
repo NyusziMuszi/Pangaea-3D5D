@@ -1,8 +1,9 @@
 import { useStore } from "../state/store";
 import { defaultProject } from "../state/defaults";
 import type { Project } from "../types";
+import { defaultFilename } from "../state/filename";
 
-export function TopBar({
+export function ProjectActions({
   onOpenExport,
 }: {
   onOpenExport: () => void;
@@ -22,7 +23,7 @@ export function TopBar({
 
   async function save(): Promise<void> {
     const path = await window.api.saveFileDialog({
-      defaultName: "project.pangaea",
+      defaultName: defaultFilename("pangaea"),
       filters: [{ name: "Pangaea Project", extensions: ["pangaea"] }],
     });
     if (!path) return;
@@ -47,7 +48,7 @@ export function TopBar({
   }
 
   return (
-    <div className="topbar">
+    <div className="project-actions">
       <button className="important" onClick={newProject}>
         New
       </button>

@@ -56,7 +56,7 @@
   /* ----- color gap-fills (previously hardcoded) ----- */
   --white: #fff; /* intentional brighten-on-hover; keep literal, NOT --text-section */
   --black: #000; /* canvas-frame bg; button.important text */
-  --bg-stage: #08080c; /* .preview */
+  --bg-stage: #0e0e14; /* .preview */
   --toggle-rest: rgb(170, 169, 169);
   --diamond: #50505f;
   --playhead: rgba(255, 255, 255, 0.443);
@@ -65,8 +65,6 @@
   --err-bg: rgba(255, 107, 107, 0.08);
 
   --bg: #0b0b0f;
-  --panel: #1b1b1b;
-  --panel-3: #232330;
 
   --text: #e7e7ee;
 
@@ -75,23 +73,32 @@
   --text-section: #599399;
   --text-section-rule: #599399;
 
-  --border-btn: #494949;
-  --border: #6e706e;
+  --border-btn: #303030;
+  --border: #3d3d3d;
+  --section-border: #818381;
 
-  --panel-btn: #1b1b1b;
+  --panel-btn: #2f2f2f;
+  --panel: #181818;
+  --panel-active: #1f1f1f;
 
   --text-dim: #9a9aab;
   --accent: #a3d6dc;
   --anim: #54ced5;
-  --ok: #56d364;
+  --ok: #3b9e47;
   --err: #ff6b6b;
   --slider-fill: #599399;
   --slider-track: #bfd1d3;
 
-  --objectA-text-border: #997a59;
-  --objectA-highlight: #997a5926;
-  --objectB-text-border: #955999;
-  --objectB-highlight: #9559992f;
+  --objectA-text: #997a59;
+  --objectA-border: #735a3e;
+  --objectA-hover: #aa8053;
+  --objectA-panel-highlight: #997a5926;
+
+  --objectB-text: #955999;
+  --objectB-border: #754678;
+  --objectB-hover: #b25fb8;
+  --objectB-panel-highlight: #9559992f;
+
   --objectText-text-border: #599399; /* teal — used for the coloured label/title */
   --objectText-highlight: #59939926; /* teal tint for the inspector header bg */
 }
@@ -117,14 +124,16 @@
    labels and the inspector title — so the colour cascades for free; hover
    states use literal colours and keep working. */
 .object-a {
-  --text-section: var(--objectA-text-border);
-  --text-section-rule: var(--objectA-text-border);
-  --obj-highlight: var(--objectA-highlight);
+  --text-section: var(--objectA-text);
+  --text-section-rule: var(--objectA-border);
+  --obj-highlight: var(--objectA-panel-highlight);
+  --obj-hover: var(--objectA-hover);
 }
 .object-b {
-  --text-section: var(--objectB-text-border);
-  --text-section-rule: var(--objectB-text-border);
-  --obj-highlight: var(--objectB-highlight);
+  --text-section: var(--objectB-text);
+  --text-section-rule: var(--objectB-border);
+  --obj-highlight: var(--objectB-panel-highlight);
+  --obj-hover: var(--objectB-hover);
 }
 .id-text {
   --text-section: var(--objectText-text-border);
@@ -164,6 +173,7 @@ button {
   --btn-text: var(--text-btn);
   font-family: inherit;
   font-size: var(--font-sm);
+  font-weight: 600;
   color: var(--btn-text);
   background: var(--btn-fill);
   border: 1px solid var(--btn-border);
@@ -235,6 +245,9 @@ button.btn-icon:active {
 button.btn-icon img {
   display: block;
   transition: filter var(--dur) var(--ease);
+  /* Recolor the #e3e3e3 source icons to --diamond (#50505f). */
+  filter: brightness(0) saturate(100%) invert(32%) sepia(14%) saturate(450%)
+    hue-rotate(202deg) brightness(92%) contrast(93%);
 }
 button.btn-icon:hover img {
   filter: brightness(0) saturate(100%) invert(54%) sepia(28%) saturate(521%)
@@ -270,9 +283,20 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="color"] {
   padding: 0;
-  width: 28px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
+  flex: none;
   border: none;
+}
+/* The native control insets the visible colour with a padded wrapper + swatch
+   border, which makes the box read as a rectangle. Zero them so the colour
+   fills the full square. */
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: var(--radius-sm);
 }
 textarea {
   resize: vertical;
@@ -284,16 +308,6 @@ textarea {
   display: grid;
   height: 100%;
 }
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  padding: 0 var(--space-5);
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  height: 46px;
-}
-
 .spacer {
   flex: 1;
 }
@@ -345,7 +359,7 @@ textarea {
    (the shared .btn-icon hover filter only applies to <img> children). */
 button.library-collapse-btn {
   cursor: pointer;
-  color: var(--text-btn);
+  color: var(--diamond);
 }
 button.library-collapse-btn:hover {
   color: var(--text-btn-hover);
@@ -358,10 +372,24 @@ button.library-collapse-btn:hover {
 }
 
 .right-col {
+  position: relative;
   display: grid;
-  grid-template-rows: 46px 1fr;
+  grid-template-rows: 1fr;
   min-height: 0;
   border-left: 1px solid var(--border);
+}
+/* The four project actions float just outside the inspector's left edge near
+   the top (over the preview's empty margin) with a 16px gap, so they don't
+   reserve a full-height column. */
+.project-actions {
+  position: absolute;
+  top: var(--space-6);
+  right: calc(100% + var(--space-6));
+  z-index: var(--z-badge);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
 }
 .center {
   display: grid;
@@ -396,15 +424,11 @@ button.library-collapse-btn:hover {
   flex-direction: column;
   gap: var(--space-3);
 }
-/* Tint the header in the active object's colour (title uses --text-section). */
-.inspector-object-header:is(.object-a, .object-b, .id-text) {
-  background: var(--obj-highlight);
-  border-top: 1px solid var(--text-section);
-  border-bottom: 1px solid var(--text-section);
-}
+
 .inspector-object-title {
-  font-size: var(--font-xs);
+  font-size: var(--font-m);
   font-weight: 700;
+
   color: var(--text-section);
 }
 .inspector-object-thumb {
@@ -417,7 +441,11 @@ button.library-collapse-btn:hover {
 
 /* ---------- Sections / fields ---------- */
 .section {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--section-border);
+  transition: background var(--dur) var(--ease);
+}
+.section:hover {
+  background: var(--panel-active);
 }
 /* Object A / B sections carry the object's accent on their rule + title.
    (These elements use literal colours, so set them explicitly rather than
@@ -429,7 +457,10 @@ button.library-collapse-btn:hover {
   color: var(--text-section);
 }
 .section:is(.object-a, .object-b, .id-text) .section-toggle:hover {
-  color: var(--white);
+  color: var(--obj-hover);
+}
+.section:is(.object-a, .object-b, .id-text):has(.section-toggle:hover) {
+  border-top-color: var(--obj-hover);
 }
 .section-head {
   display: flex;
@@ -535,18 +566,19 @@ button.library-collapse-btn:hover {
 /* ---------- Library ---------- */
 .catalog {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: var(--space-3); /* snap 5→6 */
 }
 .catalog-item {
   display: flex;
   align-items: center;
   text-align: left;
+  flex: 0 0 auto;
 }
 .catalog-rule {
   display: block;
-  width: 100%;
-  margin: var(--space-5) 0; /* snap 10→12 */
+  flex: 0 0 100%;
+  margin: var(--space-2) 0; /* snap 5→6 */
   border: none;
   overflow: visible;
 }
@@ -627,7 +659,7 @@ button.library-collapse-btn:hover {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-round);
-  background: var(--panel);
+  background: var(--text-section);
   border: 1px solid var(--border);
 }
 .tl-play .play {
@@ -635,11 +667,20 @@ button.library-collapse-btn:hover {
 }
 .tl-play .play img {
   width: 18px;
+  filter: invert(1);
+  transition: filter 0.15s ease;
+}
+.tl-play:hover .play img {
+  filter: invert(0);
 }
 .timeline-section {
   flex: 1;
   min-height: 0;
-  /* overflow-y: auto; */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Inset the content horizontally so the scrub thumb and other controls that
+     slightly overhang their track aren't clipped by overflow-x: hidden. */
+  padding: 0 var(--space-4);
 }
 .tl-tracks {
   display: flex;
@@ -766,6 +807,16 @@ button.library-collapse-btn:hover {
   max-width: 100%;
   margin-top: 0;
   margin-left: auto;
+}
+/* Editable colour swatches for a text segment (text / background / object),
+   sitting inline on the same row as the duration field. */
+.seg-swatches {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--space-2);
+}
+.seg-swatch {
+  cursor: pointer;
 }
 .object-head {
   display: flex;
@@ -925,6 +976,7 @@ button.library-collapse-btn:hover {
   margin-left: 84px;
   margin-right: 24px;
   border-bottom: 2px dotted;
+  border-color: #727272;
 }
 /* Timeline keyframe strips live inside the full-width object block, so they
    drop the inspector-era left/right alignment margins. */
@@ -1165,6 +1217,7 @@ textarea.code {
    each half-width grid cell. */
 .swatch-row input[type="color"] {
   width: 18px;
+  height: 18px;
   flex: none;
 }
 .swatch-row .hex {
@@ -1183,31 +1236,28 @@ textarea.code {
   width: 16px;
   height: 16px;
 }
-.swatch-del {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border-radius: var(--radius-round);
-  background: var(--panel-3);
-  border: 1px solid var(--border);
-}
-.swatch-del img {
-  width: 14px;
-  height: 14px;
-}
 .lucky-img-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-3);
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3) var(--space-4);
 }
 .lucky-img-cell {
-  position: relative;
-  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
-.lucky-img-cell > img {
+.lucky-img-thumb {
+  flex: 1;
+  min-width: 0;
+  aspect-ratio: 3 / 2;
+}
+button.lucky-img-thumb {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.lucky-img-thumb > img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1215,12 +1265,20 @@ textarea.code {
   border: 1px solid var(--border);
   display: block;
 }
+.lucky-img-cell .btn-icon {
+  flex: none;
+  padding: 0;
+}
+.lucky-img-cell .btn-icon img {
+  width: 16px;
+  height: 16px;
+}
 .lucky-img-missing {
   display: flex;
-  align-items: center;
-  justify-content: center;
   width: 100%;
   height: 100%;
+  align-items: center;
+  justify-content: center;
   padding: var(--space-2);
   border-radius: var(--radius-sm);
   border: 1px dashed var(--border);

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useStore } from '../state/store'
 import { engine } from '../engine/engineSingleton'
 import { totalDuration } from '../types'
+import { defaultFilename } from '../state/filename'
 import { exportVideo, type ExportProgress } from '../engine/export/exporter'
 
 const QUALITY = {
@@ -22,7 +23,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): JSX.Element 
 
   async function run(): Promise<void> {
     const path = await window.api.saveFileDialog({
-      defaultName: 'pangaea.mp4',
+      defaultName: defaultFilename('mp4'),
       filters: [{ name: 'MP4 Video', extensions: ['mp4'] }]
     })
     if (!path) return

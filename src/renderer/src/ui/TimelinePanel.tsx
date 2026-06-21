@@ -3,10 +3,18 @@ import playIcon from "../assets/play_arrow_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz2
 import pauseIcon from "../assets/pause_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
-import { KeyframeTrack } from "./controls";
+import { KeyframeTrack, DurationField } from "./controls";
 import { objectKeyframeChannels } from "./keyframeChannels";
 import { isAnimated } from "./scalarUtils";
-import { totalDuration, type ObjectState, type Scalar } from "../types";
+import {
+  objectAccentClass,
+  objectLabel,
+  objectLetterLabel,
+  totalDuration,
+  type ObjectState,
+  type Scalar,
+  type TextStyle,
+} from "../types";
 
 function fmt(t: number): string {
   const s = Math.floor(t);
@@ -45,7 +53,7 @@ export function TimelinePanel(): JSX.Element {
 
   // Select an object block (clearing any segment selection) so the inspector
   // edits that object's transform + effects.
-  function selectObjectOnly(index: 0 | 1): void {
+  function selectObjectOnly(index: number): void {
     selectObject(index);
     selectSegment(null);
   }
@@ -61,19 +69,19 @@ export function TimelinePanel(): JSX.Element {
   }
 
   function updateObject(
-    index: 0 | 1,
+    index: number,
     apply: (o: ObjectState, s: Scalar) => void,
     s: Scalar,
   ): void {
     update((p) => {
-      const o = index === 1 ? p.object2 : p.object;
+      const o = p.objects[index];
       if (o) apply(o, s);
     });
   }
 
   // One draggable marker strip per animated property, captioned with its
   // section + property name on the shared time scale.
-  function renderKeyframes(obj: ObjectState, index: 0 | 1): JSX.Element {
+  function renderKeyframes(obj: ObjectState, index: number): JSX.Element {
     const channels = objectKeyframeChannels(obj, project.customEffects).filter(
       (c) => isAnimated(c.scalar),
     );
@@ -155,23 +163,49 @@ export function TimelinePanel(): JSX.Element {
                     }}
                     onClick={() => selectOnly(seg.id)}
                   >
-                    {isText && <span className="segment-label">Text</span>}
-                    <input
-                      type="number"
+                    {isText && seg.text && (
+                      <div className="seg-swatches">
+                        {(
+                          [
+                            ["Text colour", seg.text.textColor, (t, v) => (t.textColor = v)],
+                            [
+                              "Background colour",
+                              seg.text.backgroundColor,
+                              (t, v) => (t.backgroundColor = v),
+                            ],
+                            [
+                              "Object colour",
+                              seg.text.textBackdropColor,
+                              (t, v) => (t.textBackdropColor = v),
+                            ],
+                          ] as [string, string, (t: TextStyle, v: string) => void][]
+                        ).map(([title, value, set]) => (
+                          <input
+                            key={title}
+                            type="color"
+                            className="seg-swatch"
+                            title={title}
+                            value={value}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              update((p) => {
+                                const s = p.segments.find((x) => x.id === seg.id);
+                                if (s?.text) set(s.text, e.target.value);
+                              })
+                            }
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <DurationField
                       className="tl-dur-input"
-                      min={0.2}
-                      max={20}
-                      step={0.1}
+                      wrapInField={false}
+                      stopClickPropagation
                       value={seg.durationSec}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
+                      onChange={(v) =>
                         update((p) => {
                           const s = p.segments.find((x) => x.id === seg.id);
-                          if (s)
-                            s.durationSec = Math.max(
-                              0.2,
-                              parseFloat(e.target.value || "1"),
-                            );
+                          if (s) s.durationSec = v;
                         })
                       }
                     />
@@ -184,27 +218,23 @@ export function TimelinePanel(): JSX.Element {
 
           <div className="tl-row">
             <div className="tl-track tl-track-object">
-              <div
-                className={`segment object object-a ${objectActive && selectedObjectIndex === 0 ? "sel" : ""}`}
-                onClick={() => selectObjectOnly(0)}
-              >
-                <div className="object-head">
-                  <span className="segment-label">Object A</span>
-                  <span className="segment-dur">{total.toFixed(1)}s</span>
-                </div>
-                {renderKeyframes(project.object, 0)}
-              </div>
-              {project.object2 && (
+              {project.objects.map((obj, index) => (
                 <div
-                  className={`segment object object-2 object-b ${objectActive && selectedObjectIndex === 1 ? "sel" : ""}`}
-                  onClick={() => selectObjectOnly(1)}
+                  key={index}
+                  className={`segment object ${index === 0 ? "object-a" : "object-2 " + objectAccentClass(index)} ${objectActive && selectedObjectIndex === index ? "sel" : ""}`}
+                  onClick={() => selectObjectOnly(index)}
                 >
                   <div className="object-head">
-                    <span className="segment-label">Object B</span>
+                    <span className="segment-label">
+                      Object {objectLetterLabel(index)} — {objectLabel(obj)}
+                    </span>
+                    {index === 0 && (
+                      <span className="segment-dur">{total.toFixed(1)}s</span>
+                    )}
                   </div>
-                  {renderKeyframes(project.object2, 1)}
+                  {renderKeyframes(obj, index)}
                 </div>
-              )}
+              ))}
               <div className="tl-playhead" style={{ left: pct(playhead) }} />
             </div>
           </div>

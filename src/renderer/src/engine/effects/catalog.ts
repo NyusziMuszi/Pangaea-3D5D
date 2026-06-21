@@ -26,6 +26,7 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
         min: 0,
         max: 1.2,
         default: 0.35,
+        isIntensity: true,
       },
       { name: "uPulse", label: "Pulse", min: 0, max: 1, default: 0.3 },
       { name: "uSpeed", label: "Speed", min: 0, max: 4, default: 1 },
@@ -45,7 +46,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       "Displaces vertices along their normals by the image's brightness, turning a photo into 3D relief.",
     builtin: true,
     uniforms: [
-      { name: "uAmount", label: "Amount", min: 0, max: 1, default: 0.35 },
+      {
+        name: "uAmount",
+        label: "Amount",
+        min: 0,
+        max: 1,
+        default: 0.35,
+        isIntensity: true,
+      },
     ],
     glslDeform: `
   vec3 tx = texture2D(uTexture, uv).rgb;
@@ -66,6 +74,7 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
         min: 0,
         max: 0.6,
         default: 0.12,
+        isIntensity: true,
       },
       { name: "uFrequency", label: "Frequency", min: 0, max: 40, default: 14 },
       { name: "uSpeed", label: "Speed", min: 0, max: 6, default: 2 },
@@ -88,6 +97,7 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
         min: 0,
         max: 0.6,
         default: 0.1,
+        isIntensity: true,
       },
       { name: "uFrequency", label: "Frequency", min: 0, max: 30, default: 6 },
       { name: "uSpeed", label: "Speed", min: 0, max: 6, default: 1.6 },
@@ -105,7 +115,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
     description: "Twists the geometry around the vertical axis.",
     builtin: true,
     uniforms: [
-      { name: "uTwist", label: "Twist", min: -3.5, max: 3.5, default: 1.0 },
+      {
+        name: "uTwist",
+        label: "Twist",
+        min: -3.5,
+        max: 3.5,
+        default: 1.0,
+        isIntensity: true,
+      },
       { name: "uSpeed", label: "Speed", min: 0, max: 3, default: 0.4 },
     ],
     glslDeform: `
@@ -121,7 +138,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
     description: "Bulges (or pinches) the center toward the camera.",
     builtin: true,
     uniforms: [
-      { name: "uStrength", label: "Strength", min: -1, max: 1, default: 0.4 },
+      {
+        name: "uStrength",
+        label: "Strength",
+        min: -1,
+        max: 1,
+        default: 0.4,
+        isIntensity: true,
+      },
       { name: "uRadius", label: "Radius", min: 0.1, max: 1.2, default: 0.6 },
     ],
     glslDeform: `
@@ -146,6 +170,7 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
         min: 0,
         max: 0.8,
         default: 0.22,
+        isIntensity: true,
       },
       { name: "uSpeed", label: "Speed", min: 0, max: 2, default: 0.5 },
     ],
@@ -163,7 +188,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
     description: "Puffs the surface along its normals, with an optional pulse.",
     builtin: true,
     uniforms: [
-      { name: "uAmount", label: "Amount", min: -0.6, max: 0.6, default: 0.2 },
+      {
+        name: "uAmount",
+        label: "Amount",
+        min: -0.6,
+        max: 0.6,
+        default: 0.2,
+        isIntensity: true,
+      },
       { name: "uPulse", label: "Pulse", min: 0, max: 1, default: 0.4 },
       { name: "uSpeed", label: "Speed", min: 0, max: 6, default: 1.5 },
     ],
@@ -180,7 +212,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
     description: "Pinches or stretches the geometry's radius by height.",
     builtin: true,
     uniforms: [
-      { name: "uTaper", label: "Taper", min: -1, max: 1, default: 0.4 },
+      {
+        name: "uTaper",
+        label: "Taper",
+        min: -1,
+        max: 1,
+        default: 0.4,
+        isIntensity: true,
+      },
     ],
     glslDeform: `
   float f = 1.0 + pos.y * uTaper;
@@ -195,7 +234,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       "Whirlpool twist that increases with distance from the center.",
     builtin: true,
     uniforms: [
-      { name: "uTwist", label: "Twist", min: -4, max: 4, default: 1.5 },
+      {
+        name: "uTwist",
+        label: "Twist",
+        min: -4,
+        max: 4,
+        default: 1.5,
+        isIntensity: true,
+      },
       { name: "uSpeed", label: "Speed", min: 0, max: 3, default: 0.5 },
     ],
     glslDeform: `
@@ -214,7 +260,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
     glslCommon: NOISE_COMMON,
     uniforms: [
       { name: "uScale", label: "Scale", min: 0.5, max: 8, default: 3.0 },
-      { name: "uAmount", label: "Amount", min: 0, max: 0.5, default: 0.12 },
+      {
+        name: "uAmount",
+        label: "Amount",
+        min: 0,
+        max: 0.5,
+        default: 0.12,
+        isIntensity: true,
+      },
       { name: "uSpeed", label: "Speed", min: 0, max: 6, default: 2.0 },
     ],
     glslDeform: `
@@ -234,7 +287,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
     description: "Mixes toward grayscale.",
     builtin: true,
     uniforms: [
-      { name: "uAmount", label: "Amount", min: 0, max: 1, default: 1 },
+      {
+        name: "uAmount",
+        label: "Amount",
+        min: 0,
+        max: 1,
+        default: 1,
+        isIntensity: true,
+      },
     ],
     glslShade: `
   float g = dot(color.rgb, vec3(0.299, 0.587, 0.114));
@@ -249,7 +309,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
     builtin: true,
     uniforms: [
       { name: "uPower", label: "Power", min: 0.5, max: 6, default: 2.5 },
-      { name: "uIntensity", label: "Intensity", min: 0, max: 3, default: 1.0 },
+      {
+        name: "uIntensity",
+        label: "Intensity",
+        min: 0,
+        max: 3,
+        default: 1.0,
+        isIntensity: true,
+      },
       { name: "uTintR", label: "Tint R", min: 0, max: 1, default: 1.0 },
       { name: "uTintG", label: "Tint G", min: 0, max: 1, default: 1.0 },
       { name: "uTintB", label: "Tint B", min: 0, max: 1, default: 1.0 },
@@ -268,7 +335,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       "Multiplies by Object B's image. Best with two textured objects.",
     builtin: true,
     uniforms: [
-      { name: "uAmount", label: "Amount", min: 0, max: 1, default: 1 },
+      {
+        name: "uAmount",
+        label: "Amount",
+        min: 0,
+        max: 1,
+        default: 1,
+        isIntensity: true,
+      },
     ],
     glslShade: `
   vec4 b = pg_sampleOther(uv);
@@ -283,7 +357,14 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       "Cuts this object using Object B's image as a luminance matte.",
     builtin: true,
     uniforms: [
-      { name: "uAmount", label: "Amount", min: 0, max: 1, default: 1 },
+      {
+        name: "uAmount",
+        label: "Amount",
+        min: 0,
+        max: 1,
+        default: 1,
+        isIntensity: true,
+      },
       { name: "uInvert", label: "Invert", min: 0, max: 1, default: 0 },
     ],
     glslShade: `

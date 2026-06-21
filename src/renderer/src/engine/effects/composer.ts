@@ -71,7 +71,14 @@ export function composeObjectShader(
   })
 
   const commonBlock = [...commons].join('\n')
-  const triplanarDefine = mapping === 'triplanar' ? '#define USE_TRIPLANAR' : ''
+  const mappingDefine =
+    ({
+      triplanar: '#define USE_TRIPLANAR',
+      spherical: '#define USE_SPHERICAL',
+      cylindrical: '#define USE_CYLINDRICAL',
+      reflection: '#define USE_REFLECTION',
+      uv: ''
+    } as Record<Mapping, string>)[mapping] ?? ''
 
   const vertexShader = `
 precision highp float;
@@ -82,6 +89,7 @@ ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
+varying vec3 vObjPos;
 attribute vec3 aBary;
 varying vec3 vBary;
 ${commonBlock}
@@ -92,6 +100,7 @@ void main() {
   vec3 pos = position;
   vec3 nrm = normal;
 ${deformCalls.join('\n')}
+  vObjPos = pos;
   vec4 wp = modelMatrix * vec4(pos, 1.0);
   vWorldPos = wp.xyz;
   vWorldNormal = normalize(mat3(modelMatrix) * nrm);
@@ -100,7 +109,7 @@ ${deformCalls.join('\n')}
 
   const fragmentShader = `
 precision highp float;
-${triplanarDefine}
+${mappingDefine}
 uniform float uTime;
 uniform sampler2D uTexture;
 uniform sampler2D uTextureB;
@@ -116,8 +125,17 @@ ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
+varying vec3 vObjPos;
 varying vec3 vBary;
 ${commonBlock}
+const float PG_TAU = 6.28318530718;
+const float PG_PI  = 3.14159265359;
+vec2 pg_equirect(vec3 d) {
+  d = normalize(d);
+  float u = atan(d.z, d.x) / PG_TAU + 0.5;
+  float v = asin(clamp(d.y, -1.0, 1.0)) / PG_PI + 0.5;
+  return vec2(u, v);
+}
 vec4 pg_sampleObject(vec2 uv) {
 #ifdef USE_TRIPLANAR
   vec3 n = normalize(abs(vWorldNormal)) + 1e-5;
@@ -126,6 +144,16 @@ vec4 pg_sampleObject(vec2 uv) {
   vec4 cy = texture2D(uTexture, vWorldPos.xz * 0.5 + 0.5);
   vec4 cz = texture2D(uTexture, vWorldPos.xy * 0.5 + 0.5);
   return cx * n.x + cy * n.y + cz * n.z;
+#elif defined(USE_SPHERICAL)
+  return texture2D(uTexture, pg_equirect(vObjPos));
+#elif defined(USE_CYLINDRICAL)
+  float u = atan(vObjPos.z, vObjPos.x) / PG_TAU + 0.5;
+  float v = vObjPos.y * 0.5 + 0.5;
+  return texture2D(uTexture, vec2(u, v));
+#elif defined(USE_REFLECTION)
+  vec3 viewDir = normalize(vWorldPos - cameraPosition);
+  vec3 r = reflect(viewDir, normalize(vWorldNormal));
+  return texture2D(uTexture, pg_equirect(r));
 #else
   // Aspect-correct cover fit: window the image so it fills the frame without
   // squeezing. Engine supplies scale (<=1 on the overflowing axis) and offset.

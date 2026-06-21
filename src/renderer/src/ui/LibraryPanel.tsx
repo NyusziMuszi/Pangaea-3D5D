@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { useStore } from "../state/store";
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
+import { activeObjectIndex, useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import { defaultSecondObject, instanceFromDef, uid } from "../state/defaults";
 import type {
@@ -9,10 +9,10 @@ import type {
   Mapping,
   CameraType,
 } from "../types";
-import { constant } from "../types";
+import { constant, objectAccentClass, objectLetterLabel } from "../types";
 import { bytesToDataUrl, mimeForName } from "./files";
 import { generateLuckyScene } from "../state/lucky";
-import { Section, Field, ScalarControl, ColorRow, HexInput } from "./controls";
+import { Section, Field, ColorRow, HexInput } from "./controls";
 import cancelIcon from "@assets/cancel.svg";
 
 const MAX_COLORS = 12;
@@ -131,32 +131,59 @@ export function LibraryPanel({
     }
   }
 
-  function addSecondObject(): void {
-    update((p) => {
-      p.object2 = defaultSecondObject();
-    });
-    // Focus the new object so the inspector edits its transform straight away.
-    selectObject(1);
-    selectSegment(null);
-    selectEffect(null);
+  // Apply a Type-dropdown choice for an object. "none" removes an optional
+  // object (it ceases to exist; later objects shift up to keep the list packed);
+  // choosing a real type for a non-existent object creates it. "bespoke" opens
+  // the model importer.
+  function setObjectType(index: number, value: string): void {
+    const exists = !!project.objects[index];
+    if (value === "none") {
+      if (exists) removeObject(index);
+      return;
+    }
+    if (!exists) {
+      // The objects array stays packed, so a new object lands at the first free
+      // slot (never leaving a hole if an earlier slot is None).
+      const at = Math.min(index, project.objects.length);
+      update((p) => {
+        const o = defaultSecondObject();
+        if (value !== "bespoke") o.primitive = value as PrimitiveModel;
+        p.objects.splice(at, 0, o);
+      });
+      // Focus the new object so the inspector edits its transform straight away.
+      selectObject(at);
+      selectSegment(null);
+      selectEffect(null);
+      if (value === "bespoke") importModelFor(at);
+      return;
+    }
+    if (value === "bespoke") {
+      importModelFor(index);
+    } else {
+      mutateObject(index, (o) => {
+        o.primitive = value as PrimitiveModel;
+        o.modelDataUrl = null;
+        o.modelName = null;
+      });
+    }
   }
 
-  function removeSecondObject(): void {
+  function removeObject(index: number): void {
     update((p) => {
-      p.object2 = null;
+      p.objects.splice(index, 1);
     });
     selectObject(0);
   }
 
-  // Mutate one object (0 = primary, 1 = optional second) in place.
-  function mutateObject(index: 0 | 1, fn: (o: ObjectState) => void): void {
+  // Mutate one object by index in place.
+  function mutateObject(index: number, fn: (o: ObjectState) => void): void {
     update((p) => {
-      const o = index === 0 ? p.object : p.object2;
+      const o = p.objects[index];
       if (o) fn(o);
     });
   }
 
-  async function loadImageFor(index: 0 | 1): Promise<void> {
+  async function loadImageFor(index: number): Promise<void> {
     const file = await window.api.openImageFile();
     if (!file) return;
     const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
@@ -171,7 +198,20 @@ export function LibraryPanel({
     });
   }
 
-  async function importModelFor(index: 0 | 1): Promise<void> {
+  // Drop an object's image, restoring the centered default so the "Load image"
+  // button returns.
+  function clearImageFor(index: number): void {
+    mutateObject(index, (o) => {
+      o.image = {
+        name: null,
+        dataUrl: null,
+        offsetX: constant(0.5),
+        offsetY: constant(0.5),
+      };
+    });
+  }
+
+  async function importModelFor(index: number): Promise<void> {
     const file = await window.api.openModelFile();
     if (!file) return;
     const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
@@ -187,13 +227,13 @@ export function LibraryPanel({
   // to attach to, so prompt the user to pick one.
   function addEffect(def: EffectDef): void {
     const { selectedSegmentId, selectedObjectIndex } = useStore.getState();
-    let target: 0 | 1 = 0;
-    if (project.object2) {
+    let target = 0;
+    if (project.objects.length > 1) {
       if (selectedSegmentId) {
         setToast("Select an object first");
         return;
       }
-      target = selectedObjectIndex === 1 ? 1 : 0;
+      target = activeObjectIndex(project, selectedObjectIndex);
     }
     const inst = instanceFromDef(def);
     mutateObject(target, (o) => {
@@ -221,81 +261,78 @@ export function LibraryPanel({
     openShaderEditor(def.id);
   }
 
-  // Identical shape/material + image controls for either object.
-  function ObjectMenu({ index }: { index: 0 | 1 }): JSX.Element {
-    const obj = index === 0 ? project.object : project.object2;
-    if (!obj) return <></>;
+  // Identical shape/material + image controls for any object. Optional objects
+  // gain a "None" type: selecting it makes the object cease to exist, and the
+  // remaining controls disappear until a real type is chosen again.
+  function ObjectMenu({
+    index,
+    optional = false,
+  }: {
+    index: number;
+    optional?: boolean;
+  }): JSX.Element {
+    const obj = project.objects[index];
+    const typeValue = obj ? (obj.modelDataUrl ? "bespoke" : obj.primitive) : "none";
     return (
       <>
-        <Field label="Primitive">
+        <Field label="Type">
           <select
-            value={obj.primitive}
-            disabled={!!obj.modelDataUrl}
-            onChange={(e) =>
-              mutateObject(index, (o) => {
-                o.primitive = e.target.value as PrimitiveModel;
-              })
-            }
+            value={typeValue}
+            onChange={(e) => setObjectType(index, e.target.value)}
           >
+            {optional && <option value="none">None</option>}
             {PRIMITIVE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
+            <option value="bespoke">Bespoke</option>
           </select>
         </Field>
-        <Field label="Mapping">
-          <select
-            value={obj.mapping}
-            onChange={(e) =>
-              mutateObject(index, (o) => {
-                o.mapping = e.target.value as Mapping;
-              })
-            }
-          >
-            <option value="uv">UV</option>
-            <option value="triplanar">Triplanar</option>
-          </select>
-        </Field>
-        <button
-          className="full secondary"
-          onClick={() => importModelFor(index)}
-        >
-          {obj.modelName
-            ? `Replace model: ${obj.modelName}`
-            : "Import 3D model"}
-        </button>
-        {obj.modelDataUrl && (
-          <button
-            className="full secondary"
-            onClick={() =>
-              mutateObject(index, (o) => {
-                o.modelDataUrl = null;
-                o.modelName = null;
-              })
-            }
-          >
-            Use primitive instead
-          </button>
-        )}
-        <button
-          className={obj.image.name ? "full secondary" : "full important"}
-          onClick={() => loadImageFor(index)}
-        >
-          {obj.image.name ? "Replace image" : "Load image"}
-        </button>
-        {obj.image.dataUrl && (
-          <ScalarControl
-            label="Position X"
-            scalar={obj.image.offsetX ?? constant(0.5)}
-            min={0}
-            max={1}
-            onChange={(s) =>
-              mutateObject(index, (o) => {
-                o.image.offsetX = s;
-              })
-            }
-          />
+        {obj && (
+          <>
+            <Field label="Mapping">
+              <select
+                value={obj.mapping}
+                onChange={(e) =>
+                  mutateObject(index, (o) => {
+                    o.mapping = e.target.value as Mapping;
+                  })
+                }
+              >
+                <option value="uv">UV</option>
+                <option value="triplanar">Triplanar</option>
+                <option value="spherical">Spherical</option>
+                <option value="cylindrical">Cylindrical</option>
+                <option value="reflection">Reflection</option>
+              </select>
+            </Field>
+            {obj.image.dataUrl ? (
+              <div className="lucky-img-cell">
+                <button
+                  className="lucky-img-thumb"
+                  title="Replace image"
+                  onClick={() => loadImageFor(index)}
+                >
+                  <img src={obj.image.dataUrl} alt={obj.image.name ?? ""} />
+                </button>
+                <button
+                  className="btn-icon"
+                  title="Remove image"
+                  onClick={() => clearImageFor(index)}
+                >
+                  <img src={cancelIcon} alt="remove" />
+                </button>
+              </div>
+            ) : (
+              <button
+                className="full important"
+                onClick={() => loadImageFor(index)}
+              >
+                Load image
+              </button>
+            )}
+          </>
         )}
       </>
     );
@@ -369,25 +406,14 @@ export function LibraryPanel({
             </Section>
 
             <Section title="Object A" className="object-a">
-              <ObjectMenu index={0} />
+              <ObjectMenu index={0} optional />
             </Section>
 
-            <Section title="Object B" className="object-b">
-              {project.object2 ? (
-                <>
-                  <ObjectMenu index={1} />
-                  <button
-                    className="full secondary"
-                    onClick={removeSecondObject}
-                  >
-                    Remove second object
-                  </button>
-                </>
-              ) : (
-                <button className="full" onClick={addSecondObject}>
-                  Add second object
-                </button>
-              )}
+            <Section
+              title={`Object ${objectLetterLabel(1)}`}
+              className={objectAccentClass(1)}
+            >
+              <ObjectMenu index={1} optional />
             </Section>
 
             <Section title="Explore" className="lucky">
@@ -446,15 +472,17 @@ export function LibraryPanel({
                     const dataUrl = dataUrlCache.current.get(path);
                     return (
                       <div className="lucky-img-cell" key={path + i}>
-                        {dataUrl ? (
-                          <img src={dataUrl} alt="" />
-                        ) : (
-                          <span className="lucky-img-missing" title={path}>
-                            {path.split(/[\\/]/).pop()}
-                          </span>
-                        )}
+                        <div className="lucky-img-thumb">
+                          {dataUrl ? (
+                            <img src={dataUrl} alt="" />
+                          ) : (
+                            <span className="lucky-img-missing" title={path}>
+                              {path.split(/[\\/]/).pop()}
+                            </span>
+                          )}
+                        </div>
                         <button
-                          className="btn-icon swatch-del"
+                          className="btn-icon"
                           title="Remove image"
                           onClick={() =>
                             update((p) => {
@@ -519,7 +547,7 @@ export function LibraryPanel({
                 </button>
                 <ZigzagRule patId="zigzag-bespoke" />
                 {allDefs.map((def) => (
-                  <div key={def.id}>
+                  <Fragment key={def.id}>
                     <button
                       className="catalog-item"
                       onClick={() => addEffect(def)}
@@ -529,7 +557,7 @@ export function LibraryPanel({
                     {(def.id === "relief" || def.id === "jitter") && (
                       <ZigzagRule patId={`zigzag-${def.id}`} />
                     )}
-                  </div>
+                  </Fragment>
                 ))}
               </div>
             </Section>

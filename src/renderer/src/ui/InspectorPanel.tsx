@@ -1,4 +1,4 @@
-import { useStore } from "../state/store";
+import { activeObjectIndex as resolveActiveIndex, useStore } from "../state/store";
 import arrowUpIcon from "../assets/arrow_drop_up_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
 import arrowDownIcon from "../assets/arrow_drop_down_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
 import closeIcon from "../assets/close_small_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
@@ -7,12 +7,20 @@ import deleteIcon from "../assets/cancel.svg";
 import { findEffectDef } from "../engine/effects/catalog";
 import {
   constant,
+  objectAccentClass,
   objectLabel,
+  objectLetterLabel,
   type ObjectState,
   type Scalar,
   type TextBackdrop,
 } from "../types";
-import { Section, Field, ScalarControl, ColorRow } from "./controls";
+import {
+  Section,
+  Field,
+  ScalarControl,
+  ColorRow,
+  DurationField,
+} from "./controls";
 import { defaultProject } from "../state/defaults";
 import type { CSSProperties } from "react";
 
@@ -33,13 +41,23 @@ export function InspectorPanel(): JSX.Element {
   function resetToDefault(): void {
     const fresh = defaultProject();
     fresh.scene.backgroundColor = project.scene.backgroundColor;
-    fresh.object.image.name = project.object.image.name;
-    fresh.object.image.dataUrl = project.object.image.dataUrl;
-    fresh.object.primitive = project.object.primitive;
-    fresh.object.modelName = project.object.modelName;
-    fresh.object.modelDataUrl = project.object.modelDataUrl;
-    // Keep the optional second object so a reset doesn't silently drop it.
-    fresh.object2 = project.object2 ? structuredClone(project.object2) : null;
+    const src0 = project.objects[0];
+    const dst0 = fresh.objects[0];
+    // Carry the primary object's shape/image across the reset, but only if it
+    // still exists (Object A can be set to None).
+    if (src0) {
+      dst0.image.name = src0.image.name;
+      dst0.image.dataUrl = src0.image.dataUrl;
+      dst0.primitive = src0.primitive;
+      dst0.modelName = src0.modelName;
+      dst0.modelDataUrl = src0.modelDataUrl;
+    }
+    // Keep the existing objects so a reset doesn't silently drop them; fall back
+    // to the fresh default object when the scene has none.
+    fresh.objects =
+      project.objects.length > 0
+        ? [dst0, ...project.objects.slice(1).map((o) => structuredClone(o))]
+        : [dst0];
     const typed = project.segments
       .filter((s) => s.kind === "text" && s.text)
       .map((s) => s.text!.content);
@@ -58,20 +76,20 @@ export function InspectorPanel(): JSX.Element {
   const segment = project.segments.find((s) => s.id === selectedSegmentId);
 
   // Which object the inspector edits. Guard against a stale index pointing at
-  // a second object that no longer exists.
-  const activeObjectIndex =
-    selectedObjectIndex === 1 && project.object2 ? 1 : 0;
-  const activeObject: ObjectState =
-    activeObjectIndex === 1 ? project.object2! : project.object;
+  // an object that no longer exists.
+  const activeObjectIndex = resolveActiveIndex(project, selectedObjectIndex);
+  const activeObject: ObjectState | undefined =
+    project.objects[activeObjectIndex];
 
   function updateObject(fn: (o: ObjectState) => void): void {
     update((p) => {
-      const o = activeObjectIndex === 1 ? p.object2 : p.object;
+      const o = p.objects[activeObjectIndex];
       if (o) fn(o);
     });
   }
 
   function moveEffect(index: number, dir: -1 | 1): void {
+    if (!activeObject) return;
     const j = index + dir;
     if (j < 0 || j >= activeObject.effects.length) return;
     updateObject((o) => {
@@ -109,25 +127,15 @@ export function InspectorPanel(): JSX.Element {
           {segment.kind === "text" && segment.text ? (
             <>
               <Section title="Message" className="id-text">
-                <Field label="Duration">
-                  <input
-                    type="number"
-                    min={0.2}
-                    max={20}
-                    step={0.1}
-                    value={segment.durationSec}
-                    onChange={(e) =>
-                      update((p) => {
-                        const s = p.segments.find((x) => x.id === segment.id);
-                        if (s)
-                          s.durationSec = Math.max(
-                            0.2,
-                            parseFloat(e.target.value || "1"),
-                          );
-                      })
-                    }
-                  />
-                </Field>
+                <DurationField
+                  value={segment.durationSec}
+                  onChange={(v) =>
+                    update((p) => {
+                      const s = p.segments.find((x) => x.id === segment.id);
+                      if (s) s.durationSec = v;
+                    })
+                  }
+                />
                 <Field label="Message">
                   <textarea
                     rows={3}
@@ -277,37 +285,31 @@ export function InspectorPanel(): JSX.Element {
             </>
           ) : (
             <Section title="None" className="id-text">
-              <Field label="Duration">
-                <input
-                  type="number"
-                  min={0.2}
-                  max={20}
-                  step={0.1}
-                  value={segment.durationSec}
-                  onChange={(e) =>
-                    update((p) => {
-                      const s = p.segments.find((x) => x.id === segment.id);
-                      if (s)
-                        s.durationSec = Math.max(
-                          0.2,
-                          parseFloat(e.target.value || "1"),
-                        );
-                    })
-                  }
-                />
-              </Field>
+              <DurationField
+                value={segment.durationSec}
+                onChange={(v) =>
+                  update((p) => {
+                    const s = p.segments.find((x) => x.id === segment.id);
+                    if (s) s.durationSec = v;
+                  })
+                }
+              />
             </Section>
           )}
         </>
       )}
 
-      {!segment && (
+      {!segment && !activeObject && (
+        <div className="inspector-empty hint">No object selected.</div>
+      )}
+
+      {!segment && activeObject && (
         <>
           <div
-            className={`inspector-object-header ${activeObjectIndex === 0 ? "object-a" : "object-b"}`}
+            className={`inspector-object-header ${objectAccentClass(activeObjectIndex)}`}
           >
             <span className="inspector-object-title">
-              {activeObjectIndex === 0 ? "Object A" : "Object B"} —{" "}
+              Object {objectLetterLabel(activeObjectIndex)} —{" "}
               {objectLabel(activeObject)}
             </span>
             {activeObject.image?.dataUrl && (
@@ -319,10 +321,7 @@ export function InspectorPanel(): JSX.Element {
             )}
           </div>
 
-          <Section
-            title="Transform"
-            className={activeObjectIndex === 0 ? "object-a" : "object-b"}
-          >
+          <Section title="Transform" className={objectAccentClass(activeObjectIndex)}>
             <ScalarControl
               label="Rotate X"
               scalar={activeObject.rotX}
@@ -407,7 +406,7 @@ export function InspectorPanel(): JSX.Element {
             return (
               <Section
                 key={inst.instanceId}
-                className={activeObjectIndex === 0 ? "object-a" : "object-b"}
+                className={objectAccentClass(activeObjectIndex)}
                 title={def?.name ?? inst.defId}
                 right={
                   <div className="fx-row-controls">

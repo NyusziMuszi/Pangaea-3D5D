@@ -3,7 +3,7 @@
 //
 // Given a base project, a palette of colours, a set of image data URLs, and a
 // heat value [0,1], produce a brand-new project that randomizes visuals only:
-// object A/B (shape, texture, transform), effects, keyframes, and the scene +
+// the objects (shape, texture, transform), effects, keyframes, and the scene +
 // text-card colours. The timeline (segment count, durations, text *content*)
 // is preserved. Output is always animated: scale, one rotation axis, and one
 // effect's intensity are always keyframed.
@@ -12,6 +12,7 @@
 import type {
   EffectDef,
   EffectInstance,
+  ObjectState,
   PrimitiveModel,
   Project,
   Scalar,
@@ -35,26 +36,6 @@ const PRIMITIVE_MODELS: PrimitiveModel[] = [
   "polyhedron",
   "dodecahedron",
 ];
-
-// Which uniform on each effect reads as its "intensity" — the one worth
-// animating. Falls back to the first uniform when an effect isn't listed.
-const INTENSITY_UNIFORM: Record<string, string> = {
-  displace: "uAmplitude",
-  relief: "uAmount",
-  ripple: "uAmplitude",
-  wave: "uAmplitude",
-  twist: "uTwist",
-  bulge: "uStrength",
-  warp: "uAmplitude",
-  inflate: "uAmount",
-  taper: "uTaper",
-  vortex: "uTwist",
-  jitter: "uAmount",
-  grayscale: "uAmount",
-  fresnel: "uIntensity", // NOT uPower
-  multiply: "uAmount",
-  mask: "uAmount",
-};
 
 const clamp = (v: number, lo: number, hi: number): number =>
   Math.max(lo, Math.min(hi, v));
@@ -193,10 +174,12 @@ export function generateLuckyScene(
   const scenePalette = buildScenePalette(palette, colorBudget);
 
   // A texture source: a fetched image if available, else a solid palette colour.
+  // Only a real image counts as a named image; a solid-colour fallback leaves
+  // the name null so the UI still offers "Load image" rather than "Replace".
+  const hasImages = imageDataUrls.length > 0;
   const appearance = (): string =>
-    imageDataUrls.length
-      ? pick(imageDataUrls)
-      : solidColorDataUrl(pick(scenePalette));
+    hasImages ? pick(imageDataUrls) : solidColorDataUrl(pick(scenePalette));
+  const imageName = hasImages ? "lucky" : null;
 
   next.scene.backgroundColor = pick(scenePalette);
 
@@ -204,8 +187,8 @@ export function generateLuckyScene(
   function keyframeIntensity(inst: EffectInstance): void {
     const def = BUILTIN_EFFECTS.find((d) => d.id === inst.defId);
     if (!def || def.uniforms.length === 0) return;
-    const name = INTENSITY_UNIFORM[inst.defId] ?? def.uniforms[0].name;
-    const u = def.uniforms.find((x) => x.name === name) ?? def.uniforms[0];
+    // The catalog flags each effect's intensity uniform; fall back to the first.
+    const u = def.uniforms.find((x) => x.isIntensity) ?? def.uniforms[0];
     inst.values[u.name] = spreadKeys(
       dur,
       keyCount,
@@ -216,7 +199,7 @@ export function generateLuckyScene(
   // Apply scale + one-rotation-axis sweep keyframes to an object, plus
   // `extras` extra animated transform props. Returns the chosen rotation axis.
   function animateTransform(
-    o: Project["object"],
+    o: ObjectState,
     scaleLo: number,
     scaleHi: number,
     extras: number,
@@ -256,12 +239,12 @@ export function generateLuckyScene(
   const halfGap = 0.9 * Math.random() ** 2;
 
   // ----- Object A -----
-  const a = next.object;
+  const a = next.objects[0];
   a.primitive = pick(PRIMITIVE_MODELS);
   a.modelName = null;
   a.modelDataUrl = null;
   a.image = {
-    name: "lucky",
+    name: imageName,
     dataUrl: appearance(),
     offsetX: constant(0.5),
     offsetY: constant(0.5),
@@ -271,22 +254,23 @@ export function generateLuckyScene(
   a.posZ = constant(0);
   animateTransform(a, 0.4, 1.0, animatedExtras);
 
+  const objects: ObjectState[] = [a];
+
   // ----- Object B -----
   if (twoObjects) {
     const b = defaultSecondObject();
     b.primitive = pick(PRIMITIVE_MODELS);
     b.image = {
-      name: "lucky",
+      name: imageName,
       dataUrl: appearance(),
       offsetX: constant(0.5),
       offsetY: constant(0.5),
     };
     b.posX = constant(halfGap);
     animateTransform(b, 0.3, 0.7, 0);
-    next.object2 = b;
-  } else {
-    next.object2 = null;
+    objects.push(b);
   }
+  next.objects = objects;
 
   // ----- Effects (distributed across both objects) -----
   const deformPool = BUILTIN_EFFECTS.filter((d) => d.kind === "deform");
@@ -310,16 +294,12 @@ export function generateLuckyScene(
     }
   }
 
-  // Deal the selected effects between the two objects round-robin, so neither
-  // object hoards the whole stack. With one object, they all land on A.
-  a.effects = [];
-  if (next.object2) {
-    instances.forEach((inst, i) =>
-      (i % 2 === 0 ? a.effects : next.object2!.effects).push(inst),
-    );
-  } else {
-    a.effects = instances;
-  }
+  // Deal the selected effects across the objects round-robin, so no single
+  // object hoards the whole stack. With one object, they all land on it.
+  for (const o of objects) o.effects = [];
+  instances.forEach((inst, i) =>
+    objects[i % objects.length].effects.push(inst),
+  );
 
   // Keyframe exactly one effect's intensity so the scene always animates a fx.
   if (instances.length) keyframeIntensity(pick(instances));

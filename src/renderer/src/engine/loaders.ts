@@ -43,10 +43,13 @@ function dominantGeometry(root: THREE.Object3D): THREE.BufferGeometry | null {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh
     if (mesh.isMesh && mesh.geometry) {
-      const g = mesh.geometry.clone()
-      g.applyMatrix4(mesh.matrixWorld)
-      const count = g.getAttribute('position')?.count ?? 0
+      const count = mesh.geometry.getAttribute('position')?.count ?? 0
       if (count > bestCount) {
+        // Only clone the new front-runner; dispose the clone it displaces so
+        // discarded meshes don't leak GPU buffers.
+        best?.dispose()
+        const g = mesh.geometry.clone()
+        g.applyMatrix4(mesh.matrixWorld)
         bestCount = count
         best = g
       }
