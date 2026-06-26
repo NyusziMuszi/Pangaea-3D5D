@@ -148,127 +148,132 @@ export function TimelinePanel(): JSX.Element {
       </div>
       <div className="timeline-section">
         <div className="tl-tracks">
-          <div className="tl-row tl-scrub-row">
-            <div className="tl-scrub-area">
-              <div className="tl-time">
-                {fmt(playhead)} / {fmt(total)}
-              </div>
-              <input
-                className="scrub"
-                type="range"
-                min={0}
-                max={total}
-                step={1 / 120}
-                value={playhead}
-                style={
-                  {
-                    ["--slider-pct" as string]: `${
-                      total > 0 ? (playhead / total) * 100 : 0
-                    }%`,
-                  } as CSSProperties
-                }
-                onChange={(e) => {
-                  if (engine.isPlaying) {
-                    engine.pause();
-                    setPlaying(false);
+          {/* The scrub bar and the segment track stay pinned to the top of the
+              scroll area so they remain visible while the object track (which
+              grows tall as keyframes stack) scrolls beneath them. */}
+          <div className="tl-sticky-head">
+            <div className="tl-row tl-scrub-row">
+              <div className="tl-scrub-area">
+                <div className="tl-time">
+                  {fmt(playhead)} / {fmt(total)}
+                </div>
+                <input
+                  className="scrub"
+                  type="range"
+                  min={0}
+                  max={total}
+                  step={1 / 120}
+                  value={playhead}
+                  style={
+                    {
+                      ["--slider-pct" as string]: `${
+                        total > 0 ? (playhead / total) * 100 : 0
+                      }%`,
+                    } as CSSProperties
                   }
-                  engine.seekTo(parseFloat(e.target.value));
-                }}
-              />
+                  onChange={(e) => {
+                    if (engine.isPlaying) {
+                      engine.pause();
+                      setPlaying(false);
+                    }
+                    engine.seekTo(parseFloat(e.target.value));
+                  }}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="tl-row">
-            <div className="tl-track">
-              {project.segments.map((seg, i) => {
-                const isText = seg.kind === "text";
-                return (
-                  <div
-                    key={seg.id}
-                    className={`segment ${isText ? "text id-text" : "break"} ${selectedSegmentId === seg.id ? "sel" : ""}`}
-                    style={{
-                      left: pct(starts[i]),
-                      width: pct(seg.durationSec),
-                    }}
-                    onClick={() => selectOnly(seg.id)}
-                  >
-                    {isText && seg.text && (
-                      <div className="seg-swatches">
-                        {(
-                          [
+            <div className="tl-row">
+              <div className="tl-track">
+                {project.segments.map((seg, i) => {
+                  const isText = seg.kind === "text";
+                  return (
+                    <div
+                      key={seg.id}
+                      className={`segment ${isText ? "text id-text" : "break"} ${selectedSegmentId === seg.id ? "sel" : ""}`}
+                      style={{
+                        left: pct(starts[i]),
+                        width: pct(seg.durationSec),
+                      }}
+                      onClick={() => selectOnly(seg.id)}
+                    >
+                      {isText && seg.text && (
+                        <div className="seg-swatches">
+                          {(
                             [
-                              "Background colour",
-                              seg.text.backgroundColor,
-                              (t, v) => (t.backgroundColor = v),
-                            ],
-                            [
-                              "Text colour",
-                              seg.text.textColor,
-                              (t, v) => (t.textColor = v),
-                            ],
+                              [
+                                "Background colour",
+                                seg.text.backgroundColor,
+                                (t, v) => (t.backgroundColor = v),
+                              ],
+                              [
+                                "Text colour",
+                                seg.text.textColor,
+                                (t, v) => (t.textColor = v),
+                              ],
 
-                            [
-                              "Object colour",
-                              seg.text.textBackdropColor,
-                              (t, v) => (t.textBackdropColor = v),
-                            ],
-                          ] as [
-                            string,
-                            string,
-                            (t: TextStyle, v: string) => void,
-                          ][]
-                        ).map(([title, value, set]) => (
+                              [
+                                "Object colour",
+                                seg.text.textBackdropColor,
+                                (t, v) => (t.textBackdropColor = v),
+                              ],
+                            ] as [
+                              string,
+                              string,
+                              (t: TextStyle, v: string) => void,
+                            ][]
+                          ).map(([title, value, set]) => (
+                            <ColorSwatch
+                              key={title}
+                              className="seg-swatch"
+                              title={title}
+                              value={value}
+                              onChange={(v) =>
+                                update((p) => {
+                                  const s = p.segments.find(
+                                    (x) => x.id === seg.id,
+                                  );
+                                  if (s?.text) set(s.text, v);
+                                })
+                              }
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {!isText && (
+                        <div className="seg-swatches">
                           <ColorSwatch
-                            key={title}
                             className="seg-swatch"
-                            title={title}
-                            value={value}
+                            title="Background colour"
+                            value={seg.backgroundColor ?? "#281b6c"}
                             onChange={(v) =>
                               update((p) => {
-                                const s = p.segments.find(
-                                  (x) => x.id === seg.id,
-                                );
-                                if (s?.text) set(s.text, v);
+                                const s = p.segments.find((x) => x.id === seg.id);
+                                if (s) s.backgroundColor = v;
                               })
                             }
                           />
-                        ))}
-                      </div>
-                    )}
-                    {!isText && (
-                      <div className="seg-swatches">
-                        <ColorSwatch
-                          className="seg-swatch"
-                          title="Background colour"
-                          value={seg.backgroundColor ?? "#281b6c"}
-                          onChange={(v) =>
-                            update((p) => {
-                              const s = p.segments.find((x) => x.id === seg.id);
-                              if (s) s.backgroundColor = v;
-                            })
-                          }
-                        />
-                      </div>
-                    )}
-                    <DurationField
-                      className="tl-dur-input"
-                      wrapInField={false}
-                      stopClickPropagation
-                      value={seg.durationSec}
-                      onChange={(v) =>
-                        update((p) => {
-                          const s = p.segments.find((x) => x.id === seg.id);
-                          if (s) s.durationSec = v;
-                        })
-                      }
-                    />
-                  </div>
-                );
-              })}
-              <div
-                className="tl-playhead"
-                style={{ left: playheadLeft(playhead) }}
-              />
+                        </div>
+                      )}
+                      <DurationField
+                        className="tl-dur-input"
+                        wrapInField={false}
+                        stopClickPropagation
+                        value={seg.durationSec}
+                        onChange={(v) =>
+                          update((p) => {
+                            const s = p.segments.find((x) => x.id === seg.id);
+                            if (s) s.durationSec = v;
+                          })
+                        }
+                      />
+                    </div>
+                  );
+                })}
+                <div
+                  className="tl-playhead"
+                  style={{ left: playheadLeft(playhead) }}
+                />
+              </div>
             </div>
           </div>
 
