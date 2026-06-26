@@ -79,11 +79,16 @@ export class TextOverlay {
       depthWrite: false,
       uniforms: {
         uMap: { value: null },
-        uOpacity: { value: 0 }
+        uOpacity: { value: 0 },
+        // Clip-space Z of the fullscreen quad. 0 = near (drawn on top); 1 = far
+        // (drawn behind, so depth-tested scene geometry occludes it). See
+        // setBehind().
+        uDepth: { value: 0 }
       },
       vertexShader: `
         varying vec2 vUv;
-        void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+        uniform float uDepth;
+        void main(){ vUv = uv; gl_Position = vec4(position.xy, uDepth, 1.0); }`,
       fragmentShader: `
         precision highp float;
         uniform sampler2D uMap;
@@ -105,6 +110,16 @@ export class TextOverlay {
 
   setOpacity(o: number): void {
     this.material.uniforms.uOpacity.value = o
+  }
+
+  // Behind mode: push the quad to the far plane and enable depth testing so any
+  // scene geometry (every object writes depth, even transparent ones) occludes
+  // the text. Off: draw on top with no depth test (the default overlay). The
+  // default LessEqualDepth depthFunc lets the quad still draw over the cleared
+  // background (depth 1.0) while losing to closer objects.
+  setBehind(behind: boolean): void {
+    this.material.depthTest = behind
+    this.material.uniforms.uDepth.value = behind ? 1 : 0
   }
 
   get opacity(): number {

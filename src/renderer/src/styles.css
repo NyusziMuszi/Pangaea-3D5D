@@ -281,22 +281,59 @@ input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   appearance: none;
 }
-input[type="color"] {
+/* Custom colour swatch + popover picker (replaces the native OS colour dialog
+   so the value is shown/edited as hex rather than RGB). */
+.color-swatch {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+.color-swatch-btn {
   padding: 0;
   width: 18px;
   height: 18px;
   flex: none;
   border: none;
-}
-/* The native control insets the visible colour with a padded wrapper + swatch
-   border, which makes the box read as a rectangle. Zero them so the colour
-   fills the full square. */
-input[type="color"]::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-input[type="color"]::-webkit-color-swatch {
-  border: none;
   border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.color-popover {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--panel, #1e1e1e);
+  border: 1px solid var(--border, #3a3a3a);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.color-popover .react-colorful {
+  width: 160px;
+  height: 140px;
+}
+.color-popover-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.color-popover-row .hex {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+.color-eyedropper {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.color-eyedropper:hover {
+  color: var(--text);
 }
 textarea {
   resize: vertical;
@@ -314,13 +351,19 @@ textarea {
 
 .workspace {
   display: grid;
-  grid-template-columns: var(--library-width, 250px) 1fr 320px;
+  grid-template-columns: var(--library-width, 250px) 1fr var(
+      --inspector-width,
+      320px
+    );
   transition: grid-template-columns var(--dur) var(--ease);
   min-height: 0;
   height: 100%;
 }
 .workspace.library-collapsed {
   --library-width: 40px;
+}
+.workspace.inspector-collapsed {
+  --inspector-width: 40px;
 }
 
 /* The library column wraps the scrollable panel plus a collapse tab that
@@ -383,7 +426,9 @@ button.library-collapse-btn:hover {
    reserve a full-height column. */
 .project-actions {
   position: absolute;
-  top: var(--space-6);
+  top: 40px;
+  /* Anchor to the inspector column's left edge so the actions follow the panel
+     toward the side when it collapses to a thin rail. */
   right: calc(100% + var(--space-6));
   z-index: var(--z-badge);
   display: flex;
@@ -437,6 +482,51 @@ button.library-collapse-btn:hover {
   object-fit: cover;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+}
+
+/* The inspector column wraps the scrollable panel plus a collapse tab that
+   overhangs the panel's left edge (mirror of the library's collapse tab). */
+.inspector-wrap {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+}
+.inspector-wrap > .panel.inspector {
+  height: 100%;
+}
+/* Collapsed, the panel is a thin rail; double-click anywhere on it expands. */
+.inspector-wrap.collapsed > .panel.inspector {
+  cursor: pointer;
+}
+/* Square tab sitting just outside the panel's left edge, mirroring the
+   library's tab. Same fill + border as the panels. */
+.inspector-collapse-tab {
+  position: absolute;
+  top: 2px;
+  right: calc(
+    100% - 1px
+  ); /* overlap the panel's left border into a single seam */
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  z-index: var(--z-tab);
+}
+button.inspector-collapse-btn {
+  cursor: pointer;
+  color: var(--diamond);
+}
+button.inspector-collapse-btn:hover {
+  color: var(--text-btn-hover);
+}
+.inspector-collapse-btn svg {
+  transition: transform var(--dur) var(--ease);
+}
+.inspector-wrap.collapsed .inspector-collapse-btn svg {
+  transform: rotate(180deg);
 }
 
 /* ---------- Sections / fields ---------- */
@@ -619,10 +709,9 @@ button.library-collapse-btn:hover {
   width: 34px;
 }
 .scrub {
-  /* Pull the runnable track out by half a thumb on each side so the thumb's
-     centre travels edge-to-edge, matching the playhead marker on the tracks. */
-  width: calc(100% + 14px);
-  margin-left: -7px;
+  /* Match the segment track width exactly so the scrub bar lines up with the
+     object segments, keyframes, and playhead on the shared time scale. */
+  width: 100%;
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
@@ -663,7 +752,12 @@ button.library-collapse-btn:hover {
   border: 1px solid var(--border);
 }
 .tl-play .play {
-  width: auto;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-round);
 }
 .tl-play .play img {
   width: 18px;
@@ -1205,28 +1299,20 @@ textarea.code {
 /* ---------- Feeling lucky ---------- */
 .swatch-list {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-3) var(--space-4);
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-3) var(--space-2);
 }
 .swatch-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
-/* Narrower colour square so the square + hex input + delete all fit within
-   each half-width grid cell. */
-.swatch-row input[type="color"] {
+/* Narrower colour square so the square + delete fit within each fifth-width
+   grid cell. */
+.swatch-row .color-swatch-btn {
   width: 18px;
   height: 18px;
   flex: none;
-}
-.swatch-row .hex {
-  flex: none;
-  width: 60px;
-  min-width: 0;
-  font-size: var(--font-xs);
-  padding-left: var(--space-2); /* snap 3→4 */
-  padding-right: var(--space-2); /* snap 3→4 */
 }
 .swatch-row .btn-icon {
   flex: none;
@@ -1295,4 +1381,16 @@ button.lucky-img-thumb {
   gap: var(--space-4);
   color: var(--text-dim);
   font-size: var(--font-xs);
+}
+.lucky-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.lucky-radio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  color: var(--text-dim);
 }

@@ -121,6 +121,7 @@ uniform vec3 uFlatColor;
 uniform float uOpacity;
 uniform float uWireframe;
 uniform float uWireWidth;
+uniform float uFaceted;
 ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
@@ -167,6 +168,17 @@ void main() {
   vec4 color = pg_sampleObject(vUv);
 ${shadeCalls.join('\n')}
   if (uSilhouette > 0.5) color = vec4(uFlatColor, 1.0);
+  if (uFaceted > 0.5) {
+    // Flat per-face normal from screen-space derivatives, so facets read even
+    // on smooth-normalled geometry. Face it toward the camera so DoubleSide
+    // back-faces shade consistently.
+    vec3 N = normalize(cross(dFdx(vWorldPos), dFdy(vWorldPos)));
+    if (dot(N, cameraPosition - vWorldPos) < 0.0) N = -N;
+    vec3 L = normalize(vec3(0.4, 0.7, 0.6));
+    float ndl = max(dot(N, L), 0.0);
+    float shade = mix(0.35, 1.0, ndl); // 0.35 = ambient floor
+    color = vec4(uFlatColor * shade, 1.0);
+  }
   if (uWireframe > 0.5) {
     vec3 d = fwidth(vBary);
     vec3 a3 = smoothstep(vec3(0.0), d * uWireWidth, vBary);

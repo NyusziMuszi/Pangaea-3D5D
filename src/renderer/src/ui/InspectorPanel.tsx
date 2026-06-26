@@ -22,11 +22,18 @@ import {
   DurationField,
 } from "./controls";
 import { defaultProject } from "../state/defaults";
+import { assetUrl } from "../state/assets";
 import type { CSSProperties } from "react";
 
 const TAU = Math.PI * 2;
 
-export function InspectorPanel(): JSX.Element {
+export function InspectorPanel({
+  collapsed,
+  onToggleCollapse,
+}: {
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}): JSX.Element {
   const project = useStore((s) => s.project);
   const update = useStore((s) => s.update);
   const setProject = useStore((s) => s.setProject);
@@ -40,14 +47,13 @@ export function InspectorPanel(): JSX.Element {
 
   function resetToDefault(): void {
     const fresh = defaultProject();
-    fresh.scene.backgroundColor = project.scene.backgroundColor;
     const src0 = project.objects[0];
     const dst0 = fresh.objects[0];
     // Carry the primary object's shape/image across the reset, but only if it
     // still exists (Object A can be set to None).
     if (src0) {
       dst0.image.name = src0.image.name;
-      dst0.image.dataUrl = src0.image.dataUrl;
+      dst0.image.assetId = src0.image.assetId;
       dst0.primitive = src0.primitive;
       dst0.modelName = src0.modelName;
       dst0.modelDataUrl = src0.modelDataUrl;
@@ -65,6 +71,17 @@ export function InspectorPanel(): JSX.Element {
     for (const seg of fresh.segments) {
       if (seg.kind === "text" && seg.text && i < typed.length) {
         seg.text.content = typed[i++];
+      }
+    }
+    // Carry each break's background colour across the reset.
+    const bgs = project.segments
+      .filter((s) => s.kind === "animation")
+      .map((s) => s.backgroundColor);
+    let b = 0;
+    for (const seg of fresh.segments) {
+      if (seg.kind === "animation" && b < bgs.length) {
+        if (bgs[b]) seg.backgroundColor = bgs[b];
+        b++;
       }
     }
     setProject(fresh);
@@ -113,8 +130,16 @@ export function InspectorPanel(): JSX.Element {
   }
 
   return (
-    <div className="panel inspector">
-      {segment && (
+    <div className={`inspector-wrap ${collapsed ? "collapsed" : ""}`}>
+      <div
+        className="panel inspector"
+        // When collapsed the panel is just a thin rail; double-clicking
+        // anywhere on it re-expands the inspector.
+        onDoubleClick={collapsed ? onToggleCollapse : undefined}
+      >
+        {!collapsed && (
+          <>
+            {segment && (
         <>
           <div className="inspector-object-header id-text">
             <span className="inspector-object-title">
@@ -294,6 +319,16 @@ export function InspectorPanel(): JSX.Element {
                   })
                 }
               />
+              <ColorRow
+                label="Background colour"
+                value={segment.backgroundColor ?? "#281b6c"}
+                onChange={(v) =>
+                  update((p) => {
+                    const s = p.segments.find((x) => x.id === segment.id);
+                    if (s) s.backgroundColor = v;
+                  })
+                }
+              />
             </Section>
           )}
         </>
@@ -312,10 +347,10 @@ export function InspectorPanel(): JSX.Element {
               Object {objectLetterLabel(activeObjectIndex)} —{" "}
               {objectLabel(activeObject)}
             </span>
-            {activeObject.image?.dataUrl && (
+            {activeObject.image?.assetId && (
               <img
                 className="inspector-object-thumb"
-                src={activeObject.image.dataUrl}
+                src={assetUrl(activeObject.image.assetId) ?? undefined}
                 alt={activeObject.image.name ?? ""}
               />
             )}
@@ -480,9 +515,36 @@ export function InspectorPanel(): JSX.Element {
         </>
       )}
 
-      <div className="inspector-footer">
-        <button className="secondary" onClick={resetToDefault}>
-          Reset to default
+            <div className="inspector-footer">
+              <button className="secondary" onClick={resetToDefault}>
+                Reset to default
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="inspector-collapse-tab">
+        <button
+          className="btn-icon inspector-collapse-btn"
+          onClick={onToggleCollapse}
+          title={collapsed ? "Expand inspector" : "Collapse inspector"}
+          aria-label={collapsed ? "Expand inspector" : "Collapse inspector"}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M9 18L15 12L9 6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
       </div>
     </div>

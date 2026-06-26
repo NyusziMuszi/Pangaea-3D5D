@@ -1,9 +1,9 @@
-import { type CSSProperties } from "react";
+import { type CSSProperties, useEffect } from "react";
 import playIcon from "../assets/play_arrow_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import pauseIcon from "../assets/pause_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
-import { KeyframeTrack, DurationField } from "./controls";
+import { KeyframeTrack, DurationField, ColorSwatch } from "./controls";
 import { objectKeyframeChannels } from "./keyframeChannels";
 import { isAnimated } from "./scalarUtils";
 import {
@@ -43,6 +43,14 @@ export function TimelinePanel(): JSX.Element {
     acc += seg.durationSec;
   }
   const pct = (v: number): string => `${(v / total) * 100}%`;
+  // The playhead lines share the inset time axis used by the keyframe strips
+  // and the scrub thumb, not the full container width. The kf-track sits inside
+  // the object segment's horizontal padding (--space-4), so the axis runs from
+  // that inset on the left to its mirror on the right; interpolate within it.
+  const playheadLeft = (v: number): string => {
+    const f = total > 0 ? v / total : 0;
+    return `calc(var(--space-4) + ${f.toFixed(4)} * (100% - 2 * var(--space-4)))`;
+  };
   // An object is the active context whenever no segment is selected; selecting
   // an effect from the inspector no longer deactivates it.
   const objectActive = !selectedSegmentId;
@@ -67,6 +75,27 @@ export function TimelinePanel(): JSX.Element {
       setPlaying(true);
     }
   }
+
+  // Space bar toggles playback, except while typing in a form field.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.code !== "Space" && e.key !== " ") return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        t?.isContentEditable
+      ) {
+        return;
+      }
+      e.preventDefault();
+      togglePlay();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   function updateObject(
     index: number,
@@ -167,34 +196,58 @@ export function TimelinePanel(): JSX.Element {
                       <div className="seg-swatches">
                         {(
                           [
-                            ["Text colour", seg.text.textColor, (t, v) => (t.textColor = v)],
                             [
                               "Background colour",
                               seg.text.backgroundColor,
                               (t, v) => (t.backgroundColor = v),
                             ],
                             [
+                              "Text colour",
+                              seg.text.textColor,
+                              (t, v) => (t.textColor = v),
+                            ],
+
+                            [
                               "Object colour",
                               seg.text.textBackdropColor,
                               (t, v) => (t.textBackdropColor = v),
                             ],
-                          ] as [string, string, (t: TextStyle, v: string) => void][]
+                          ] as [
+                            string,
+                            string,
+                            (t: TextStyle, v: string) => void,
+                          ][]
                         ).map(([title, value, set]) => (
-                          <input
+                          <ColorSwatch
                             key={title}
-                            type="color"
                             className="seg-swatch"
                             title={title}
                             value={value}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) =>
+                            onChange={(v) =>
                               update((p) => {
-                                const s = p.segments.find((x) => x.id === seg.id);
-                                if (s?.text) set(s.text, e.target.value);
+                                const s = p.segments.find(
+                                  (x) => x.id === seg.id,
+                                );
+                                if (s?.text) set(s.text, v);
                               })
                             }
                           />
                         ))}
+                      </div>
+                    )}
+                    {!isText && (
+                      <div className="seg-swatches">
+                        <ColorSwatch
+                          className="seg-swatch"
+                          title="Background colour"
+                          value={seg.backgroundColor ?? "#281b6c"}
+                          onChange={(v) =>
+                            update((p) => {
+                              const s = p.segments.find((x) => x.id === seg.id);
+                              if (s) s.backgroundColor = v;
+                            })
+                          }
+                        />
                       </div>
                     )}
                     <DurationField
@@ -212,7 +265,10 @@ export function TimelinePanel(): JSX.Element {
                   </div>
                 );
               })}
-              <div className="tl-playhead" style={{ left: pct(playhead) }} />
+              <div
+                className="tl-playhead"
+                style={{ left: playheadLeft(playhead) }}
+              />
             </div>
           </div>
 
@@ -235,7 +291,10 @@ export function TimelinePanel(): JSX.Element {
                   {renderKeyframes(obj, index)}
                 </div>
               ))}
-              <div className="tl-playhead" style={{ left: pct(playhead) }} />
+              <div
+                className="tl-playhead"
+                style={{ left: playheadLeft(playhead) }}
+              />
             </div>
           </div>
         </div>

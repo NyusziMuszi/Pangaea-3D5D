@@ -10,7 +10,7 @@ export function PreviewPanel(): JSX.Element {
   const update = useStore((s) => s.update)
   // The image being panned belongs to whichever object is selected.
   const activeObject = useActiveObject()
-  const hasImage = !!activeObject?.image.dataUrl
+  const hasImage = !!activeObject?.image.assetId
 
   // Resolve the active object from the live store (drag handlers run outside the
   // render closure, so read the current selection each time). Undefined when the
@@ -22,7 +22,7 @@ export function PreviewPanel(): JSX.Element {
   // Drag over the preview to reposition the image's cover-fit window. Only the
   // overflowing axis responds (the fitted axis ignores its offset in-shader).
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>): void {
-    if (!liveActiveObject(useStore.getState().project)?.image.dataUrl) return
+    if (!liveActiveObject(useStore.getState().project)?.image.assetId) return
     dragRef.current = { x: e.clientX, y: e.clientY }
     e.currentTarget.setPointerCapture(e.pointerId)
   }

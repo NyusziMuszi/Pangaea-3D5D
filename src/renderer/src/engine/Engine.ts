@@ -18,7 +18,8 @@ import {
 import { findEffectDef } from "./effects/catalog";
 import { TextOverlay, renderTextCard } from "./textOverlay";
 import { loadTextCardFont } from "./fonts";
-import { loadImage, loadModelGeometry } from "./loaders";
+import { loadModelGeometry } from "./loaders";
+import { assetUrl } from "../state/assets";
 
 // A composed uniform binding resolved once at material-build time: holds a
 // direct reference to the owning effect instance and the uniform's default
@@ -107,19 +108,21 @@ function primitiveGeometry(primitive: string): THREE.BufferGeometry {
 // screenshot) into the destination colour space when drawing onto a 2D
 // canvas, which defaults to sRGB. Direct WebGL texture uploads skip this and
 // show the raw P3 values as sRGB, which reads as oversaturated. Routing the
-// image through an sRGB canvas first restores the file's real colours.
-function normalizeToSrgb(img: HTMLImageElement): CanvasImageSource {
-  const w = img.naturalWidth;
-  const h = img.naturalHeight;
-  if (!w || !h) return img;
+// already-decoded + resized bitmap through an sRGB canvas first restores the
+// file's real colours.
+function normalizeToSrgb(source: ImageBitmap): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = Math.max(1, source.width);
+  canvas.height = Math.max(1, source.height);
   const ctx = canvas.getContext("2d");
-  if (!ctx) return img;
-  ctx.drawImage(img, 0, 0);
+  if (ctx) ctx.drawImage(source, 0, 0);
   return canvas;
 }
+
+// Largest texture edge uploaded to the GPU. 4096 still exceeds the 1080×1350
+// output, so capped textures stay sharp on export while bounding VRAM and
+// upload cost for huge (e.g. 8K) source images.
+const MAX_TEXTURE_EDGE = 4096;
 
 // Parse a #rrggbb / #rgb hex string into literal 0..1 sRGB components, writing
 // into `target` (no allocation per call).
@@ -201,7 +204,7 @@ class ObjectSlot {
   private imageSource: CanvasImageSource | null = null;
   private imageTexture: THREE.Texture | null = null;
   private imageAspect = 1; // natural width / height of the loaded image
-  private lastImageUrl: string | null = null;
+  private lastImageId: string | null = null;
 
   // model
   private modelToken = 0;
@@ -238,40 +241,87 @@ class ObjectSlot {
   }
 
   private reconcileImage(object: ObjectState): void {
-    const url = object.image?.dataUrl ?? null;
-    if (url === this.lastImageUrl) return;
-    this.lastImageUrl = url;
+    const id = object.image?.assetId ?? null;
+    if (id === this.lastImageId) return;
+    this.lastImageId = id;
     this.reloadImage();
   }
 
+  // Swap in a new image texture, disposing the one it replaces so abandoned
+  // GPU textures (and the 2D canvas each keeps alive) don't accumulate across
+  // image changes — e.g. every "Explore" generation that lands a different
+  // image asset on this object.
+  private setImageTexture(tex: THREE.Texture | null): void {
+    if (this.imageTexture && this.imageTexture !== tex) this.imageTexture.dispose();
+    this.imageTexture = tex;
+  }
+
   private reloadImage(): void {
-    const url = this.lastImageUrl;
-    if (!url) {
+    const id = this.lastImageId;
+    const url = id ? assetUrl(id) : null;
+    if (!id || !url) {
       this.imageSource = null;
-      this.imageTexture = null;
+      this.setImageTexture(null);
       this.applyTextureToMaterial();
       return;
     }
-    loadImage(url)
-      .then((img) => {
-        if (this.lastImageUrl !== url) return;
-        this.imageAspect = img.naturalWidth / Math.max(1, img.naturalHeight);
-        this.imageSource = normalizeToSrgb(img);
-        const tex = new THREE.CanvasTexture(
-          this.imageSource as HTMLCanvasElement,
-        );
-        // NoColorSpace: avoid the GPU's hardware sRGB decode (SRGB8_ALPHA8),
-        // which our custom ShaderMaterial never re-encodes on output. The 2D
-        // canvas above already produced sRGB bytes; pass them through as-is.
-        tex.colorSpace = THREE.NoColorSpace;
-        tex.needsUpdate = true;
-        tex.minFilter = THREE.LinearMipmapLinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        this.imageTexture = tex;
-        this.applyTextureToMaterial();
-        this.requestRender();
-      })
-      .catch(() => this.reportError("Failed to load image"));
+    this.decodeTexture(id, url).catch(() =>
+      this.reportError("Failed to load image"),
+    );
+  }
+
+  // Decode the asset off the main thread (createImageBitmap), capping the
+  // longest edge at MAX_TEXTURE_EDGE so oversized images don't blow up VRAM or
+  // stall the upload. imageAspect is read from the natural (pre-cap) size so
+  // cover-fit framing is unaffected by the cap. The id guards against a newer
+  // image winning the race while this decode is in flight.
+  private async decodeTexture(id: string, url: string): Promise<void> {
+    const blob = await (await fetch(url)).blob();
+    // Probe to learn the natural size; reused directly when no resize is needed.
+    const probe = await createImageBitmap(blob);
+    if (this.lastImageId !== id) {
+      probe.close();
+      return;
+    }
+    const natW = probe.width;
+    const natH = probe.height;
+    this.imageAspect = natW / Math.max(1, natH);
+
+    const scale = Math.min(1, MAX_TEXTURE_EDGE / Math.max(natW, natH));
+    let bitmap = probe;
+    if (scale < 1) {
+      bitmap = await createImageBitmap(blob, {
+        resizeWidth: Math.max(1, Math.round(natW * scale)),
+        resizeHeight: Math.max(1, Math.round(natH * scale)),
+        resizeQuality: "high",
+      });
+      probe.close();
+      if (this.lastImageId !== id) {
+        bitmap.close();
+        return;
+      }
+    }
+
+    this.imageSource = normalizeToSrgb(bitmap);
+    bitmap.close();
+    const tex = new THREE.CanvasTexture(this.imageSource as HTMLCanvasElement);
+    // NoColorSpace: avoid the GPU's hardware sRGB decode (SRGB8_ALPHA8),
+    // which our custom ShaderMaterial never re-encodes on output. The 2D
+    // canvas above already produced sRGB bytes; pass them through as-is.
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.needsUpdate = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    // Final guard: a newer image may have won the race after the resize checks
+    // above but before the texture existed. Drop ours rather than overwrite
+    // (and leak past) the current one.
+    if (this.lastImageId !== id) {
+      tex.dispose();
+      return;
+    }
+    this.setImageTexture(tex);
+    this.applyTextureToMaterial();
+    this.requestRender();
   }
 
   private applyTextureToMaterial(): void {
@@ -371,6 +421,7 @@ class ObjectSlot {
       uOpacity: { value: 1 },
       uWireframe: { value: 0 },
       uWireWidth: { value: 1.5 },
+      uFaceted: { value: 0 },
     };
     for (const b of composed.bindings) uniforms[b.uniformKey] = { value: 0 };
     this.bindActive(composed.bindings, effects);
@@ -468,11 +519,41 @@ class ObjectSlot {
       scaleU.set(1, 1);
       offU.set(0, 0);
     }
+
+    this.applySurface(object);
+  }
+
+  // The object's own surface mode: textured image (today's default), or a flat
+  // silhouette / wireframe drawn in surfaceColor. Sets the per-frame base that
+  // applyBackdrop overrides when a text card is active (it runs after this in
+  // the same frame). No-op without a material.
+  private applySurface(object: ObjectState): void {
+    const mat = this.material;
+    if (!mat) return;
+    const surface = object.surface ?? "image";
+    if (surface === "image") {
+      mat.uniforms.uSilhouette.value = 0;
+      mat.uniforms.uWireframe.value = 0;
+      mat.uniforms.uFaceted.value = 0;
+    } else {
+      // silhouette, wireframe and faceted all colour the surface with
+      // surfaceColor; each then sets exactly one flag for its shader branch.
+      hexToRgb01(
+        object.surfaceColor ?? "#878787",
+        mat.uniforms.uFlatColor.value as THREE.Vector3,
+      );
+      mat.uniforms.uSilhouette.value = surface === "silhouette" ? 1 : 0;
+      mat.uniforms.uWireframe.value = surface === "wireframe" ? 1 : 0;
+      mat.uniforms.uFaceted.value = surface === "faceted" ? 1 : 0;
+      mat.uniforms.uWireWidth.value = object.surfaceWireWidth ?? 1.5;
+    }
+    mat.uniforms.uOpacity.value = 1;
   }
 
   // Text-card backdrop: draw the object as a flat silhouette or wireframe
-  // (still deformed by the active effects) under the text. No-op without a
-  // material.
+  // (still deformed by the active effects) under the text. When inactive the
+  // object's own surface — already applied this frame by applySurface — stands.
+  // No-op without a material.
   applyBackdrop(active: boolean, tl: Timeline): void {
     const mat = this.material;
     if (!mat) return;
@@ -489,10 +570,9 @@ class ObjectSlot {
       mat.uniforms.uWireframe.value = isWire ? 1 : 0;
       mat.uniforms.uWireWidth.value =
         tl.textCard.style.textBackdropWireWidth ?? 1.5;
-    } else {
-      mat.uniforms.uSilhouette.value = 0;
-      mat.uniforms.uOpacity.value = 1;
-      mat.uniforms.uWireframe.value = 0;
+      // Clear any faceted flag left by the object's own surface, else its shader
+      // branch would override the flat backdrop fill.
+      mat.uniforms.uFaceted.value = 0;
     }
   }
 
@@ -515,13 +595,12 @@ class ObjectSlot {
     this.loadedModelGeo?.dispose();
     this.loadedModelGeo = null;
     this.loadedModelUrl = null;
-    this.imageTexture?.dispose();
+    this.setImageTexture(null);
     this.objectSig = "";
     this.materialSig = "";
     this.activeBindings = [];
     this.imageSource = null;
-    this.imageTexture = null;
-    this.lastImageUrl = null;
+    this.lastImageId = null;
   }
 }
 
@@ -783,32 +862,36 @@ export class Engine {
     }
 
     // render
-    const clearColor = this.clearColorScratch.set(p.scene.backgroundColor);
-    if (backdropActive) {
-      // Fade from the scene background to the card's color, same curve as
-      // the card itself, so the backdrop appears to fade in with the card.
+    const clearColor = this.clearColorScratch.set(tl.backgroundColor);
+    // Ease the break's background into the title card's background instead of
+    // snapping at the cut. With a backdrop this fades in with the card; during
+    // the fade-in tail (`behind`) it shifts the break colour toward the upcoming
+    // title's colour so the change is smooth across the break→title boundary.
+    // The glyphs fade in over the whole tail, but the colour shift is biased
+    // toward the end (cubic) so the break holds its colour until close to the
+    // cut rather than drifting from the start.
+    if (backdropActive || tl.textCard?.behind) {
+      const o = tl.textCard!.opacity;
+      const mix = tl.textCard!.behind ? o * o * o : o;
       clearColor.lerp(
         this.cardColorScratch.set(tl.textCard!.style.backgroundColor),
-        tl.textCard!.opacity,
+        mix,
       );
     }
     this.renderer.setClearColor(clearColor, 1);
     this.renderer.clear();
     const overlayVisible =
       this.overlay.opacity > 0.001 && this.overlay.hasTexture;
-    if (tl.textCard?.behind && overlayVisible) {
-      // Fade-out tail: paint the glyphs first, then draw the scene on top so the
-      // live shape occludes the dissolving text (text fades out *behind* it).
-      // autoClear is false, so the scene render doesn't wipe the glyphs.
+    // Fade-in tail ("behind"): keep the scene's depth and depth-test the text
+    // against it so *every* object — including transparent ones like the second
+    // object — occludes the emerging glyphs. On-top cards clear depth first so
+    // the text always wins.
+    const behind = !!tl.textCard?.behind;
+    this.overlay.setBehind(behind);
+    this.renderer.render(this.scene, this.camera);
+    if (overlayVisible) {
+      if (!behind) this.renderer.clearDepth();
       this.renderer.render(this.overlay.scene, this.overlay.camera);
-      this.renderer.clearDepth();
-      this.renderer.render(this.scene, this.camera);
-    } else {
-      this.renderer.render(this.scene, this.camera);
-      if (overlayVisible) {
-        this.renderer.clearDepth();
-        this.renderer.render(this.overlay.scene, this.overlay.camera);
-      }
     }
   }
 

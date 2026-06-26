@@ -16,6 +16,7 @@ export default function App(): JSX.Element {
   const setToast = useStore((s) => s.setToast);
   const [exportOpen, setExportOpen] = useState(false);
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [timelineHeight, setTimelineHeight] = useState(240);
   const dragStartY = useRef<number | null>(null);
   const dragStartH = useRef<number>(240);
@@ -93,7 +94,9 @@ export default function App(): JSX.Element {
   return (
     <div className="app">
       <div
-        className={`workspace ${libraryCollapsed ? "library-collapsed" : ""}`}
+        className={`workspace ${libraryCollapsed ? "library-collapsed" : ""} ${
+          inspectorCollapsed ? "inspector-collapsed" : ""
+        }`}
       >
         <LibraryPanel
           collapsed={libraryCollapsed}
@@ -113,7 +116,10 @@ export default function App(): JSX.Element {
         </div>
         <div className="right-col">
           <ProjectActions onOpenExport={() => setExportOpen(true)} />
-          <InspectorPanel />
+          <InspectorPanel
+            collapsed={inspectorCollapsed}
+            onToggleCollapse={() => setInspectorCollapsed((c) => !c)}
+          />
         </div>
       </div>
       <ShaderEditorModal />

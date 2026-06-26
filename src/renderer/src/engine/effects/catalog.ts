@@ -281,27 +281,6 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
   },
   // ----- Stylize (fragment) -----
   {
-    id: "grayscale",
-    name: "Desaturate",
-    kind: "shade",
-    description: "Mixes toward grayscale.",
-    builtin: true,
-    uniforms: [
-      {
-        name: "uAmount",
-        label: "Amount",
-        min: 0,
-        max: 1,
-        default: 1,
-        isIntensity: true,
-      },
-    ],
-    glslShade: `
-  float g = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-  color.rgb = mix(color.rgb, vec3(g), uAmount);
-  return color;`,
-  },
-  {
     id: "fresnel",
     name: "Fresnel / Rim Glow",
     kind: "shade",

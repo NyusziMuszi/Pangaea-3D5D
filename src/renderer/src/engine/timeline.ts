@@ -5,21 +5,24 @@ export interface TimelineState {
   segment: Segment
   localT: number
   sceneTime: number
+  // WebGL clear colour for this moment: the active break's colour, held through
+  // the text card that follows it.
+  backgroundColor: string
   textCard: {
     segmentId: string
     style: TextStyle
     opacity: number
-    // When true, the card is a fade-out "tail" lingering into the following
-    // segment and must render *behind* the scene (the live shape occludes it),
-    // not on top.
+    // When true, the card is a fade-in "tail" previewing the upcoming text
+    // segment during the tail end of the preceding segment, and must render
+    // *behind* the scene (the live shape occludes it), not on top.
     behind: boolean
   } | null
 }
 
-// A faded-out text card lingers this long into the next segment, dissolving
-// behind the returning shape instead of cutting hard. Capped to the next
-// segment's duration so it never bleeds past it.
-const FADE_OUT_TAIL_SEC = 1
+// Before a fading text card, its glyphs fade in behind the live shape for this
+// long at the tail end of the preceding segment, easing into the card instead
+// of cutting hard. Capped to that segment's duration so it never starts early.
+const FADE_IN_TAIL_SEC = 2
 
 // Cumulative segment start times + total duration. Precomputed when segments
 // change (see Engine.setProject) so the per-frame timeline lookup doesn't
@@ -59,35 +62,64 @@ export function computeTimeline(
 
   const sceneTime = clamped
 
+  // The clear colour comes from the active break. On a text card we look back to
+  // the nearest preceding animation segment so the break's colour holds through
+  // it; fall back to the first animation segment's colour, then a literal.
+  const DEFAULT_BG = '#281b6c'
+  let backgroundColor = DEFAULT_BG
+  if (segment.kind === 'animation' && segment.backgroundColor) {
+    backgroundColor = segment.backgroundColor
+  } else {
+    let found: string | undefined
+    for (let i = idx; i >= 0; i--) {
+      if (segments[i].kind === 'animation' && segments[i].backgroundColor) {
+        found = segments[i].backgroundColor
+        break
+      }
+    }
+    backgroundColor =
+      found ??
+      segments.find((s) => s.kind === 'animation' && s.backgroundColor)
+        ?.backgroundColor ??
+      DEFAULT_BG
+  }
+
   let textCard: TimelineState['textCard'] = null
   if (segment.kind === 'text' && segment.text) {
     let opacity = 1
     if (segment.text.reveal === 'fade') {
-      // Every card fades in, then cuts back at the end (no fade-out) — the
-      // segment simply ends at full opacity.
-      const fade = Math.min(0.4, segment.durationSec * 0.3)
-      opacity = fade > 0 ? Math.min(1, localT / fade) : 1
+      // A card preceded by an animation segment already had its glyphs faded in
+      // by the before-tail, so it snaps to full opacity for a seamless
+      // behind→front handoff. Without a tail (e.g. first segment, or following
+      // another text card) it keeps the short fade-in.
+      const hadTail = idx > 0 && segments[idx - 1].kind === 'animation'
+      if (!hadTail) {
+        const fade = Math.min(0.4, segment.durationSec * 0.3)
+        opacity = fade > 0 ? Math.min(1, localT / fade) : 1
+      }
     }
     textCard = { segmentId: segment.id, style: segment.text, opacity, behind: false }
   }
 
-  // Fade-out tail: if this segment isn't a text card but the previous one was a
-  // fading text card, let its glyphs linger and fade out behind the live shape.
-  // opacity is 1 at the boundary (matching where the text segment ended) → 0.
-  if (!textCard && idx > 0) {
-    const prev = segments[idx - 1]
-    if (prev.kind === 'text' && prev.text && prev.text.reveal === 'fade') {
-      const tail = Math.min(FADE_OUT_TAIL_SEC, segment.durationSec)
-      if (tail > 0 && localT < tail) {
+  // Fade-in tail: if this segment isn't a text card but the NEXT one is a
+  // fading text card, preview its glyphs behind the live shape, fading in
+  // (0 → 1) over the final FADE_IN_TAIL_SEC of this segment. Capped to the
+  // segment's duration so it never starts before the segment does.
+  if (!textCard && idx < segments.length - 1) {
+    const next = segments[idx + 1]
+    if (next.kind === 'text' && next.text && next.text.reveal === 'fade') {
+      const tail = Math.min(FADE_IN_TAIL_SEC, segment.durationSec)
+      const tailStart = segment.durationSec - tail
+      if (tail > 0 && localT >= tailStart) {
         textCard = {
-          segmentId: prev.id,
-          style: prev.text,
-          opacity: 1 - localT / tail,
+          segmentId: next.id,
+          style: next.text,
+          opacity: (localT - tailStart) / tail,
           behind: true,
         }
       }
     }
   }
 
-  return { segmentIndex: idx, segment, localT, sceneTime, textCard }
+  return { segmentIndex: idx, segment, localT, sceneTime, backgroundColor, textCard }
 }

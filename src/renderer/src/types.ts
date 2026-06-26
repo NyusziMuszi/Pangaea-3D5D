@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
 // Project data model. A Project is the single serializable source of truth.
-// Assets (image / model) are embedded as data URLs so a project saves as one
-// portable JSON file (.pangaea).
+// Object images live in the asset registry (state/assets.ts) and are referenced
+// by id; a model is still embedded inline as a data URL. On save the referenced
+// asset bytes are re-embedded alongside the project (see ProjectActions).
 // ---------------------------------------------------------------------------
 
 export interface Vec3 {
@@ -85,6 +86,12 @@ export type PrimitiveModel =
 // the backdrop, so it moves in sync with the (hidden) scene.
 export type TextBackdrop = "none" | "silhouette" | "wireframe";
 
+// How an object's surface is rendered: textured ("image", today's default —
+// shows the loaded image or the grey placeholder), as a flat "silhouette"
+// or "wireframe" drawn in surfaceColor, or as a "faceted" solid coloured in
+// surfaceColor and flat-shaded by a fixed light so its planes are visible.
+export type ObjectSurface = "image" | "silhouette" | "wireframe" | "faceted";
+
 export interface TextStyle {
   content: string;
   fontSize: number;
@@ -105,12 +112,17 @@ export interface Segment {
   label: string;
   durationSec: number;
   text?: TextStyle;
+  // Per-break WebGL clear colour. Set on `animation` segments; a break's colour
+  // also holds through the text card that follows it (see engine/timeline.ts).
+  backgroundColor?: string;
 }
 
 // Source image textured onto a single object. Each object owns its own image.
+// The bytes live in the asset registry (state/assets.ts) keyed by assetId — the
+// model holds only the id so per-edit clones never copy multi-MB image data.
 export interface ObjectImage {
   name: string | null;
-  dataUrl: string | null;
+  assetId: string | null;
   // Normalized 0..1 position of the visible window when the image is
   // cover-fit to the frame (aspect locked). 0.5 = centered. Only the
   // overflowing axis responds; the fitted axis ignores its offset.
@@ -123,6 +135,11 @@ export interface ObjectState {
   modelName: string | null;
   modelDataUrl: string | null;
   mapping: Mapping;
+  // How the surface is drawn: textured image, or a flat silhouette / wireframe
+  // in surfaceColor. surfaceWireWidth is the wireframe line weight (~screen px).
+  surface: ObjectSurface;
+  surfaceColor: string;
+  surfaceWireWidth: number;
   // This object's own texture and the effect stack applied to it. Both objects
   // are independent peers — neither shares the other's material.
   image: ObjectImage;
@@ -142,7 +159,6 @@ export interface Project {
   version: number;
   output: { width: number; height: number; fps: number };
   scene: {
-    backgroundColor: string;
     cameraType: CameraType;
   };
   // Renderable objects, in render order. Length 1 or 2 today; the array shape
@@ -153,9 +169,23 @@ export interface Project {
   segments: Segment[]; // exactly 6 by default: 3 animation + 3 text, alternating
   customEffects: EffectDef[];
   // "Feeling lucky" presets: colour swatches, uploaded source images (stored as
-  // absolute file paths, resolved to data URLs on use), and a heat value
-  // steering how complex a generated scene is.
-  lucky: { colors: string[]; images: string[]; heat: number };
+  // absolute file paths, resolved to data URLs on use), plus the controls
+  // steering a generated scene — how many objects, how colours are assigned, and
+  // an overall animation amount. Colours are split into two pools: typeColors
+  // (text) and surfaceColors (backgrounds, object surfaces, effect tints), so a
+  // generation can keep text legible against a separately-chosen surface palette.
+  //
+  // objectCounts and colorSchemes are *sets* the user widens or narrows: each
+  // generation randomly picks one entry from each, so checking more boxes
+  // explores a wider space. Both are kept non-empty (emptying re-selects all).
+  lucky: {
+    typeColors: string[];
+    surfaceColors: string[];
+    images: string[];
+    objectCounts: (1 | 2)[];
+    colorSchemes: ("byType" | "byPair" | "random")[];
+    animation: number; // 0..1 overall animation amount
+  };
 }
 
 export function totalDuration(p: Project): number {

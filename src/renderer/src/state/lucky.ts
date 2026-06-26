@@ -2,24 +2,48 @@
 // "Feeling lucky" — a pure random-scene generator.
 //
 // Given a base project, a palette of colours, a set of image data URLs, and a
-// heat value [0,1], produce a brand-new project that randomizes visuals only:
+// set of options, produce a brand-new project that randomizes visuals only:
 // the objects (shape, texture, transform), effects, keyframes, and the scene +
 // text-card colours. The timeline (segment count, durations, text *content*)
 // is preserved. Output is always animated: scale, one rotation axis, and one
 // effect's intensity are always keyframed.
+//
+// Three independent controls steer a generation. objectCounts and colorSchemes
+// are *sets* the user has chosen to explore; each generation randomly picks one
+// entry from each (an empty set falls back to "all" as a safety net):
+//   - objectCount: render one object or two.
+//   - colorScheme: how colour trios are dealt across segments —
+//       "byType"  one trio for all animation breaks, a different trio for all
+//                 text cards;
+//       "byPair"  each animation break and the text card(s) that follow it
+//                 share their own trio, so each break reads continuously into
+//                 its text card;
+//       "random"  every segment coloured independently.
+//   - animation: overall animation amount [0,1] driving effect count, keyframe
+//                count, animated transform extras, and rotation intensity.
+//
+// A colour "trio" (from pickTextColors) is a background + silhouette on one
+// lightness side and text on the opposite side, so text always reads.
 // ---------------------------------------------------------------------------
 
 import type {
   EffectDef,
   EffectInstance,
+  Mapping,
   ObjectState,
+  ObjectSurface,
   PrimitiveModel,
   Project,
   Scalar,
+  TextStyle,
 } from "../types";
 import { constant, totalDuration } from "../types";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
-import { defaultSecondObject, instanceFromDef } from "./defaults";
+import {
+  defaultObjectImage,
+  defaultSecondObject,
+  instanceFromDef,
+} from "./defaults";
 
 // The full set of primitive shapes. Kept inline so this module is independent
 // of any UI list.
@@ -83,27 +107,34 @@ function buildScenePalette(palette: string[], budget: number): string[] {
   return chosen;
 }
 
-// Pick { backdropColor, background, text } for one text card so background +
-// silhouette share one lightness side and text takes the other.
-function pickTextColors(pool: string[]): {
+// Pick { backdropColor, background, text } for one text card: background +
+// silhouette come from the surface palette (one lightness side), text comes
+// from the type palette (the opposite side, so it always reads).
+function pickTextColors(
+  surfacePool: string[],
+  typePool: string[],
+): {
   backdropColor: string;
   background: string;
   text: string;
 } {
-  const light = pool.filter((c) => lightness(c) >= 0.5);
-  const dark = pool.filter((c) => lightness(c) < 0.5);
+  const sLight = surfacePool.filter((c) => lightness(c) >= 0.5);
+  const sDark = surfacePool.filter((c) => lightness(c) < 0.5);
+  const tLight = typePool.filter((c) => lightness(c) >= 0.5);
+  const tDark = typePool.filter((c) => lightness(c) < 0.5);
   // background + silhouette must come from a side with >= 2 colours so they can
-  // be distinct; text takes the opposite side. With a budget >= 3 and at least
-  // one colour on each side, one side always has >= 2 (pigeonhole), so we steer
-  // lightTheme toward it rather than flipping a blind coin (which could land on
-  // a single-colour side and collapse background + silhouette to one colour).
-  const canLight = light.length >= 2;
-  const canDark = dark.length >= 2;
+  // be distinct. With a budget >= 3 and at least one colour on each side, one
+  // side always has >= 2 (pigeonhole), so we steer lightTheme toward it rather
+  // than flipping a blind coin (which could land on a single-colour side and
+  // collapse background + silhouette to one colour).
+  const canLight = sLight.length >= 2;
+  const canDark = sDark.length >= 2;
   const lightTheme = canLight && canDark ? Math.random() < 0.5 : canLight;
-  const sameSide = lightTheme ? light : dark; // background + silhouette
-  const opposite = lightTheme ? dark : light; // text
+  const sameSide = lightTheme ? sLight : sDark; // background + silhouette
+  const opposite = lightTheme ? tDark : tLight; // text, from the type palette
   const [background, second] = pickDistinct(sameSide, 2);
-  return { background, backdropColor: second ?? background, text: pick(opposite) };
+  const textChoices = opposite.length ? opposite : typePool;
+  return { background, backdropColor: second ?? background, text: pick(textChoices) };
 }
 
 // Build an animated scalar of `n` keys spread evenly across [0, dur], easing
@@ -132,56 +163,187 @@ function spreadKeys(
   return { kind: "keys", keys };
 }
 
-// A solid-colour texture as a same-origin PNG data URL. Same-origin canvas
-// never taints, so this is safe to upload to WebGL and to read back on export.
-// 8x8 keeps the embedded base64 tiny.
-export function solidColorDataUrl(hex: string, size = 8): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle = hex;
-    ctx.fillRect(0, 0, size, size);
-  }
-  return canvas.toDataURL("image/png");
+export interface LuckyOptions {
+  objectCounts: (1 | 2)[];
+  colorSchemes: ("byType" | "byPair" | "random")[];
+  animation: number; // 0..1 overall animation amount
 }
 
 export function generateLuckyScene(
   base: Project,
-  colors: string[],
-  imageDataUrls: string[],
-  heat: number,
+  surfaceColors: string[],
+  typeColors: string[],
+  imageAssetIds: string[],
+  opts: LuckyOptions,
 ): Project {
-  const h = clamp(heat, 0, 1);
-  const effectCount = clamp(1 + Math.round(h * 6), 1, 7);
-  const twoObjects = h >= 0.5;
+  const anim = clamp(opts.animation, 0, 1);
+  const effectCount = clamp(1 + Math.round(anim * 6), 1, 7);
+  // Pick one entry from each explored set (empty falls back to the full range).
+  const objectCount = pick(
+    opts.objectCounts.length ? opts.objectCounts : [1, 2],
+  );
+  const colorScheme = pick(
+    opts.colorSchemes.length
+      ? opts.colorSchemes
+      : ["byType", "byPair", "random"],
+  );
+  const twoObjects = objectCount === 2;
   // No slider is ever worth more than 3 keyframes — even at the hottest setting.
-  const keyCount = clamp(2 + Math.round(h), 2, 3);
-  const animatedExtras = Math.round(h * 2);
+  const keyCount = clamp(2 + Math.round(anim), 2, 3);
+  const animatedExtras = Math.round(anim * 2);
 
   // Preserve output, version, customEffects, and the full segments array
   // (durations + text content). structuredClone keeps the timeline intact.
   const next = structuredClone(base) as Project;
   const dur = totalDuration(base);
 
-  const palette = colors.length
-    ? colors
-    : [base.scene.backgroundColor, "#A3D6DC", "#64e36e", "#6473e3"];
+  const palette = surfaceColors.length
+    ? surfaceColors
+    : [
+        base.segments.find((s) => s.kind === "animation")?.backgroundColor ??
+          "#281b6c",
+        "#A3D6DC",
+        "#64e36e",
+        "#6473e3",
+      ];
+  const textPalette = typeColors.length ? typeColors : ["#ffffff", "#000000"];
 
-  // Distinct colours a single generation may use: 3 cold → 5 hot.
-  const colorBudget = clamp(3 + Math.round(h * 2), 3, 5);
+  // Distinct colours a single generation may use. Per-segment schemes need more
+  // room (5) so trios can differ; the single-type scheme stays tighter (4).
+  const colorBudget = colorScheme === "byType" ? 4 : 5;
   const scenePalette = buildScenePalette(palette, colorBudget);
+  // The type palette only ever supplies a single text colour per card, so it
+  // needs no budget and no padding. Pass the user's distinct type colours
+  // through unchanged — buildScenePalette would inject undefined fallback
+  // colours (e.g. #6473e3), which must never appear in text the user did not
+  // define.
+  const typePalette = Array.from(new Set(textPalette));
 
-  // A texture source: a fetched image if available, else a solid palette colour.
-  // Only a real image counts as a named image; a solid-colour fallback leaves
-  // the name null so the UI still offers "Load image" rather than "Replace".
-  const hasImages = imageDataUrls.length > 0;
-  const appearance = (): string =>
-    hasImages ? pick(imageDataUrls) : solidColorDataUrl(pick(scenePalette));
-  const imageName = hasImages ? "lucky" : null;
+  // Object appearance. Image vs. flat is dealt per object: an object can wear a
+  // textured "image" surface (random asset + random mapping mode) or fall back
+  // to a flat surface (silhouette / wireframe / faceted) drawn in a palette
+  // colour, leaving the image slot empty so the UI still offers "Load image"
+  // rather than "Replace".
+  //
+  // With two objects and at least one image, exactly one object wears the image
+  // and the other takes a flat surface, so the pair reads as image-against-
+  // silhouette rather than two textured shapes. A single object (or none with
+  // images) simply wears the image itself. The two flat surfaces are picked
+  // distinct so a fully-flat pair still reads differently.
+  const hasImages = imageAssetIds.length > 0;
+  const imageObject = !hasImages ? -1 : twoObjects && Math.random() < 0.5 ? 1 : 0;
+  const flatSurfaces = pickDistinct(
+    ["silhouette", "wireframe", "faceted"] as ObjectSurface[],
+    2,
+  );
+  const MAPPINGS: Mapping[] = [
+    "uv",
+    "triplanar",
+    "spherical",
+    "cylindrical",
+    "reflection",
+  ];
 
-  next.scene.backgroundColor = pick(scenePalette);
+  // Set an object's surface + image slot for its index. The image object gets a
+  // textured surface (random asset + mapping); any other object gets a flat
+  // surface in a background-safe palette colour and an empty image slot.
+  const dressObject = (o: ObjectState, i: number): void => {
+    if (i === imageObject) {
+      o.surface = "image";
+      o.mapping = pick(MAPPINGS);
+      o.image = {
+        name: "lucky",
+        assetId: pick(imageAssetIds),
+        offsetX: constant(0.5),
+        offsetY: constant(0.5),
+      };
+    } else {
+      o.surface = flatSurfaces[i % flatSurfaces.length];
+      o.surfaceColor = pickSurfaceColor();
+      o.image = defaultObjectImage();
+    }
+  };
+
+  // Apply a colour trio to a text card: background, silhouette backdrop, text.
+  const applyTrio = (
+    t: TextStyle,
+    trio: { background: string; backdropColor: string; text: string },
+  ): void => {
+    t.backgroundColor = trio.background;
+    t.textBackdropColor = trio.backdropColor;
+    t.textColor = trio.text;
+  };
+
+  // ----- Colour assignment (scheme-driven) -----
+  // Animation breaks only take a trio's `background`; text cards take the full
+  // trio so background + silhouette sit on one lightness side and text on the
+  // other (pickTextColors guarantees this), keeping text legible everywhere.
+  if (colorScheme === "byType") {
+    // One trio for all animation breaks, a different one for all text cards.
+    const objTrio = pickTextColors(scenePalette, typePalette);
+    let textTrio = pickTextColors(scenePalette, typePalette);
+    for (let i = 0; i < 6 && textTrio.background === objTrio.background; i++) {
+      textTrio = pickTextColors(scenePalette, typePalette);
+    }
+    for (const seg of next.segments) {
+      if (seg.kind === "animation") seg.backgroundColor = objTrio.background;
+      else if (seg.text) applyTrio(seg.text, textTrio);
+    }
+  } else if (colorScheme === "byPair") {
+    // One trio per animation break; the text card(s) following it reuse it, so
+    // each break reads continuously into its text card. Pre-pick distinct trios
+    // for the breaks, cycling if the palette can't yield enough distinct ones.
+    // At least one trio so a leading/orphan text card always has a colour.
+    const breakCount = Math.max(
+      next.segments.filter((s) => s.kind === "animation").length,
+      1,
+    );
+    const trios: ReturnType<typeof pickTextColors>[] = [];
+    for (let i = 0; i < breakCount; i++) {
+      let trio = pickTextColors(scenePalette, typePalette);
+      for (
+        let r = 0;
+        r < 6 && trios.some((t) => t.background === trio.background);
+        r++
+      ) {
+        trio = pickTextColors(scenePalette, typePalette);
+      }
+      trios.push(trio);
+    }
+    // Walk segments tracking the current pair. A leading text card with no
+    // preceding break falls back to the first trio.
+    let pair = -1;
+    for (const seg of next.segments) {
+      if (seg.kind === "animation") {
+        pair++;
+        seg.backgroundColor = trios[pair % trios.length].background;
+      } else if (seg.text) {
+        const trio = trios[Math.max(pair, 0) % trios.length];
+        applyTrio(seg.text, trio);
+      }
+    }
+  } else {
+    // random: every segment coloured independently.
+    for (const seg of next.segments) {
+      if (seg.kind === "animation") seg.backgroundColor = pick(scenePalette);
+      else if (seg.text) applyTrio(seg.text, pickTextColors(scenePalette, typePalette));
+    }
+  }
+
+  // A silhouette object is drawn flat in its surfaceColor against the animation
+  // background, so picking the same colour as a background it sits on makes the
+  // object vanish. Collect the backgrounds in use and pick surface colours from
+  // the rest of the palette (falling back to the full palette only if every
+  // colour is taken as a background).
+  const animBackgrounds = new Set(
+    next.segments
+      .filter((s) => s.kind === "animation")
+      .map((s) => s.backgroundColor),
+  );
+  const pickSurfaceColor = (): string => {
+    const safe = scenePalette.filter((c) => !animBackgrounds.has(c));
+    return pick(safe.length ? safe : scenePalette);
+  };
 
   // Look up an effect's keyframeable intensity uniform and its [min,max].
   function keyframeIntensity(inst: EffectInstance): void {
@@ -212,7 +374,7 @@ export function generateLuckyScene(
     const axes: ("rotX" | "rotY" | "rotZ")[] = ["rotX", "rotY", "rotZ"];
     const spun = pick(axes);
     const dir = Math.random() < 0.5 ? -1 : 1;
-    const target = dir * 2 * Math.PI * (0.5 + h);
+    const target = dir * 2 * Math.PI * (0.5 + anim);
     for (const ax of axes) {
       o[ax] =
         ax === spun
@@ -243,12 +405,7 @@ export function generateLuckyScene(
   a.primitive = pick(PRIMITIVE_MODELS);
   a.modelName = null;
   a.modelDataUrl = null;
-  a.image = {
-    name: imageName,
-    dataUrl: appearance(),
-    offsetX: constant(0.5),
-    offsetY: constant(0.5),
-  };
+  dressObject(a, 0);
   a.posX = twoObjects ? constant(-halfGap) : constant(0);
   a.posY = constant(0);
   a.posZ = constant(0);
@@ -260,12 +417,7 @@ export function generateLuckyScene(
   if (twoObjects) {
     const b = defaultSecondObject();
     b.primitive = pick(PRIMITIVE_MODELS);
-    b.image = {
-      name: imageName,
-      dataUrl: appearance(),
-      offsetX: constant(0.5),
-      offsetY: constant(0.5),
-    };
+    dressObject(b, 1);
     b.posX = constant(halfGap);
     animateTransform(b, 0.3, 0.7, 0);
     objects.push(b);
@@ -303,19 +455,6 @@ export function generateLuckyScene(
 
   // Keyframe exactly one effect's intensity so the scene always animates a fx.
   if (instances.length) keyframeIntensity(pick(instances));
-
-  // ----- Text recolour (content preserved) -----
-  // Each text card draws from scenePalette so the whole generation stays within
-  // budget. pickTextColors keeps background + silhouette on one lightness side
-  // and the text on the other, so the text always reads.
-  for (const seg of next.segments) {
-    if (seg.kind === "text" && seg.text) {
-      const { backdropColor, background, text } = pickTextColors(scenePalette);
-      seg.text.textBackdropColor = backdropColor;
-      seg.text.backgroundColor = background;
-      seg.text.textColor = text;
-    }
-  }
 
   return next;
 }

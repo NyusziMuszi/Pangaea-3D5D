@@ -2,6 +2,27 @@ import { useStore } from "../state/store";
 import { defaultProject } from "../state/defaults";
 import type { Project } from "../types";
 import { defaultFilename } from "../state/filename";
+import {
+  assetBytes,
+  assetMime,
+  registerAssetWithId,
+} from "../state/assets";
+import { base64ToBytes, bytesToBase64 } from "./files";
+
+// On-disk shape: the project plus the bytes of every image asset it references,
+// embedded as base64 only at this I/O boundary. The live model keeps just the
+// assetIds (state/assets.ts); the bytes never touch the per-edit clone path.
+interface SavedFile {
+  project: Project;
+  assets: Record<string, { mime: string; base64: string }>;
+}
+
+// Every distinct image assetId referenced by the project's objects.
+function referencedAssetIds(p: Project): string[] {
+  const ids = new Set<string>();
+  for (const o of p.objects) if (o.image.assetId) ids.add(o.image.assetId);
+  return [...ids];
+}
 
 export function ProjectActions({
   onOpenExport,
@@ -27,7 +48,14 @@ export function ProjectActions({
       filters: [{ name: "Pangaea Project", extensions: ["pangaea"] }],
     });
     if (!path) return;
-    const bytes = new TextEncoder().encode(JSON.stringify(project, null, 2));
+    const assets: SavedFile["assets"] = {};
+    for (const id of referencedAssetIds(project)) {
+      const bytes = assetBytes(id);
+      const mime = assetMime(id);
+      if (bytes && mime) assets[id] = { mime, base64: bytesToBase64(bytes) };
+    }
+    const payload: SavedFile = { project, assets };
+    const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
     await window.api.writeFile(path, bytes);
     setToast("Project saved");
   }
@@ -37,8 +65,13 @@ export function ProjectActions({
     if (!file) return;
     try {
       const text = new TextDecoder().decode(file.data);
-      const parsed = JSON.parse(text) as Project;
-      setProject(parsed);
+      const parsed = JSON.parse(text) as SavedFile;
+      // Re-register every embedded asset under its saved id *before* setting the
+      // project, so the engine resolves each object.image.assetId immediately.
+      for (const [id, a] of Object.entries(parsed.assets ?? {})) {
+        registerAssetWithId(id, base64ToBytes(a.base64), a.mime);
+      }
+      setProject(parsed.project);
       selectEffect(null);
       selectSegment(null);
       setToast("Project loaded");

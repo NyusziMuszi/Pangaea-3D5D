@@ -2,6 +2,8 @@ import { useStore } from '../state/store'
 import { engine } from '../engine/engineSingleton'
 import { BUILTIN_EFFECTS } from '../engine/effects/catalog'
 import { instanceFromDef } from '../state/defaults'
+import { registerAsset } from '../state/assets'
+import { base64ToBytes } from './files'
 import { constant } from '../types'
 import { exportVideo } from '../engine/export/exporter'
 
@@ -24,11 +26,12 @@ export async function runSelfTest(): Promise<void> {
     ctx.font = 'bold 90px sans-serif'
     ctx.textAlign = 'center'
     ctx.fillText('TEST', 256, 340)
-    const dataUrl = c.toDataURL('image/png')
+    const base64 = c.toDataURL('image/png').split(',')[1]
+    const assetId = registerAsset(base64ToBytes(base64), 'image/png')
 
     const ripple = BUILTIN_EFFECTS.find((e) => e.id === 'ripple')!
     useStore.getState().update((p) => {
-      p.objects[0].image = { name: 'selftest.png', dataUrl, offsetX: constant(0.5), offsetY: constant(0.5) }
+      p.objects[0].image = { name: 'selftest.png', assetId, offsetX: constant(0.5), offsetY: constant(0.5) }
       p.objects[0].effects = [instanceFromDef(ripple)]
       // shorten for a fast test: 6 segments x 1s
       p.segments.forEach((s) => (s.durationSec = 1))

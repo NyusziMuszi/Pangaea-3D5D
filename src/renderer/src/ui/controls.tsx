@@ -1,4 +1,13 @@
-import { memo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import { HexColorPicker } from "react-colorful";
 import { totalDuration, type Scalar } from "../types";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
@@ -324,6 +333,133 @@ export function HexInput({
   );
 }
 
+// Chromium's EyeDropper API (Electron). Not yet in the default TS DOM lib, so
+// declare the minimal surface we use.
+type EyeDropperResult = { sRGBHex: string };
+type EyeDropperCtor = new () => {
+  open: () => Promise<EyeDropperResult>;
+};
+
+/**
+ * A colour swatch button that opens a popover picker (saturation/hue area, an
+ * eyedropper that samples any pixel on screen, plus a hex field) in place of the
+ * native OS colour dialog, so the value is always shown and edited as hex.
+ */
+export function ColorSwatch({
+  value,
+  onChange,
+  className,
+  title,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+  title?: string;
+}): JSX.Element {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const open = pos !== null;
+
+  // Anchor the popover to the swatch in viewport coordinates. It renders into a
+  // portal (fixed position) so it isn't clipped by panels/segments that hide
+  // their overflow.
+  const openAt = (): void => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 6, left: r.left });
+  };
+
+  const Ctor = (window as unknown as { EyeDropper?: EyeDropperCtor })
+    .EyeDropper;
+  const pickWithEyedropper = async (): Promise<void> => {
+    if (!Ctor) return;
+    try {
+      const { sRGBHex } = await new Ctor().open();
+      onChange(sRGBHex);
+    } catch {
+      // The user dismissed the eyedropper (Escape); leave the colour unchanged.
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocPointer = (e: MouseEvent): void => {
+      const t = e.target as Node;
+      if (
+        btnRef.current?.contains(t) ||
+        popRef.current?.contains(t)
+      ) {
+        return;
+      }
+      setPos(null);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setPos(null);
+    };
+    document.addEventListener("mousedown", onDocPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="color-swatch">
+      <button
+        type="button"
+        ref={btnRef}
+        className={"color-swatch-btn" + (className ? " " + className : "")}
+        title={title}
+        style={{ background: value }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (open) setPos(null);
+          else openAt();
+        }}
+      />
+      {pos &&
+        createPortal(
+          <div
+            ref={popRef}
+            className="color-popover"
+            style={{ top: pos.top, left: pos.left }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <HexColorPicker color={value} onChange={onChange} />
+            <div className="color-popover-row">
+              {Ctor && (
+                <button
+                  type="button"
+                  className="btn-icon color-eyedropper"
+                  title="Pick a colour from anywhere on screen"
+                  onClick={pickWithEyedropper}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m2 22 1-1h3l9-9" />
+                    <path d="M3 21v-3l9-9" />
+                    <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z" />
+                  </svg>
+                </button>
+              )}
+              <HexInput value={value} onChange={onChange} />
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 export const ColorRow = memo(function ColorRow({
   label,
   value,
@@ -335,12 +471,7 @@ export const ColorRow = memo(function ColorRow({
 }): JSX.Element {
   return (
     <Field label={label}>
-      <input
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <HexInput value={value} onChange={onChange} />
+      <ColorSwatch value={value} onChange={onChange} />
     </Field>
   );
 });

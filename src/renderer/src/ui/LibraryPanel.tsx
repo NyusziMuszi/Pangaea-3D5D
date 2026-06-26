@@ -1,18 +1,27 @@
-import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { activeObjectIndex, useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import { defaultSecondObject, instanceFromDef, uid } from "../state/defaults";
 import type {
   EffectDef,
   ObjectState,
+  ObjectSurface,
   PrimitiveModel,
   Mapping,
   CameraType,
 } from "../types";
 import { constant, objectAccentClass, objectLetterLabel } from "../types";
-import { bytesToDataUrl, mimeForName } from "./files";
+import { bytesToDataUrl, makeThumbnailUrl, mimeForName } from "./files";
+import { registerAsset, assetUrl } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
-import { Section, Field, ColorRow, HexInput } from "./controls";
+import { engine } from "../engine/engineSingleton";
+import { Section, Field, ColorRow, ColorSwatch } from "./controls";
 import cancelIcon from "@assets/cancel.svg";
 
 const MAX_COLORS = 12;
@@ -36,6 +45,16 @@ const PRIMITIVE_OPTIONS: { value: PrimitiveModel; label: string }[] = [
   { value: "dodecahedron", label: "Dodecahedron" },
 ];
 
+// Toggle `value` in an "explore" set: remove it if present, add it otherwise.
+// Emptying the set re-selects everything (`all`) so a generation always has a
+// choice to make — deselecting all is the same as exploring all.
+function toggleExplore<T>(set: T[], value: T, all: readonly T[]): T[] {
+  const next = set.includes(value)
+    ? set.filter((v) => v !== value)
+    : [...set, value];
+  return next.length ? next : [...all];
+}
+
 export function LibraryPanel({
   collapsed,
   onToggleCollapse,
@@ -50,82 +69,122 @@ export function LibraryPanel({
   const selectObject = useStore((s) => s.selectObject);
   const setToast = useStore((s) => s.setToast);
   const setProject = useStore((s) => s.setProject);
-  const setPlayhead = useStore((s) => s.setPlayhead);
   const openShaderEditor = useStore((s) => s.openShaderEditor);
 
   const lucky = project.lucky;
   const [generating, setGenerating] = useState(false);
 
-  // lucky.images stores absolute file paths. Each path is resolved to a data
-  // URL on demand (renderer is sandboxed and the engine taints on raw URLs, so
-  // only data URLs are safe). This ephemeral cache (not serialized) maps
-  // path -> data URL so each file is read at most once per session; thumbResolved
-  // mirrors it into state so thumbnails re-render once a read completes.
-  const dataUrlCache = useRef<Map<string, string>>(new Map());
+  // lucky.images stores absolute file paths. The palette grid only ever shows a
+  // small thumbnail, so we decode + downscale each path off the main thread into
+  // a blob: object URL (thumbUrlCache) — far cheaper than ×10 full-res decodes.
+  // Full-res bytes are read and registered as assets lazily, only at generation
+  // time (assetIdCache), so big originals never stay resident just to paint the
+  // grid. Both caches are ephemeral (not serialized); thumbResolved mirrors
+  // thumb arrivals into state so the grid re-renders once a decode completes.
+  const assetIdCache = useRef<Map<string, string>>(new Map());
+  const thumbUrlCache = useRef<Map<string, string>>(new Map());
   const [thumbResolved, setThumbResolved] = useState(0);
 
-  // Resolve a path to a data URL, using the cache or the ungated image-read IPC.
-  // Returns null if the file can't be read (moved/deleted/unreadable).
-  async function resolvePath(path: string): Promise<string | null> {
-    const cached = dataUrlCache.current.get(path);
+  // Resolve a path to a registered asset id, reading the file once via the
+  // ungated image-read IPC. Returns null if the file can't be read.
+  async function resolveAssetId(path: string): Promise<string | null> {
+    const cached = assetIdCache.current.get(path);
     if (cached) return cached;
     const res = await window.api.readImagePath(path);
     if (!res.ok || !res.data || !res.mime) return null;
-    const dataUrl = bytesToDataUrl(res.data, res.mime);
-    dataUrlCache.current.set(path, dataUrl);
-    return dataUrl;
+    const id = registerAsset(res.data, res.mime);
+    assetIdCache.current.set(path, id);
+    return id;
+  }
+
+  // Resolve a path to a small thumbnail object URL. Returns null if unreadable.
+  async function resolveThumb(path: string): Promise<string | null> {
+    const cached = thumbUrlCache.current.get(path);
+    if (cached) return cached;
+    const res = await window.api.readImagePath(path);
+    if (!res.ok || !res.data || !res.mime) return null;
+    const url = await makeThumbnailUrl(res.data, res.mime);
+    thumbUrlCache.current.set(path, url);
+    return url;
   }
 
   // Resolve any uncached preset paths (e.g. after reopening a project) so
-  // thumbnails reappear without re-picking via dialog.
+  // thumbnails reappear without re-picking via dialog. Decodes run in parallel
+  // so the grid never blocks on a sequential chain of large-image decodes.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      let changed = false;
-      for (const path of lucky.images) {
-        if (dataUrlCache.current.has(path)) continue;
-        const dataUrl = await resolvePath(path);
-        if (dataUrl) changed = true;
-      }
-      if (changed && !cancelled) setThumbResolved((n) => n + 1);
-    })();
+    const pending = lucky.images.filter((p) => !thumbUrlCache.current.has(p));
+    if (pending.length === 0) return;
+    Promise.all(pending.map(resolveThumb)).then((results) => {
+      if (!cancelled && results.some(Boolean)) setThumbResolved((n) => n + 1);
+    });
     return () => {
       cancelled = true;
     };
   }, [lucky.images]);
 
+  // Revoke every cached thumbnail object URL on unmount so blobs don't leak.
+  useEffect(() => {
+    const cache = thumbUrlCache.current;
+    return () => {
+      for (const url of cache.values()) URL.revokeObjectURL(url);
+    };
+  }, []);
+
   // Upload an image from disk and store its file path as a preset. The picked
-  // bytes seed the cache so the thumbnail is instant and no re-read is needed.
+  // bytes seed the thumbnail cache so it appears instantly with no re-read.
   async function addLuckyImage(): Promise<void> {
     const file = await window.api.openImageFile();
     if (!file) return;
-    dataUrlCache.current.set(
-      file.path,
-      bytesToDataUrl(file.data, mimeForName(file.name)),
-    );
+    const mime = mimeForName(file.name);
+    makeThumbnailUrl(file.data, mime).then((url) => {
+      thumbUrlCache.current.set(file.path, url);
+      setThumbResolved((n) => n + 1);
+    });
     update((p) => {
       p.lucky.images.push(file.path);
+    });
+  }
+
+  // Remove a preset image and revoke its thumbnail so the blob is freed.
+  function removeLuckyImage(index: number, path: string): void {
+    const url = thumbUrlCache.current.get(path);
+    if (url) {
+      URL.revokeObjectURL(url);
+      thumbUrlCache.current.delete(path);
+    }
+    update((p) => {
+      p.lucky.images.splice(index, 1);
     });
   }
 
   async function onGenerate(): Promise<void> {
     setGenerating(true);
     try {
-      const dataUrls: string[] = [];
+      const assetIds: string[] = [];
       for (const path of lucky.images) {
-        const dataUrl = await resolvePath(path);
-        if (dataUrl) dataUrls.push(dataUrl);
+        const id = await resolveAssetId(path);
+        if (id) assetIds.push(id);
         else setToast(`Skipped ${path.split(/[\\/]/).pop()}`);
       }
       const next = generateLuckyScene(
         project,
-        lucky.colors,
-        dataUrls,
-        lucky.heat,
+        lucky.surfaceColors,
+        lucky.typeColors,
+        assetIds,
+        {
+          objectCounts: lucky.objectCounts,
+          colorSchemes: lucky.colorSchemes,
+          animation: lucky.animation,
+        },
       );
       // New identity re-syncs the engine via App.tsx's useEffect([project]).
       setProject(next);
-      setPlayhead(0);
+      // Reset the engine's own clock, not just the store. setPlayhead alone
+      // leaves the engine's internal playhead at the old timestamp, so playback
+      // would resume there; seekTo(0) moves the real clock and fires
+      // onTick -> setPlayhead so the new scene always starts from the beginning.
+      engine.seekTo(0);
     } finally {
       setGenerating(false);
     }
@@ -186,12 +245,12 @@ export function LibraryPanel({
   async function loadImageFor(index: number): Promise<void> {
     const file = await window.api.openImageFile();
     if (!file) return;
-    const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
+    const assetId = registerAsset(file.data, mimeForName(file.name));
     mutateObject(index, (o) => {
       // New image: reset framing to centered.
       o.image = {
         name: file.name,
-        dataUrl,
+        assetId,
         offsetX: constant(0.5),
         offsetY: constant(0.5),
       };
@@ -204,7 +263,7 @@ export function LibraryPanel({
     mutateObject(index, (o) => {
       o.image = {
         name: null,
-        dataUrl: null,
+        assetId: null,
         offsetX: constant(0.5),
         offsetY: constant(0.5),
       };
@@ -272,7 +331,11 @@ export function LibraryPanel({
     optional?: boolean;
   }): JSX.Element {
     const obj = project.objects[index];
-    const typeValue = obj ? (obj.modelDataUrl ? "bespoke" : obj.primitive) : "none";
+    const typeValue = obj
+      ? obj.modelDataUrl
+        ? "bespoke"
+        : obj.primitive
+      : "none";
     return (
       <>
         <Field label="Type">
@@ -291,47 +354,101 @@ export function LibraryPanel({
         </Field>
         {obj && (
           <>
-            <Field label="Mapping">
+            <Field label="Surface">
               <select
-                value={obj.mapping}
+                value={obj.surface ?? "image"}
                 onChange={(e) =>
                   mutateObject(index, (o) => {
-                    o.mapping = e.target.value as Mapping;
+                    o.surface = e.target.value as ObjectSurface;
                   })
                 }
               >
-                <option value="uv">UV</option>
-                <option value="triplanar">Triplanar</option>
-                <option value="spherical">Spherical</option>
-                <option value="cylindrical">Cylindrical</option>
-                <option value="reflection">Reflection</option>
+                <option value="image">Image</option>
+                <option value="silhouette">Silhouette</option>
+                <option value="wireframe">Wireframe</option>
+                <option value="faceted">Faceted</option>
               </select>
             </Field>
-            {obj.image.dataUrl ? (
-              <div className="lucky-img-cell">
+            {obj.surface !== "image" && (
+              <ColorRow
+                label="Surface colour"
+                value={obj.surfaceColor ?? "#878787"}
+                onChange={(v) =>
+                  mutateObject(index, (o) => {
+                    o.surfaceColor = v;
+                  })
+                }
+              />
+            )}
+            {obj.surface === "wireframe" && (
+              <Field label="Line weight">
+                <input
+                  className="scalar-slider"
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={obj.surfaceWireWidth ?? 1.5}
+                  style={
+                    {
+                      "--slider-pct": `${(((obj.surfaceWireWidth ?? 1.5) - 1) / 2) * 100}%`,
+                    } as CSSProperties
+                  }
+                  onChange={(e) =>
+                    mutateObject(index, (o) => {
+                      o.surfaceWireWidth = Number(e.target.value);
+                    })
+                  }
+                />
+              </Field>
+            )}
+            {obj.surface === "image" && (
+              <Field label="Mapping">
+                <select
+                  value={obj.mapping}
+                  onChange={(e) =>
+                    mutateObject(index, (o) => {
+                      o.mapping = e.target.value as Mapping;
+                    })
+                  }
+                >
+                  <option value="uv">UV</option>
+                  <option value="triplanar">Triplanar</option>
+                  <option value="spherical">Spherical</option>
+                  <option value="cylindrical">Cylindrical</option>
+                  <option value="reflection">Reflection</option>
+                </select>
+              </Field>
+            )}
+            {obj.surface === "image" &&
+              (obj.image.assetId ? (
+                <div className="lucky-img-cell">
+                  <button
+                    className="lucky-img-thumb"
+                    title="Replace image"
+                    onClick={() => loadImageFor(index)}
+                  >
+                    <img
+                      src={assetUrl(obj.image.assetId) ?? undefined}
+                      alt={obj.image.name ?? ""}
+                    />
+                  </button>
+                  <button
+                    className="btn-icon"
+                    title="Remove image"
+                    onClick={() => clearImageFor(index)}
+                  >
+                    <img src={cancelIcon} alt="remove" />
+                  </button>
+                </div>
+              ) : (
                 <button
-                  className="lucky-img-thumb"
-                  title="Replace image"
+                  className="full important"
                   onClick={() => loadImageFor(index)}
                 >
-                  <img src={obj.image.dataUrl} alt={obj.image.name ?? ""} />
+                  Load image
                 </button>
-                <button
-                  className="btn-icon"
-                  title="Remove image"
-                  onClick={() => clearImageFor(index)}
-                >
-                  <img src={cancelIcon} alt="remove" />
-                </button>
-              </div>
-            ) : (
-              <button
-                className="full important"
-                onClick={() => loadImageFor(index)}
-              >
-                Load image
-              </button>
-            )}
+              ))}
           </>
         )}
       </>
@@ -380,16 +497,206 @@ export function LibraryPanel({
       >
         {!collapsed && (
           <>
-            <Section title="Scene">
-              <ColorRow
-                label="Background"
-                value={project.scene.backgroundColor}
-                onChange={(v) =>
+            <Section title="Explore" className="lucky">
+              <div className="subhead">Colour: Typography Palette</div>
+              <div className="swatch-list">
+                {lucky.typeColors.map((c, i) => (
+                  <div className="swatch-row" key={i}>
+                    <ColorSwatch
+                      value={c}
+                      onChange={(v) =>
+                        update((p) => {
+                          p.lucky.typeColors[i] = v;
+                        })
+                      }
+                    />
+                    <button
+                      className="btn-icon"
+                      title="Remove colour"
+                      onClick={() =>
+                        update((p) => {
+                          p.lucky.typeColors.splice(i, 1);
+                        })
+                      }
+                    >
+                      <img src={cancelIcon} alt="remove" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {lucky.typeColors.length < MAX_COLORS && (
+                <button
+                  className="full"
+                  onClick={() =>
+                    update((p) => {
+                      p.lucky.typeColors.push("#a3d6dc");
+                    })
+                  }
+                >
+                  Add colours
+                </button>
+              )}
+              <div className="subhead">Colour: Surface Palette</div>
+              <div className="swatch-list">
+                {lucky.surfaceColors.map((c, i) => (
+                  <div className="swatch-row" key={i}>
+                    <ColorSwatch
+                      value={c}
+                      onChange={(v) =>
+                        update((p) => {
+                          p.lucky.surfaceColors[i] = v;
+                        })
+                      }
+                    />
+                    <button
+                      className="btn-icon"
+                      title="Remove colour"
+                      onClick={() =>
+                        update((p) => {
+                          p.lucky.surfaceColors.splice(i, 1);
+                        })
+                      }
+                    >
+                      <img src={cancelIcon} alt="remove" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {lucky.surfaceColors.length < MAX_COLORS && (
+                <button
+                  className="full"
+                  onClick={() =>
+                    update((p) => {
+                      p.lucky.surfaceColors.push("#a3d6dc");
+                    })
+                  }
+                >
+                  Add colours
+                </button>
+              )}
+
+              <div className="subhead">Image Palette</div>
+              {lucky.images.length > 0 && (
+                <div className="lucky-img-grid" data-resolved={thumbResolved}>
+                  {lucky.images.map((path, i) => {
+                    const thumbUrl = thumbUrlCache.current.get(path);
+                    return (
+                      <div className="lucky-img-cell" key={path + i}>
+                        <div className="lucky-img-thumb">
+                          {thumbUrl ? (
+                            <img src={thumbUrl} alt="" />
+                          ) : (
+                            <span className="lucky-img-missing" title={path}>
+                              {path.split(/[\\/]/).pop()}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          className="btn-icon"
+                          title="Remove image"
+                          onClick={() => removeLuckyImage(i, path)}
+                        >
+                          <img src={cancelIcon} alt="remove" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {lucky.images.length < MAX_IMAGES && (
+                <button className="full default" onClick={addLuckyImage}>
+                  Add images
+                </button>
+              )}
+
+              <div className="subhead">Objects</div>
+              <div className="lucky-radio-group">
+                {(
+                  [
+                    [1, "Mono"],
+                    [2, "Duo"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <label className="lucky-radio" key={v}>
+                    <input
+                      type="checkbox"
+                      checked={lucky.objectCounts.includes(v)}
+                      onChange={() =>
+                        update((p) => {
+                          p.lucky.objectCounts = toggleExplore(
+                            p.lucky.objectCounts,
+                            v,
+                            [1, 2],
+                          );
+                        })
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="subhead">Colour scheme</div>
+              <div className="lucky-radio-group">
+                {(
+                  [
+                    ["byType", "Background"],
+                    ["byPair", "Pair"],
+                    ["random", "Random"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <label className="lucky-radio" key={v}>
+                    <input
+                      type="checkbox"
+                      checked={lucky.colorSchemes.includes(v)}
+                      onChange={() =>
+                        update((p) => {
+                          p.lucky.colorSchemes = toggleExplore(
+                            p.lucky.colorSchemes,
+                            v,
+                            ["byType", "byPair", "random"],
+                          );
+                        })
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="subhead">Animations</div>
+              <input
+                className="scalar-slider"
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={lucky.animation}
+                style={
+                  {
+                    ["--slider-pct" as string]: `${lucky.animation * 100}%`,
+                  } as CSSProperties
+                }
+                onChange={(e) =>
                   update((p) => {
-                    p.scene.backgroundColor = v;
+                    p.lucky.animation = parseFloat(e.target.value);
                   })
                 }
               />
+              <div className="heat-labels">
+                <span>Few</span>
+                <span>Many</span>
+              </div>
+
+              <button
+                className="full important"
+                disabled={generating}
+                onClick={onGenerate}
+              >
+                Feeling lucky
+              </button>
+            </Section>
+            <Section title="Scene">
               <Field label="Camera">
                 <select
                   value={project.scene.cameraType}
@@ -406,136 +713,15 @@ export function LibraryPanel({
             </Section>
 
             <Section title="Object A" className="object-a">
-              <ObjectMenu index={0} optional />
+              {ObjectMenu({ index: 0, optional: true })}
             </Section>
 
             <Section
               title={`Object ${objectLetterLabel(1)}`}
               className={objectAccentClass(1)}
             >
-              <ObjectMenu index={1} optional />
+              {ObjectMenu({ index: 1, optional: true })}
             </Section>
-
-            <Section title="Explore" className="lucky">
-              <div className="subhead">Colour Palette</div>
-              <div className="swatch-list">
-                {lucky.colors.map((c, i) => (
-                  <div className="swatch-row" key={i}>
-                    <input
-                      type="color"
-                      value={c}
-                      onChange={(e) =>
-                        update((p) => {
-                          p.lucky.colors[i] = e.target.value;
-                        })
-                      }
-                    />
-                    <HexInput
-                      value={c}
-                      onChange={(v) =>
-                        update((p) => {
-                          p.lucky.colors[i] = v;
-                        })
-                      }
-                    />
-                    <button
-                      className="btn-icon"
-                      title="Remove colour"
-                      onClick={() =>
-                        update((p) => {
-                          p.lucky.colors.splice(i, 1);
-                        })
-                      }
-                    >
-                      <img src={cancelIcon} alt="remove" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {lucky.colors.length < MAX_COLORS && (
-                <button
-                  className="full"
-                  onClick={() =>
-                    update((p) => {
-                      p.lucky.colors.push("#a3d6dc");
-                    })
-                  }
-                >
-                  Add a colour
-                </button>
-              )}
-
-              <div className="subhead">Image Palette</div>
-              {lucky.images.length > 0 && (
-                <div className="lucky-img-grid" data-resolved={thumbResolved}>
-                  {lucky.images.map((path, i) => {
-                    const dataUrl = dataUrlCache.current.get(path);
-                    return (
-                      <div className="lucky-img-cell" key={path + i}>
-                        <div className="lucky-img-thumb">
-                          {dataUrl ? (
-                            <img src={dataUrl} alt="" />
-                          ) : (
-                            <span className="lucky-img-missing" title={path}>
-                              {path.split(/[\\/]/).pop()}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          className="btn-icon"
-                          title="Remove image"
-                          onClick={() =>
-                            update((p) => {
-                              p.lucky.images.splice(i, 1);
-                            })
-                          }
-                        >
-                          <img src={cancelIcon} alt="remove" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {lucky.images.length < MAX_IMAGES && (
-                <button className="full default" onClick={addLuckyImage}>
-                  Add an image
-                </button>
-              )}
-
-              <div className="subhead">Heat</div>
-              <input
-                className="scalar-slider"
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={lucky.heat}
-                style={
-                  {
-                    ["--slider-pct" as string]: `${lucky.heat * 100}%`,
-                  } as CSSProperties
-                }
-                onChange={(e) =>
-                  update((p) => {
-                    p.lucky.heat = parseFloat(e.target.value);
-                  })
-                }
-              />
-              <div className="heat-labels">
-                <span>Simple </span>
-                <span>Intense</span>
-              </div>
-
-              <button
-                className="full important"
-                disabled={generating}
-                onClick={onGenerate}
-              >
-                Feeling lucky
-              </button>
-            </Section>
-
             <Section title="Effects">
               <div className="catalog">
                 <button

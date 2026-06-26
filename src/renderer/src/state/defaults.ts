@@ -22,7 +22,7 @@ export function instanceFromDef(def: EffectDef): EffectInstance {
 export function defaultObjectImage(): ObjectImage {
   return {
     name: null,
-    dataUrl: null,
+    assetId: null,
     offsetX: constant(0.5),
     offsetY: constant(0.5),
   };
@@ -36,6 +36,9 @@ export function defaultSecondObject(): ObjectState {
     modelName: null,
     modelDataUrl: null,
     mapping: "uv",
+    surface: "image",
+    surfaceColor: "#878787",
+    surfaceWireWidth: 1.5,
     image: defaultObjectImage(),
     effects: [],
     rotX: constant(0),
@@ -53,7 +56,6 @@ export function defaultProject(): Project {
     version: 1,
     output: { width: 1080, height: 1350, fps: 30 },
     scene: {
-      backgroundColor: "#281b6c",
       cameraType: "perspective",
     },
     objects: [
@@ -62,6 +64,9 @@ export function defaultProject(): Project {
         modelName: null,
         modelDataUrl: null,
         mapping: "uv",
+        surface: "image",
+        surfaceColor: "#878787",
+        surfaceWireWidth: 1.5,
         image: defaultObjectImage(),
         effects: [],
         rotX: constant(0),
@@ -74,15 +79,21 @@ export function defaultProject(): Project {
       },
     ],
     segments: [
-      { id: uid("seg"), kind: "animation", label: "Intro", durationSec: 2.5 },
+      {
+        id: uid("seg"),
+        kind: "animation",
+        label: "Intro",
+        durationSec: 2.5,
+        backgroundColor: "#281b6c",
+      },
       {
         id: uid("seg"),
         kind: "text",
         label: "Unique message",
         durationSec: 2.5,
         text: {
-          content: "Making ideas visible. Giving thinking form.",
-          fontSize: 96,
+          content: "Making ideas visible.\n\nGiving thinking form.",
+          fontSize: 150,
           align: "center",
           textColor: "#000000",
           backgroundColor: "#A3D6DC",
@@ -97,6 +108,7 @@ export function defaultProject(): Project {
         kind: "animation",
         label: "Continue",
         durationSec: 2.5,
+        backgroundColor: "#1b6c4f",
       },
       {
         id: uid("seg"),
@@ -104,13 +116,13 @@ export function defaultProject(): Project {
         label: "Sculpture as a Tool",
         durationSec: 2.5,
         text: {
-          content: "Sculpture as a Tool for Wider Learning",
-          fontSize: 120,
+          content: "Sculpture \nas a Tool for Wider Learning",
+          fontSize: 150,
           align: "center",
           textColor: "#000000",
           backgroundColor: "#A3D6DC",
           reveal: "fade",
-          textBackdrop: "wireframe",
+          textBackdrop: "silhouette",
           textBackdropColor: "#6473e3",
           textBackdropWireWidth: 1.5,
         },
@@ -120,6 +132,7 @@ export function defaultProject(): Project {
         kind: "animation",
         label: "Conclude",
         durationSec: 2.5,
+        backgroundColor: "#6c2b1b",
       },
       {
         id: uid("seg"),
@@ -128,7 +141,7 @@ export function defaultProject(): Project {
         durationSec: 2.5,
         text: {
           content: "3D–5D Learning Revolution",
-          fontSize: 140,
+          fontSize: 200,
           align: "center",
           textColor: "#000000",
           backgroundColor: "#A3D6DC",
@@ -141,7 +154,8 @@ export function defaultProject(): Project {
     ],
     customEffects: [],
     lucky: {
-      colors: [
+      typeColors: ["#ffffff", "#000000"],
+      surfaceColors: [
         "#ffffff",
         "#000000",
         "#878787",
@@ -153,7 +167,9 @@ export function defaultProject(): Project {
         "#816575",
       ],
       images: [],
-      heat: 0.3,
+      objectCounts: [2],
+      colorSchemes: ["byPair"],
+      animation: 0.3,
     },
   };
 }
