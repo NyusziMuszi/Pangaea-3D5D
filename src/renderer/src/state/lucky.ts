@@ -340,9 +340,20 @@ export function generateLuckyScene(
       .filter((s) => s.kind === "animation")
       .map((s) => s.backgroundColor),
   );
+  // Track colours already dealt to other objects so two flat objects never wear
+  // the same surface colour. Constraints are relaxed in order — first allow a
+  // background colour, then allow a repeat — so a call always returns something.
+  const usedSurfaceColors = new Set<string>();
   const pickSurfaceColor = (): string => {
-    const safe = scenePalette.filter((c) => !animBackgrounds.has(c));
-    return pick(safe.length ? safe : scenePalette);
+    const fresh = scenePalette.filter(
+      (c) => !animBackgrounds.has(c) && !usedSurfaceColors.has(c),
+    );
+    const pool = fresh.length
+      ? fresh
+      : scenePalette.filter((c) => !usedSurfaceColors.has(c));
+    const chosen = pick(pool.length ? pool : scenePalette);
+    usedSurfaceColors.add(chosen);
+    return chosen;
   };
 
   // Look up an effect's keyframeable intensity uniform and its [min,max].

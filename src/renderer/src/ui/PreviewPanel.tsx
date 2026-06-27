@@ -7,7 +7,12 @@ import { evalScalar, setValueAt } from './scalarUtils'
 export function PreviewPanel(): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ x: number; y: number } | null>(null)
+  // Pointer-down position for tap detection — tracked regardless of image state
+  // so a click can select an object even when panning isn't available.
+  const downRef = useRef<{ x: number; y: number } | null>(null)
   const update = useStore((s) => s.update)
+  const selectObject = useStore((s) => s.selectObject)
+  const selectSegment = useStore((s) => s.selectSegment)
   // The image being panned belongs to whichever object is selected.
   const activeObject = useActiveObject()
   const hasImage = !!activeObject?.image.assetId
@@ -22,6 +27,7 @@ export function PreviewPanel(): JSX.Element {
   // Drag over the preview to reposition the image's cover-fit window. Only the
   // overflowing axis responds (the fitted axis ignores its offset in-shader).
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>): void {
+    downRef.current = { x: e.clientX, y: e.clientY }
     if (!liveActiveObject(useStore.getState().project)?.image.assetId) return
     dragRef.current = { x: e.clientX, y: e.clientY }
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -52,6 +58,27 @@ export function PreviewPanel(): JSX.Element {
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>): void {
+    // Tap (negligible movement since down) = pick an object on the canvas.
+    const down = downRef.current
+    downRef.current = null
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) {
+      const rect = e.currentTarget.getBoundingClientRect()
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
+      // The text card is drawn on top, so check it first: a hit selects its
+      // segment (showing the text inspector). Misses fall through to the object
+      // beneath, mirroring how the scene is layered.
+      const textSeg = engine.pickTextAt(ndcX, ndcY)
+      if (textSeg != null) {
+        selectSegment(textSeg)
+      } else {
+        const idx = engine.pickObjectAt(ndcX, ndcY)
+        if (idx != null) {
+          selectObject(idx)
+          selectSegment(null)
+        }
+      }
+    }
     if (!dragRef.current) return
     dragRef.current = null
     e.currentTarget.releasePointerCapture(e.pointerId)

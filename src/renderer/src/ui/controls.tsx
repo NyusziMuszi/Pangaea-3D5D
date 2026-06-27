@@ -28,16 +28,18 @@ export function Section({
   defaultOpen = true,
   right,
   className,
+  style,
 }: {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
   right?: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }): JSX.Element {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={`section ${className ?? ""}`}>
+    <div className={`section ${className ?? ""}`} style={style}>
       <div className="section-head">
         <button className="section-toggle" onClick={() => setOpen((o) => !o)}>
           <svg

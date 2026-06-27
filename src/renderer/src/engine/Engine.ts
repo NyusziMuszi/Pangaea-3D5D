@@ -628,6 +628,13 @@ export class Engine {
   // allocation in the hot render path.
   private clearColorScratch = new THREE.Color();
   private cardColorScratch = new THREE.Color();
+  private raycaster = new THREE.Raycaster();
+
+  // The text card currently drawn this frame (for click-to-select). Tracks the
+  // segment whose card is on screen plus its source 2D canvas, so pickTextAt can
+  // sample glyph/background alpha at the cursor. Null when no card is showing.
+  private currentTextSegmentId: string | null = null;
+  private currentTextCanvas: HTMLCanvasElement | null = null;
 
   // text cache
   private textCache = new Map<string, THREE.CanvasTexture>();
@@ -668,6 +675,49 @@ export class Engine {
     );
     this.scene.add(slot.group);
     return slot;
+  }
+
+  // Raycast against the visible, mesh-bearing slots and return the index of the
+  // nearest hit object (mapping the hit back to its slot), or null on a miss.
+  // ndc coords are in clip space ([-1, 1], y-up) from the canvas frame.
+  pickObjectAt(ndcX: number, ndcY: number): number | null {
+    this.raycaster.setFromCamera(
+      new THREE.Vector2(ndcX, ndcY),
+      this.camera,
+    );
+    const groups = this.slots
+      .filter((s) => s.group.visible && s.hasMesh)
+      .map((s) => s.group);
+    const hits = this.raycaster.intersectObjects(groups, true);
+    if (hits.length === 0) return null;
+    // Walk the nearest hit's parent chain up to the slot group it belongs to.
+    let node: THREE.Object3D | null = hits[0].object;
+    while (node) {
+      const idx = this.slots.findIndex((s) => s.group === node);
+      if (idx !== -1) return idx;
+      node = node.parent;
+    }
+    return null;
+  }
+
+  // Hit-test the on-screen text card and return its segment id, or null. A solid
+  // card covers the whole frame (any point hits); a transparent backdrop/behind
+  // card only hits where glyphs are drawn. Samples the source 2D canvas's alpha
+  // at the cursor so clicking through transparent gaps falls through to objects.
+  // ndc coords are clip space ([-1, 1], y-up) from the canvas frame.
+  pickTextAt(ndcX: number, ndcY: number): string | null {
+    const seg = this.currentTextSegmentId;
+    const canvas = this.currentTextCanvas;
+    // Ignore cards that have faded out — they're not meaningfully visible.
+    if (!seg || !canvas || this.overlay.opacity < 0.05) return null;
+    const px = Math.floor(((ndcX + 1) / 2) * canvas.width);
+    const py = Math.floor((1 - (ndcY + 1) / 2) * canvas.height);
+    if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height)
+      return null;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    const alpha = ctx.getImageData(px, py, 1, 1).data[3];
+    return alpha > 10 ? seg : null;
   }
 
   constructor() {
@@ -857,8 +907,12 @@ export class Engine {
       );
       this.overlay.setTexture(tex);
       this.overlay.setOpacity(tl.textCard.opacity);
+      this.currentTextSegmentId = tl.textCard.segmentId;
+      this.currentTextCanvas = tex.image as HTMLCanvasElement;
     } else {
       this.overlay.setOpacity(0);
+      this.currentTextSegmentId = null;
+      this.currentTextCanvas = null;
     }
 
     // render

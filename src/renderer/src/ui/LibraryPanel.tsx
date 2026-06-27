@@ -7,43 +7,17 @@ import {
 } from "react";
 import { activeObjectIndex, useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
-import { defaultSecondObject, instanceFromDef, uid } from "../state/defaults";
-import type {
-  EffectDef,
-  ObjectState,
-  ObjectSurface,
-  PrimitiveModel,
-  Mapping,
-  CameraType,
-} from "../types";
-import { constant, objectAccentClass, objectLetterLabel } from "../types";
-import { bytesToDataUrl, makeThumbnailUrl, mimeForName } from "./files";
-import { registerAsset, assetUrl } from "../state/assets";
+import { instanceFromDef, uid } from "../state/defaults";
+import type { EffectDef, ObjectState, CameraType } from "../types";
+import { makeThumbnailUrl, mimeForName } from "./files";
+import { registerAsset } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
 import { engine } from "../engine/engineSingleton";
-import { Section, Field, ColorRow, ColorSwatch } from "./controls";
+import { Section, Field, ColorSwatch } from "./controls";
 import cancelIcon from "@assets/cancel.svg";
 
 const MAX_COLORS = 12;
 const MAX_IMAGES = 10;
-
-// Primitive shapes offered for both the primary and the optional second object.
-const PRIMITIVE_OPTIONS: { value: PrimitiveModel; label: string }[] = [
-  { value: "plane", label: "Plane" },
-  { value: "sphere", label: "Sphere" },
-  { value: "portal", label: "Portal" },
-
-  { value: "cylinder", label: "Cylinder" },
-  { value: "capsule", label: "Capsule" },
-  { value: "torus", label: "Torus" },
-  { value: "box", label: "Box" },
-  { value: "lathe", label: "Lathe" },
-  { value: "knot", label: "Knot" },
-  { value: "twist", label: "Twist" },
-
-  { value: "polyhedron", label: "Polyhedron" },
-  { value: "dodecahedron", label: "Dodecahedron" },
-];
 
 // Toggle `value` in an "explore" set: remove it if present, add it otherwise.
 // Emptying the set re-selects everything (`all`) so a generation always has a
@@ -190,93 +164,11 @@ export function LibraryPanel({
     }
   }
 
-  // Apply a Type-dropdown choice for an object. "none" removes an optional
-  // object (it ceases to exist; later objects shift up to keep the list packed);
-  // choosing a real type for a non-existent object creates it. "bespoke" opens
-  // the model importer.
-  function setObjectType(index: number, value: string): void {
-    const exists = !!project.objects[index];
-    if (value === "none") {
-      if (exists) removeObject(index);
-      return;
-    }
-    if (!exists) {
-      // The objects array stays packed, so a new object lands at the first free
-      // slot (never leaving a hole if an earlier slot is None).
-      const at = Math.min(index, project.objects.length);
-      update((p) => {
-        const o = defaultSecondObject();
-        if (value !== "bespoke") o.primitive = value as PrimitiveModel;
-        p.objects.splice(at, 0, o);
-      });
-      // Focus the new object so the inspector edits its transform straight away.
-      selectObject(at);
-      selectSegment(null);
-      selectEffect(null);
-      if (value === "bespoke") importModelFor(at);
-      return;
-    }
-    if (value === "bespoke") {
-      importModelFor(index);
-    } else {
-      mutateObject(index, (o) => {
-        o.primitive = value as PrimitiveModel;
-        o.modelDataUrl = null;
-        o.modelName = null;
-      });
-    }
-  }
-
-  function removeObject(index: number): void {
-    update((p) => {
-      p.objects.splice(index, 1);
-    });
-    selectObject(0);
-  }
-
   // Mutate one object by index in place.
   function mutateObject(index: number, fn: (o: ObjectState) => void): void {
     update((p) => {
       const o = p.objects[index];
       if (o) fn(o);
-    });
-  }
-
-  async function loadImageFor(index: number): Promise<void> {
-    const file = await window.api.openImageFile();
-    if (!file) return;
-    const assetId = registerAsset(file.data, mimeForName(file.name));
-    mutateObject(index, (o) => {
-      // New image: reset framing to centered.
-      o.image = {
-        name: file.name,
-        assetId,
-        offsetX: constant(0.5),
-        offsetY: constant(0.5),
-      };
-    });
-  }
-
-  // Drop an object's image, restoring the centered default so the "Load image"
-  // button returns.
-  function clearImageFor(index: number): void {
-    mutateObject(index, (o) => {
-      o.image = {
-        name: null,
-        assetId: null,
-        offsetX: constant(0.5),
-        offsetY: constant(0.5),
-      };
-    });
-  }
-
-  async function importModelFor(index: number): Promise<void> {
-    const file = await window.api.openModelFile();
-    if (!file) return;
-    const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
-    mutateObject(index, (o) => {
-      o.modelName = file.name;
-      o.modelDataUrl = dataUrl;
     });
   }
 
@@ -318,141 +210,6 @@ export function LibraryPanel({
       p.customEffects.push(def);
     });
     openShaderEditor(def.id);
-  }
-
-  // Identical shape/material + image controls for any object. Optional objects
-  // gain a "None" type: selecting it makes the object cease to exist, and the
-  // remaining controls disappear until a real type is chosen again.
-  function ObjectMenu({
-    index,
-    optional = false,
-  }: {
-    index: number;
-    optional?: boolean;
-  }): JSX.Element {
-    const obj = project.objects[index];
-    const typeValue = obj
-      ? obj.modelDataUrl
-        ? "bespoke"
-        : obj.primitive
-      : "none";
-    return (
-      <>
-        <Field label="Type">
-          <select
-            value={typeValue}
-            onChange={(e) => setObjectType(index, e.target.value)}
-          >
-            {optional && <option value="none">None</option>}
-            {PRIMITIVE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-            <option value="bespoke">Bespoke</option>
-          </select>
-        </Field>
-        {obj && (
-          <>
-            <Field label="Surface">
-              <select
-                value={obj.surface ?? "image"}
-                onChange={(e) =>
-                  mutateObject(index, (o) => {
-                    o.surface = e.target.value as ObjectSurface;
-                  })
-                }
-              >
-                <option value="image">Image</option>
-                <option value="silhouette">Silhouette</option>
-                <option value="wireframe">Wireframe</option>
-                <option value="faceted">Faceted</option>
-              </select>
-            </Field>
-            {obj.surface !== "image" && (
-              <ColorRow
-                label="Surface colour"
-                value={obj.surfaceColor ?? "#878787"}
-                onChange={(v) =>
-                  mutateObject(index, (o) => {
-                    o.surfaceColor = v;
-                  })
-                }
-              />
-            )}
-            {obj.surface === "wireframe" && (
-              <Field label="Line weight">
-                <input
-                  className="scalar-slider"
-                  type="range"
-                  min={1}
-                  max={3}
-                  step={0.1}
-                  value={obj.surfaceWireWidth ?? 1.5}
-                  style={
-                    {
-                      "--slider-pct": `${(((obj.surfaceWireWidth ?? 1.5) - 1) / 2) * 100}%`,
-                    } as CSSProperties
-                  }
-                  onChange={(e) =>
-                    mutateObject(index, (o) => {
-                      o.surfaceWireWidth = Number(e.target.value);
-                    })
-                  }
-                />
-              </Field>
-            )}
-            {obj.surface === "image" && (
-              <Field label="Mapping">
-                <select
-                  value={obj.mapping}
-                  onChange={(e) =>
-                    mutateObject(index, (o) => {
-                      o.mapping = e.target.value as Mapping;
-                    })
-                  }
-                >
-                  <option value="uv">UV</option>
-                  <option value="triplanar">Triplanar</option>
-                  <option value="spherical">Spherical</option>
-                  <option value="cylindrical">Cylindrical</option>
-                  <option value="reflection">Reflection</option>
-                </select>
-              </Field>
-            )}
-            {obj.surface === "image" &&
-              (obj.image.assetId ? (
-                <div className="lucky-img-cell">
-                  <button
-                    className="lucky-img-thumb"
-                    title="Replace image"
-                    onClick={() => loadImageFor(index)}
-                  >
-                    <img
-                      src={assetUrl(obj.image.assetId) ?? undefined}
-                      alt={obj.image.name ?? ""}
-                    />
-                  </button>
-                  <button
-                    className="btn-icon"
-                    title="Remove image"
-                    onClick={() => clearImageFor(index)}
-                  >
-                    <img src={cancelIcon} alt="remove" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  className="full important"
-                  onClick={() => loadImageFor(index)}
-                >
-                  Load image
-                </button>
-              ))}
-          </>
-        )}
-      </>
-    );
   }
 
   function ZigzagRule({ patId }: { patId: string }): JSX.Element {
@@ -498,7 +255,7 @@ export function LibraryPanel({
         {!collapsed && (
           <>
             <Section title="Explore" className="lucky">
-              <div className="subhead">Colour: Typography Palette</div>
+              <div className="subhead">Palette: Typography</div>
               <div className="swatch-list">
                 {lucky.typeColors.map((c, i) => (
                   <div className="swatch-row" key={i}>
@@ -536,7 +293,7 @@ export function LibraryPanel({
                   Add colours
                 </button>
               )}
-              <div className="subhead">Colour: Surface Palette</div>
+              <div className="subhead">Palette: Surface</div>
               <div className="swatch-list">
                 {lucky.surfaceColors.map((c, i) => (
                   <div className="swatch-row" key={i}>
@@ -575,7 +332,7 @@ export function LibraryPanel({
                 </button>
               )}
 
-              <div className="subhead">Image Palette</div>
+              <div className="subhead">Palette: Image</div>
               {lucky.images.length > 0 && (
                 <div className="lucky-img-grid" data-resolved={thumbResolved}>
                   {lucky.images.map((path, i) => {
@@ -712,26 +469,8 @@ export function LibraryPanel({
               </Field>
             </Section>
 
-            <Section title="Object A" className="object-a">
-              {ObjectMenu({ index: 0, optional: true })}
-            </Section>
-
-            <Section
-              title={`Object ${objectLetterLabel(1)}`}
-              className={objectAccentClass(1)}
-            >
-              {ObjectMenu({ index: 1, optional: true })}
-            </Section>
             <Section title="Effects">
               <div className="catalog">
-                <button
-                  className="catalog-item"
-                  onClick={newCustomShader}
-                  title="Author a new GLSL effect"
-                >
-                  <span className="catalog-name">Bespoke</span>
-                </button>
-                <ZigzagRule patId="zigzag-bespoke" />
                 {allDefs.map((def) => (
                   <Fragment key={def.id}>
                     <button
@@ -745,6 +484,14 @@ export function LibraryPanel({
                     )}
                   </Fragment>
                 ))}
+                <ZigzagRule patId="zigzag-bespoke" />
+                <button
+                  className="catalog-item"
+                  onClick={newCustomShader}
+                  title="Author a new GLSL effect"
+                >
+                  <span className="catalog-name">Bespoke</span>
+                </button>
               </div>
             </Section>
           </>

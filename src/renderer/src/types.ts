@@ -202,9 +202,7 @@ export function objectLabel(o: ObjectState): string {
   return o.primitive.charAt(0).toUpperCase() + o.primitive.slice(1);
 }
 
-// CSS accent class + display letter for an object by index, so the per-object
-// colour accent ("Object A"/"Object B") stays consistent across panels.
+// CSS accent class for an object by index, so the per-object colour accent
+// stays consistent across panels.
 export const objectAccentClass = (index: number): string =>
   index === 0 ? "object-a" : "object-b";
-export const objectLetterLabel = (index: number): string =>
-  String.fromCharCode(65 + index);

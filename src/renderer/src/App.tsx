@@ -8,6 +8,9 @@ import { TimelinePanel } from "./ui/TimelinePanel";
 import { InspectorPanel } from "./ui/InspectorPanel";
 import { ShaderEditorModal } from "./ui/ShaderEditorModal";
 import { ExportDialog } from "./ui/ExportDialog";
+import { PreferencesPanel } from "./ui/PreferencesPanel";
+import { usePrefs } from "./state/prefs";
+import { setCustomTextCardFont } from "./engine/fonts";
 import { runSelfTest } from "./ui/selftest";
 
 export default function App(): JSX.Element {
@@ -15,6 +18,7 @@ export default function App(): JSX.Element {
   const toast = useStore((s) => s.toast);
   const setToast = useStore((s) => s.setToast);
   const [exportOpen, setExportOpen] = useState(false);
+  const [prefsOpen, setPrefsOpen] = useState(false);
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [timelineHeight, setTimelineHeight] = useState(240);
@@ -75,6 +79,22 @@ export default function App(): JSX.Element {
     if (!engine.isPlaying) engine.renderFrame(engine.getPlayhead());
   }, [project]);
 
+  // Apply a stored custom card font at cold start, then rebuild text-card
+  // textures so the preview reflects it without waiting for an edit.
+  useEffect(() => {
+    const font = usePrefs.getState().customFont;
+    if (!font) return;
+    let cancelled = false;
+    void setCustomTextCardFont(font.dataUrl).then(() => {
+      if (cancelled) return;
+      engine.setProject(useStore.getState().project);
+      engine.renderFrame(engine.getPlayhead());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Headless self-test (launched with ?selftest=1) for automated verification.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).has("selftest")) {
@@ -115,7 +135,10 @@ export default function App(): JSX.Element {
           <TimelinePanel />
         </div>
         <div className="right-col">
-          <ProjectActions onOpenExport={() => setExportOpen(true)} />
+          <ProjectActions
+            onOpenExport={() => setExportOpen(true)}
+            onOpenPreferences={() => setPrefsOpen(true)}
+          />
           <InspectorPanel
             collapsed={inspectorCollapsed}
             onToggleCollapse={() => setInspectorCollapsed((c) => !c)}
@@ -124,6 +147,7 @@ export default function App(): JSX.Element {
       </div>
       <ShaderEditorModal />
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
+      {prefsOpen && <PreferencesPanel onClose={() => setPrefsOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

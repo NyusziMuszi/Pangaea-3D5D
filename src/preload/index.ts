@@ -23,6 +23,10 @@ const api = {
     ipcRenderer.invoke('dialog:openFile', {
       filters: [{ name: 'Pangaea Project', extensions: ['pangaea', 'json'] }]
     }),
+  openFontFile: (): Promise<OpenedFile | null> =>
+    ipcRenderer.invoke('dialog:openFile', {
+      filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'woff', 'woff2'] }]
+    }),
   readFile: (path: string): Promise<OpenedFile> => ipcRenderer.invoke('file:read', path),
   readImagePath: (
     path: string
@@ -39,7 +43,12 @@ const api = {
     fps: number
     outputPath: string
   }): Promise<{ ok: boolean; outputPath: string }> =>
-    ipcRenderer.invoke('ffmpeg:encodeFrames', opts)
+    ipcRenderer.invoke('ffmpeg:encodeFrames', opts),
+  // Read/write the app's persisted preferences blob (userData/preferences.json).
+  // Read returns null when the file is missing or corrupt.
+  readPreferences: (): Promise<unknown> => ipcRenderer.invoke('prefs:read'),
+  writePreferences: (data: unknown): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('prefs:write', data)
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -70,8 +70,8 @@
 
   --text-btn: #e1e3e3;
   --text-btn-hover: #a3d6dc;
-  --text-section: #599399;
-  --text-section-rule: #599399;
+  --text-section: #ffffff;
+  --text-section-rule: #ffffff;
 
   --border-btn: #303030;
   --border: #3d3d3d;
@@ -81,9 +81,10 @@
   --panel: #181818;
   --panel-active: #1f1f1f;
 
-  --text-dim: #9a9aab;
+  --text-dim: #c2c2c2;
   --accent: #a3d6dc;
   --anim: #54ced5;
+  --accent-strong: #54ced5;
   --ok: #3b9e47;
   --err: #ff6b6b;
   --slider-fill: #599399;
@@ -101,6 +102,7 @@
 
   --objectText-text-border: #599399; /* teal — used for the coloured label/title */
   --objectText-highlight: #59939926; /* teal tint for the inspector header bg */
+  --objectText-hover: #a3d6dc; /* brighter teal — text block's hover/keyed accent */
 }
 
 ::-webkit-scrollbar {
@@ -139,6 +141,7 @@
   --text-section: var(--objectText-text-border);
   --text-section-rule: var(--objectText-text-border);
   --obj-highlight: var(--objectText-highlight);
+  --obj-hover: var(--objectText-hover);
 }
 
 * {
@@ -211,6 +214,13 @@ button.important {
 button.secondary {
   --btn-fill: transparent;
   --btn-text: var(--text-dim);
+}
+
+/* Important buttons keep their default text colour on hover — only the
+   corner radius changes (no white text / inset line). */
+button.important:hover {
+  color: var(--btn-text);
+  box-shadow: none;
 }
 
 /* Orthogonal modifiers — compose with any type. */
@@ -293,7 +303,7 @@ input[type="number"]::-webkit-outer-spin-button {
   width: 18px;
   height: 18px;
   flex: none;
-  border: none;
+  border: 1px solid var(--border-btn);
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
@@ -452,12 +462,35 @@ button.library-collapse-btn:hover {
 
 .panel {
   overflow-y: auto;
+  /* 1px so the first header line isn't clipped at the panel's top edge. */
+  padding-top: 1px;
   background: var(--panel);
   border-right: 1px solid var(--border);
 }
 .inspector {
   border-right: none;
   border-left: none;
+}
+/* When a block is selected its identity class (.object-a/.object-b/.id-text) is
+   set on the panel, carrying --obj-highlight. Layer that translucent tint over
+   the solid panel fill so the whole inspector takes the selected block's
+   highlight colour — the same tint the timeline segment fills with. */
+.panel.inspector:is(.object-a, .object-b, .id-text) {
+  background:
+    linear-gradient(var(--obj-highlight), var(--obj-highlight)), var(--panel);
+}
+/* Retint the interactive accents to the block's colour so a block reads in its
+   own identity wherever it appears: the whole inspector, and each object's
+   keyframe markers in the timeline. Maps the four-step accent ramp emitted by
+   accentVars onto the shared control variables — slider heads/fills take the
+   default step, hover/focus the bright hover step, and keyframed/active state
+   the emphasised "important" step. (--slider-track, the muted step, is set
+   directly by accentVars so the groove follows the block too.) */
+.panel.inspector:is(.object-a, .object-b, .id-text),
+.tl-track-object .segment.object:is(.object-a, .object-b) {
+  --slider-fill: var(--text-section);
+  --accent: var(--obj-hover);
+  --anim: var(--accent-strong);
 }
 .inspector-footer {
   padding: var(--space-5); /* snap 10→12 */
@@ -819,6 +852,24 @@ button.inspector-collapse-btn:hover {
 .tl-track.tl-track-object .segment.object + .segment.object {
   margin-top: var(--space-3);
 }
+/* "Add object" ghost block: a dashed, dimmed affordance matching the object
+   segments, shown in the object track only while the scene has room for a
+   second object. */
+.tl-track.tl-track-object .segment.object.tl-add-object {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  border-style: dashed;
+  background: none;
+  color: var(--text-dim);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  font-family: inherit;
+}
+.tl-track.tl-track-object .segment.object.tl-add-object:hover {
+  color: var(--text);
+}
 .tl-scrub-area {
   flex: 1;
   display: flex;
@@ -867,31 +918,20 @@ button.inspector-collapse-btn:hover {
 }
 .segment.break {
   background: var(--segment-break-bg);
+  /* Break segments aren't selectable, so they don't invite a click. */
+  cursor: default;
 }
 /* All three identity blocks (Text, Object A, Object B) share one interaction:
    neutral grey border, a top line in the block's accent on hover that stays
    once selected. Break segments fall back to the root --text-section. */
-.segment:hover,
+.segment:not(.break):hover,
 .segment.sel {
   box-shadow: 0 3px 0px var(--text-section) inset;
-  border-radius: var(--radius-lg);
 }
-.segment-label {
-  display: block;
-  font-size: var(--font-xs);
-  font-weight: 700;
-
-  color: var(--text);
-}
-/* Identity blocks colour their label with the block's accent; break segments
-   keep the default white label. */
-/* Split rather than folded: the object arms and the id-text arm had different
-   specificity, so a single :is() would lift the id-text arm. */
-.segment:is(.object-a, .object-b) .segment-label {
-  color: var(--text-section);
-}
-.segment.id-text .segment-label {
-  color: var(--text-section);
+/* The highlight fill is reserved for the active (selected) block; hover only
+   shows the accent top line. */
+.segment.sel {
+  background-color: var(--obj-highlight);
 }
 .segment-dur {
   color: var(--text-dim);
@@ -926,11 +966,19 @@ button.inspector-collapse-btn:hover {
 .seg-swatch {
   cursor: pointer;
 }
+/* An object block's head: type + surface dropdowns and (when the surface isn't
+   an image) the editable surface-colour swatch, sitting inline on one line. */
 .object-head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
+  align-items: center;
+  gap: var(--space-2);
+}
+/* Compact dropdowns sized to their content so the swatch follows on the line. */
+.object-head-select {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: var(--font-xs);
+  padding: var(--space-1) var(--space-2);
 }
 .fx-empty {
   color: var(--text-dim);
@@ -1041,14 +1089,11 @@ button.inspector-collapse-btn:hover {
 .scalar-num {
   width: 56px;
 }
-/* Scalar hover cue. */
-.scalar-row:hover .scalar-label {
-  color: var(--text);
-}
-/* Keyframed-input cue: animated fields read accent, a key on the playhead
-   reads brighter still. */
+
+/* Keyframed-input cue: animated and keyed fields both read the emphasised
+   "important" step; a key on the playhead adds an inset glow on top. */
 .scalar-row.anim .scalar-num {
-  border-color: var(--accent);
+  border-color: var(--anim);
 }
 .scalar-row.keyed .scalar-num {
   border-color: var(--anim);
@@ -1067,7 +1112,7 @@ button.inspector-collapse-btn:hover {
   color: var(--accent);
 }
 .diamond.anim {
-  color: var(--accent);
+  color: var(--anim);
 }
 .diamond.keyed {
   color: var(--anim);
@@ -1145,11 +1190,11 @@ button.inspector-collapse-btn:hover {
   box-shadow: none;
 }
 .kf-marker.active {
-  background: var(--white);
-  box-shadow: 0 0 4px var(--white);
+  background: var(--anim);
+  box-shadow: 0 0 4px var(--anim);
 }
 .kf-marker.active:active {
-  box-shadow: 0 0 4px var(--white);
+  box-shadow: 0 0 4px var(--anim);
 }
 
 /* ---------- Modals ---------- */
@@ -1294,6 +1339,62 @@ textarea.code {
   color: var(--text-dim);
   font-size: var(--font-sm); /* snap 11.5→12 */
   word-break: break-all;
+}
+
+/* ---------- Preferences ---------- */
+.prefs-dialog {
+  width: 520px;
+  max-width: 92vw;
+  max-height: 88vh;
+}
+.prefs-body {
+  padding: var(--space-5) var(--space-6);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.prefs-note {
+  color: var(--text-dim);
+  font-size: var(--font-sm);
+  margin: 0;
+}
+.prefs-rules {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.prefs-rules li {
+  list-style: disc;
+}
+.prefs-foot-spread {
+  justify-content: space-between;
+}
+.prefs-seg {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.prefs-seg-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.prefs-seg-head .grow {
+  flex: 1;
+}
+.prefs-row-add {
+  display: flex;
+  gap: var(--space-3);
+}
+.prefs-font-current {
+  color: var(--text-dim);
+  font-size: var(--font-sm);
 }
 
 /* ---------- Toast ---------- */

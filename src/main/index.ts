@@ -100,6 +100,11 @@ interface OpenFileOpts {
   filters?: { name: string; extensions: string[] }[]
 }
 
+// The app's own settings file in the OS user-data dir. This path is fixed and
+// app-owned (never renderer-supplied), so it is deliberately NOT subject to the
+// approvedPaths dialog gating that protects arbitrary file reads/writes.
+const PREFS_PATH = join(app.getPath('userData'), 'preferences.json')
+
 function registerIpc(): void {
   // The self-test harness writes to fixed /tmp paths without a dialog; approve
   // them up front so the gating doesn't break PANGAEA_SELFTEST runs.
@@ -107,6 +112,22 @@ function registerIpc(): void {
     approvedPaths.add(resolve('/tmp/pangaea-selftest.mp4'))
     approvedPaths.add(resolve('/tmp/pangaea-selftest.status'))
   }
+
+  // Read the persisted preferences blob. Missing or corrupt file → null, so the
+  // renderer falls back to the hard-coded base defaults (no migration layer).
+  ipcMain.handle('prefs:read', async () => {
+    try {
+      return JSON.parse(await readFile(PREFS_PATH, 'utf8'))
+    } catch {
+      return null
+    }
+  })
+
+  // Flush the preferences blob to disk (pretty-printed for hand-editing / backup).
+  ipcMain.handle('prefs:write', async (_e, data: unknown) => {
+    await writeFile(PREFS_PATH, JSON.stringify(data, null, 2))
+    return { ok: true }
+  })
 
   // Open a file via native dialog; return its path + bytes.
   ipcMain.handle('dialog:openFile', async (_e, opts: OpenFileOpts) => {

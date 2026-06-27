@@ -2,16 +2,20 @@ import { type CSSProperties, useEffect } from "react";
 import playIcon from "../assets/play_arrow_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import pauseIcon from "../assets/pause_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import { useStore } from "../state/store";
+import { defaultSecondObject } from "../state/defaults";
 import { engine } from "../engine/engineSingleton";
 import { KeyframeTrack, DurationField, ColorSwatch } from "./controls";
+import { accentVars, objectAccentColor, segmentAccentColor } from "./accent";
 import { objectKeyframeChannels } from "./keyframeChannels";
+import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS } from "./objectOptions";
+import { bytesToDataUrl, mimeForName } from "./files";
 import { isAnimated } from "./scalarUtils";
 import {
   objectAccentClass,
-  objectLabel,
-  objectLetterLabel,
   totalDuration,
   type ObjectState,
+  type ObjectSurface,
+  type PrimitiveModel,
   type Scalar,
   type TextStyle,
 } from "../types";
@@ -64,6 +68,57 @@ export function TimelinePanel(): JSX.Element {
   function selectObjectOnly(index: number): void {
     selectObject(index);
     selectSegment(null);
+  }
+
+  // Append a new object (the optional second object) and focus it so the
+  // inspector edits its shape/transform straight away. The scene caps at two
+  // objects, so the button only shows while there is room.
+  function addObject(): void {
+    const at = project.objects.length;
+    update((p) => {
+      p.objects.push(defaultSecondObject());
+    });
+    selectObject(at);
+    selectSegment(null);
+  }
+
+  // Mirror the inspector's Type dropdown for an object in the timeline head.
+  // "none" removes the object (selection falls back to the first); "bespoke"
+  // opens the model importer; a real type swaps the primitive and drops any
+  // imported model.
+  function setObjectType(index: number, value: string): void {
+    if (value === "none") {
+      update((p) => {
+        p.objects.splice(index, 1);
+      });
+      selectObject(0);
+      return;
+    }
+    if (value === "bespoke") {
+      void importModelFor(index);
+      return;
+    }
+    update((p) => {
+      const o = p.objects[index];
+      if (o) {
+        o.primitive = value as PrimitiveModel;
+        o.modelDataUrl = null;
+        o.modelName = null;
+      }
+    });
+  }
+
+  async function importModelFor(index: number): Promise<void> {
+    const file = await window.api.openModelFile();
+    if (!file) return;
+    const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
+    update((p) => {
+      const o = p.objects[index];
+      if (o) {
+        o.modelName = file.name;
+        o.modelDataUrl = dataUrl;
+      }
+    });
   }
 
   function togglePlay(): void {
@@ -193,8 +248,12 @@ export function TimelinePanel(): JSX.Element {
                       style={{
                         left: pct(starts[i]),
                         width: pct(seg.durationSec),
+                        // Text cards take their accent from the card background.
+                        ...(isText ? accentVars(segmentAccentColor(seg)) : {}),
                       }}
-                      onClick={() => selectOnly(seg.id)}
+                      // Break (non-text) segments aren't editable as such, so
+                      // they don't open the inspector; only text segments select.
+                      onClick={isText ? () => selectOnly(seg.id) : undefined}
                     >
                       {isText && seg.text && (
                         <div className="seg-swatches">
@@ -247,7 +306,9 @@ export function TimelinePanel(): JSX.Element {
                             value={seg.backgroundColor ?? "#281b6c"}
                             onChange={(v) =>
                               update((p) => {
-                                const s = p.segments.find((x) => x.id === seg.id);
+                                const s = p.segments.find(
+                                  (x) => x.id === seg.id,
+                                );
                                 if (s) s.backgroundColor = v;
                               })
                             }
@@ -283,19 +344,67 @@ export function TimelinePanel(): JSX.Element {
                 <div
                   key={index}
                   className={`segment object ${index === 0 ? "object-a" : "object-2 " + objectAccentClass(index)} ${objectActive && selectedObjectIndex === index ? "sel" : ""}`}
+                  style={accentVars(objectAccentColor(project, obj))}
                   onClick={() => selectObjectOnly(index)}
                 >
                   <div className="object-head">
-                    <span className="segment-label">
-                      Object {objectLetterLabel(index)} — {objectLabel(obj)}
-                    </span>
-                    {index === 0 && (
-                      <span className="segment-dur">{total.toFixed(1)}s</span>
+                    <select
+                      className="object-head-select"
+                      value={obj.modelDataUrl ? "bespoke" : obj.primitive}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setObjectType(index, e.target.value)}
+                    >
+                      <option value="none">None</option>
+                      {PRIMITIVE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                      <option value="bespoke">Bespoke</option>
+                    </select>
+                    <select
+                      className="object-head-select"
+                      value={obj.surface ?? "image"}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        update((p) => {
+                          const o = p.objects[index];
+                          if (o) o.surface = e.target.value as ObjectSurface;
+                        })
+                      }
+                    >
+                      {SURFACE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    {obj.surface !== "image" && (
+                      <ColorSwatch
+                        className="seg-swatch"
+                        title="Surface colour"
+                        value={obj.surfaceColor ?? "#878787"}
+                        onChange={(v) =>
+                          update((p) => {
+                            const o = p.objects[index];
+                            if (o) o.surfaceColor = v;
+                          })
+                        }
+                      />
                     )}
                   </div>
                   {renderKeyframes(obj, index)}
                 </div>
               ))}
+              {project.objects.length < 2 && (
+                <button
+                  className="segment object tl-add-object"
+                  onClick={addObject}
+                  title="Add a second object"
+                >
+                  + Add object
+                </button>
+              )}
               <div
                 className="tl-playhead"
                 style={{ left: playheadLeft(playhead) }}

@@ -26,8 +26,10 @@ function referencedAssetIds(p: Project): string[] {
 
 export function ProjectActions({
   onOpenExport,
+  onOpenPreferences,
 }: {
   onOpenExport: () => void;
+  onOpenPreferences: () => void;
 }): JSX.Element {
   const project = useStore((s) => s.project);
   const setProject = useStore((s) => s.setProject);
@@ -93,6 +95,9 @@ export function ProjectActions({
       </button>
       <button className="important" onClick={onOpenExport}>
         Export
+      </button>
+      <button className="important" onClick={onOpenPreferences}>
+        Preferences
       </button>
     </div>
   );

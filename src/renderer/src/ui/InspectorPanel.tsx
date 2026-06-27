@@ -8,9 +8,10 @@ import { findEffectDef } from "../engine/effects/catalog";
 import {
   constant,
   objectAccentClass,
-  objectLabel,
-  objectLetterLabel,
+  type Mapping,
   type ObjectState,
+  type ObjectSurface,
+  type PrimitiveModel,
   type Scalar,
   type TextBackdrop,
 } from "../types";
@@ -21,8 +22,11 @@ import {
   ColorRow,
   DurationField,
 } from "./controls";
+import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS } from "./objectOptions";
+import { accentVars, objectAccentColor, segmentAccentColor } from "./accent";
 import { defaultProject } from "../state/defaults";
-import { assetUrl } from "../state/assets";
+import { assetUrl, registerAsset } from "../state/assets";
+import { bytesToDataUrl, mimeForName } from "./files";
 import type { CSSProperties } from "react";
 
 const TAU = Math.PI * 2;
@@ -39,6 +43,7 @@ export function InspectorPanel({
   const setProject = useStore((s) => s.setProject);
   const selectEffect = useStore((s) => s.selectEffect);
   const selectedEffectId = useStore((s) => s.selectedEffectId);
+  const selectObject = useStore((s) => s.selectObject);
   const selectSegment = useStore((s) => s.selectSegment);
   const setToast = useStore((s) => s.setToast);
   const selectedSegmentId = useStore((s) => s.selectedSegmentId);
@@ -50,7 +55,7 @@ export function InspectorPanel({
     const src0 = project.objects[0];
     const dst0 = fresh.objects[0];
     // Carry the primary object's shape/image across the reset, but only if it
-    // still exists (Object A can be set to None).
+    // still exists (the primary object can be set to None).
     if (src0) {
       dst0.image.name = src0.image.name;
       dst0.image.assetId = src0.image.assetId;
@@ -98,6 +103,26 @@ export function InspectorPanel({
   const activeObject: ObjectState | undefined =
     project.objects[activeObjectIndex];
 
+  // Identity class for the currently-edited block (text segment, or object A/B),
+  // applied to the whole panel so it carries that block's --obj-highlight tint —
+  // matching the highlight the selected timeline segment fills with. Empty when
+  // nothing is selected, so the panel stays untinted.
+  const panelAccentClass = segment
+    ? "id-text"
+    : activeObject
+      ? objectAccentClass(activeObjectIndex)
+      : "";
+
+  // The accent colour scheme for the active block, taken from its content: a
+  // text segment's background, or an object's surface/scene colour. Set as
+  // inline CSS variables on the panel and each section so they override the
+  // identity class's fixed palette.
+  const accentStyle: CSSProperties | undefined = segment
+    ? accentVars(segmentAccentColor(segment))
+    : activeObject
+      ? accentVars(objectAccentColor(project, activeObject))
+      : undefined;
+
   function updateObject(fn: (o: ObjectState) => void): void {
     update((p) => {
       const o = p.objects[activeObjectIndex];
@@ -129,10 +154,72 @@ export function InspectorPanel({
     if (selectedEffectId === instanceId) selectEffect(null);
   }
 
+  // Apply a Type-dropdown choice for the active object. "none" removes it (the
+  // objects array stays packed, and selection falls back to the first object);
+  // "bespoke" opens the model importer; a real type swaps the primitive and
+  // drops any imported model.
+  function setObjectType(value: string): void {
+    if (value === "none") {
+      update((p) => {
+        p.objects.splice(activeObjectIndex, 1);
+      });
+      selectObject(0);
+      return;
+    }
+    if (value === "bespoke") {
+      importModelFor();
+      return;
+    }
+    updateObject((o) => {
+      o.primitive = value as PrimitiveModel;
+      o.modelDataUrl = null;
+      o.modelName = null;
+    });
+  }
+
+  async function loadImageFor(): Promise<void> {
+    const file = await window.api.openImageFile();
+    if (!file) return;
+    const assetId = registerAsset(file.data, mimeForName(file.name));
+    updateObject((o) => {
+      // New image: reset framing to centered.
+      o.image = {
+        name: file.name,
+        assetId,
+        offsetX: constant(0.5),
+        offsetY: constant(0.5),
+      };
+    });
+  }
+
+  // Drop the object's image, restoring the centered default so the "Load image"
+  // button returns.
+  function clearImageFor(): void {
+    updateObject((o) => {
+      o.image = {
+        name: null,
+        assetId: null,
+        offsetX: constant(0.5),
+        offsetY: constant(0.5),
+      };
+    });
+  }
+
+  async function importModelFor(): Promise<void> {
+    const file = await window.api.openModelFile();
+    if (!file) return;
+    const dataUrl = bytesToDataUrl(file.data, mimeForName(file.name));
+    updateObject((o) => {
+      o.modelName = file.name;
+      o.modelDataUrl = dataUrl;
+    });
+  }
+
   return (
     <div className={`inspector-wrap ${collapsed ? "collapsed" : ""}`}>
       <div
-        className="panel inspector"
+        className={`panel inspector ${panelAccentClass}`}
+        style={accentStyle}
         // When collapsed the panel is just a thin rail; double-clicking
         // anywhere on it re-expands the inspector.
         onDoubleClick={collapsed ? onToggleCollapse : undefined}
@@ -141,17 +228,9 @@ export function InspectorPanel({
           <>
             {segment && (
         <>
-          <div className="inspector-object-header id-text">
-            <span className="inspector-object-title">
-              {segment.kind === "text"
-                ? `Text — ${segment.label}`
-                : "Text — None"}
-            </span>
-          </div>
-
           {segment.kind === "text" && segment.text ? (
             <>
-              <Section title="Message" className="id-text">
+              <Section title="Message" className="id-text" style={accentStyle}>
                 <DurationField
                   value={segment.durationSec}
                   onChange={(v) =>
@@ -222,7 +301,7 @@ export function InspectorPanel({
                 />
               </Section>
 
-              <Section title="Background" className="id-text">
+              <Section title="Background" className="id-text" style={accentStyle}>
                 <ColorRow
                   label="Background colour"
                   value={segment.text.backgroundColor}
@@ -309,7 +388,7 @@ export function InspectorPanel({
               </Section>
             </>
           ) : (
-            <Section title="None" className="id-text">
+            <Section title="None" className="id-text" style={accentStyle}>
               <DurationField
                 value={segment.durationSec}
                 onChange={(v) =>
@@ -340,23 +419,125 @@ export function InspectorPanel({
 
       {!segment && activeObject && (
         <>
-          <div
-            className={`inspector-object-header ${objectAccentClass(activeObjectIndex)}`}
+          <Section
+            title="Shape"
+            className={objectAccentClass(activeObjectIndex)}
+            style={accentStyle}
           >
-            <span className="inspector-object-title">
-              Object {objectLetterLabel(activeObjectIndex)} —{" "}
-              {objectLabel(activeObject)}
-            </span>
-            {activeObject.image?.assetId && (
-              <img
-                className="inspector-object-thumb"
-                src={assetUrl(activeObject.image.assetId) ?? undefined}
-                alt={activeObject.image.name ?? ""}
+            <Field label="Type">
+              <select
+                value={activeObject.modelDataUrl ? "bespoke" : activeObject.primitive}
+                onChange={(e) => setObjectType(e.target.value)}
+              >
+                <option value="none">None</option>
+                {PRIMITIVE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+                <option value="bespoke">Bespoke</option>
+              </select>
+            </Field>
+            <Field label="Surface">
+              <select
+                value={activeObject.surface ?? "image"}
+                onChange={(e) =>
+                  updateObject((o) => {
+                    o.surface = e.target.value as ObjectSurface;
+                  })
+                }
+              >
+                {SURFACE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {activeObject.surface !== "image" && (
+              <ColorRow
+                label="Surface colour"
+                value={activeObject.surfaceColor ?? "#878787"}
+                onChange={(v) =>
+                  updateObject((o) => {
+                    o.surfaceColor = v;
+                  })
+                }
               />
             )}
-          </div>
+            {activeObject.surface === "wireframe" && (
+              <Field label="Line weight">
+                <input
+                  className="scalar-slider"
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={activeObject.surfaceWireWidth ?? 1.5}
+                  style={
+                    {
+                      "--slider-pct": `${(((activeObject.surfaceWireWidth ?? 1.5) - 1) / 2) * 100}%`,
+                    } as CSSProperties
+                  }
+                  onChange={(e) =>
+                    updateObject((o) => {
+                      o.surfaceWireWidth = Number(e.target.value);
+                    })
+                  }
+                />
+              </Field>
+            )}
+            {activeObject.surface === "image" && (
+              <Field label="Mapping">
+                <select
+                  value={activeObject.mapping}
+                  onChange={(e) =>
+                    updateObject((o) => {
+                      o.mapping = e.target.value as Mapping;
+                    })
+                  }
+                >
+                  <option value="uv">UV</option>
+                  <option value="triplanar">Triplanar</option>
+                  <option value="spherical">Spherical</option>
+                  <option value="cylindrical">Cylindrical</option>
+                  <option value="reflection">Reflection</option>
+                </select>
+              </Field>
+            )}
+            {activeObject.surface === "image" &&
+              (activeObject.image.assetId ? (
+                <div className="lucky-img-cell">
+                  <button
+                    className="lucky-img-thumb"
+                    title="Replace image"
+                    onClick={loadImageFor}
+                  >
+                    <img
+                      src={assetUrl(activeObject.image.assetId) ?? undefined}
+                      alt={activeObject.image.name ?? ""}
+                    />
+                  </button>
+                  <button
+                    className="btn-icon"
+                    title="Remove image"
+                    onClick={clearImageFor}
+                  >
+                    <img src={deleteIcon} alt="remove" />
+                  </button>
+                </div>
+              ) : (
+                <button className="full important" onClick={loadImageFor}>
+                  Load image
+                </button>
+              ))}
+          </Section>
 
-          <Section title="Transform" className={objectAccentClass(activeObjectIndex)}>
+          <Section
+            title="Transform"
+            className={objectAccentClass(activeObjectIndex)}
+            style={accentStyle}
+          >
             <ScalarControl
               label="Rotate X"
               scalar={activeObject.rotX}
@@ -442,6 +623,7 @@ export function InspectorPanel({
               <Section
                 key={inst.instanceId}
                 className={objectAccentClass(activeObjectIndex)}
+                style={accentStyle}
                 title={def?.name ?? inst.defId}
                 right={
                   <div className="fx-row-controls">
