@@ -5,13 +5,12 @@ import { useStore } from "../state/store";
 import { defaultSecondObject } from "../state/defaults";
 import { engine } from "../engine/engineSingleton";
 import { KeyframeTrack, DurationField, ColorSwatch } from "./controls";
-import { accentVars, objectAccentColor, segmentAccentColor } from "./accent";
+import { accentVars, objectAccentColor } from "./accent";
 import { objectKeyframeChannels } from "./keyframeChannels";
 import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS } from "./objectOptions";
 import { bytesToDataUrl, mimeForName } from "./files";
 import { isAnimated } from "./scalarUtils";
 import {
-  objectAccentClass,
   totalDuration,
   type ObjectState,
   type ObjectSurface,
@@ -244,12 +243,10 @@ export function TimelinePanel(): JSX.Element {
                   return (
                     <div
                       key={seg.id}
-                      className={`segment ${isText ? "text id-text" : "break"} ${selectedSegmentId === seg.id ? "sel" : ""}`}
+                      className={`segment ${isText ? "text" : "break"} ${selectedSegmentId === seg.id ? "sel" : ""}`}
                       style={{
                         left: pct(starts[i]),
                         width: pct(seg.durationSec),
-                        // Text cards take their accent from the card background.
-                        ...(isText ? accentVars(segmentAccentColor(seg)) : {}),
                       }}
                       // Break (non-text) segments aren't editable as such, so
                       // they don't open the inspector; only text segments select.
@@ -343,8 +340,8 @@ export function TimelinePanel(): JSX.Element {
               {project.objects.map((obj, index) => (
                 <div
                   key={index}
-                  className={`segment object ${index === 0 ? "object-a" : "object-2 " + objectAccentClass(index)} ${objectActive && selectedObjectIndex === index ? "sel" : ""}`}
-                  style={accentVars(objectAccentColor(project, obj))}
+                  className={`segment object accented ${objectActive && selectedObjectIndex === index ? "sel" : ""}`}
+                  style={accentVars(objectAccentColor(project, obj, index))}
                   onClick={() => selectObjectOnly(index)}
                 >
                   <div className="object-head">

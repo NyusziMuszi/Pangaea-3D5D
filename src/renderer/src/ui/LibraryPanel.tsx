@@ -13,7 +13,8 @@ import { makeThumbnailUrl, mimeForName } from "./files";
 import { registerAsset } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
 import { engine } from "../engine/engineSingleton";
-import { Section, Field, ColorSwatch } from "./controls";
+import { Section, Field, ColorSwatch, tickGradient } from "./controls";
+import { LockPanel } from "./LockPanel";
 import cancelIcon from "@assets/cancel.svg";
 
 const MAX_COLORS = 12;
@@ -44,6 +45,8 @@ export function LibraryPanel({
   const setToast = useStore((s) => s.setToast);
   const setProject = useStore((s) => s.setProject);
   const openShaderEditor = useStore((s) => s.openShaderEditor);
+  const hasGenerated = useStore((s) => s.hasGenerated);
+  const setHasGenerated = useStore((s) => s.setHasGenerated);
 
   const lucky = project.lucky;
   const [generating, setGenerating] = useState(false);
@@ -149,7 +152,10 @@ export function LibraryPanel({
         {
           objectCounts: lucky.objectCounts,
           colorSchemes: lucky.colorSchemes,
+          blendModes: lucky.blendModes,
+          textBackdrops: lucky.textBackdrops,
           animation: lucky.animation,
+          locks: lucky.locks,
         },
       );
       // New identity re-syncs the engine via App.tsx's useEffect([project]).
@@ -159,6 +165,7 @@ export function LibraryPanel({
       // would resume there; seekTo(0) moves the real clock and fires
       // onTick -> setPlayhead so the new scene always starts from the beginning.
       engine.seekTo(0);
+      setHasGenerated(true);
     } finally {
       setGenerating(false);
     }
@@ -393,12 +400,12 @@ export function LibraryPanel({
                 ))}
               </div>
 
-              <div className="subhead">Colour scheme</div>
+              <div className="subhead">Colour Rhythm</div>
               <div className="lucky-radio-group">
                 {(
                   [
-                    ["byType", "Background"],
-                    ["byPair", "Pair"],
+                    ["byType", "~ + ~ + ~ +"],
+                    ["byPair", "~ ~ + + x x"],
                     ["random", "Random"],
                   ] as const
                 ).map(([v, label]) => (
@@ -421,17 +428,75 @@ export function LibraryPanel({
                 ))}
               </div>
 
+              <div className="subhead">Blend</div>
+              <div className="lucky-radio-group">
+                {(
+                  [
+                    ["normal", "Normal"],
+                    ["invert", "Invert"],
+                    ["exclusion", "Exclusion"],
+                    ["multiply", "Multiply"],
+                    ["screen", "Screen"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <label className="lucky-radio" key={v}>
+                    <input
+                      type="checkbox"
+                      checked={lucky.blendModes.includes(v)}
+                      onChange={() =>
+                        update((p) => {
+                          p.lucky.blendModes = toggleExplore(
+                            p.lucky.blendModes,
+                            v,
+                            ["normal", "invert", "exclusion", "multiply", "screen"],
+                          );
+                        })
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="subhead">Text background</div>
+              <div className="lucky-radio-group">
+                {(
+                  [
+                    ["silhouette", "Silhouette"],
+                    ["wireframe", "Wireframe"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <label className="lucky-radio" key={v}>
+                    <input
+                      type="checkbox"
+                      checked={lucky.textBackdrops.includes(v)}
+                      onChange={() =>
+                        update((p) => {
+                          p.lucky.textBackdrops = toggleExplore(
+                            p.lucky.textBackdrops,
+                            v,
+                            ["silhouette", "wireframe"],
+                          );
+                        })
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+
               <div className="subhead">Animations</div>
               <input
                 className="scalar-slider"
                 type="range"
                 min={0}
                 max={1}
-                step={0.01}
+                step={1 / 6}
                 value={lucky.animation}
                 style={
                   {
                     ["--slider-pct" as string]: `${lucky.animation * 100}%`,
+                    ["--tick-gradient" as string]: tickGradient(0, 1, 1 / 6),
                   } as CSSProperties
                 }
                 onChange={(e) =>
@@ -497,9 +562,10 @@ export function LibraryPanel({
           </>
         )}
       </div>
-      <div className="library-collapse-tab">
+      {hasGenerated && !collapsed && <LockPanel />}
+      <div className="collapse-tab right">
         <button
-          className="btn-icon library-collapse-btn"
+          className="btn-icon collapse-btn"
           onClick={onToggleCollapse}
           title={collapsed ? "Expand library" : "Collapse library"}
           aria-label={collapsed ? "Expand library" : "Collapse library"}

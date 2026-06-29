@@ -4,6 +4,7 @@ import { engine } from "../engine/engineSingleton";
 import { totalDuration } from "../types";
 import { defaultFilename } from "../state/filename";
 import { exportVideo, type ExportProgress } from "../engine/export/exporter";
+import { Modal } from "./Modal";
 
 const QUALITY = {
   Standard: 10_000_000,
@@ -68,93 +69,94 @@ export function ExportDialog({
     : 0;
 
   return (
-    <div className="modal-backdrop" onClick={() => !busy && onClose()}>
-      <div className="modal export-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
+    <Modal
+      onClose={() => !busy && onClose()}
+      modalClassName="export-dialog"
+      head={
+        <>
           <h3>Export video</h3>
           <span className="spacer" />
-          <button onClick={onClose} disabled={busy}>
-            Close
+        </>
+      }
+      foot={
+        busy ? (
+          <button onClick={() => abortRef.current?.abort()}>Cancel</button>
+        ) : done ? (
+          <button className="important" onClick={onClose}>
+            Done
           </button>
-        </div>
-
-        <div className="export-body">
-          <label className="field">
-            <span className="field-label">Resolution</span>
-            <span className="readonly">
-              {project.output.width}×{project.output.height} (Instagram
-              portrait)
-            </span>
-          </label>
-          <label className="field">
-            <span className="field-label">Frame rate</span>
-            <select
-              value={fps}
-              onChange={(e) => setFps(parseInt(e.target.value, 10))}
-            >
-              <option value={24}>24 fps</option>
-              <option value={30}>30 fps</option>
-              <option value={60}>60 fps</option>
-            </select>
-          </label>
-          <label className="field">
-            <span className="field-label">Duration (s)</span>
-            <input
-              type="number"
-              min={0.5}
-              max={120}
-              step={0.5}
-              value={duration}
-              onChange={(e) => setDuration(parseFloat(e.target.value || "1"))}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Quality</span>
-            <select
-              value={quality}
-              onChange={(e) =>
-                setQuality(e.target.value as keyof typeof QUALITY)
-              }
-            >
-              {Object.keys(QUALITY).map((q) => (
-                <option key={q} value={q}>
-                  {q}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="export-summary">
-            {Math.round(duration * fps)} frames · H.264 MP4
-          </div>
-
-          {busy && (
-            <div className="progress">
-              <div className="bar">
-                <div className="fill" style={{ width: `${pct}%` }} />
-              </div>
-              <span>
-                {pct}% ({progress?.frame ?? 0}/{progress?.totalFrames ?? 0})
-              </span>
-            </div>
-          )}
-          {status && <p className="status">{status}</p>}
-        </div>
-
-        <div className="modal-foot">
-          {busy ? (
-            <button onClick={() => abortRef.current?.abort()}>Cancel</button>
-          ) : done ? (
-            <button className="important" onClick={onClose}>
-              Done
-            </button>
-          ) : (
+        ) : (
+          <>
+            <button onClick={onClose}>Cancel</button>
             <button className="important" onClick={run}>
               Choose location & export
             </button>
-          )}
+          </>
+        )
+      }
+    >
+      <div className="export-body">
+        <label className="field">
+          <span className="field-label">Resolution</span>
+          <span className="readonly">
+            {project.output.width}×{project.output.height} (Instagram
+            portrait)
+          </span>
+        </label>
+        <label className="field">
+          <span className="field-label">Frame rate</span>
+          <select
+            value={fps}
+            onChange={(e) => setFps(parseInt(e.target.value, 10))}
+          >
+            <option value={24}>24 fps</option>
+            <option value={30}>30 fps</option>
+            <option value={60}>60 fps</option>
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label">Duration (s)</span>
+          <input
+            type="number"
+            min={0.5}
+            max={120}
+            step={0.5}
+            value={duration}
+            onChange={(e) => setDuration(parseFloat(e.target.value || "1"))}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Quality</span>
+          <select
+            value={quality}
+            onChange={(e) =>
+              setQuality(e.target.value as keyof typeof QUALITY)
+            }
+          >
+            {Object.keys(QUALITY).map((q) => (
+              <option key={q} value={q}>
+                {q}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="export-summary">
+          {Math.round(duration * fps)} frames · H.264 MP4
         </div>
+
+        {busy && (
+          <div className="progress">
+            <div className="bar">
+              <div className="fill" style={{ width: `${pct}%` }} />
+            </div>
+            <span>
+              {pct}% ({progress?.frame ?? 0}/{progress?.totalFrames ?? 0})
+            </span>
+          </div>
+        )}
+        {status && <p className="status">{status}</p>}
       </div>
-    </div>
+    </Modal>
   );
 }

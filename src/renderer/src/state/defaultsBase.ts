@@ -44,7 +44,7 @@ export const BASE_SECOND_OBJECT: ObjectState = {
   mapping: "uv",
   surface: "image",
   surfaceColor: "#878787",
-  surfaceWireWidth: 1.5,
+  surfaceWireWidth: 1,
   image: defaultObjectImage(),
   effects: [],
   rotX: constant(0),
@@ -72,7 +72,7 @@ export const BASE_PROJECT: Project = {
       mapping: "uv",
       surface: "image",
       surfaceColor: "#878787",
-      surfaceWireWidth: 1.5,
+      surfaceWireWidth: 1,
       image: defaultObjectImage(),
       effects: [],
       rotX: constant(0),
@@ -106,7 +106,7 @@ export const BASE_PROJECT: Project = {
         reveal: "fade",
         textBackdrop: "silhouette",
         textBackdropColor: "#64e36e",
-        textBackdropWireWidth: 1.5,
+        textBackdropWireWidth: 1,
       },
     },
     {
@@ -130,7 +130,7 @@ export const BASE_PROJECT: Project = {
         reveal: "fade",
         textBackdrop: "silhouette",
         textBackdropColor: "#6473e3",
-        textBackdropWireWidth: 1.5,
+        textBackdropWireWidth: 1,
       },
     },
     {
@@ -154,7 +154,7 @@ export const BASE_PROJECT: Project = {
         reveal: "fade",
         textBackdrop: "silhouette",
         textBackdropColor: "#64e36e",
-        textBackdropWireWidth: 1.5,
+        textBackdropWireWidth: 1,
       },
     },
   ],
@@ -162,8 +162,6 @@ export const BASE_PROJECT: Project = {
   lucky: {
     typeColors: ["#ffffff", "#000000"],
     surfaceColors: [
-      "#ffffff",
-      "#000000",
       "#878787",
       "#a3d6dc",
       "#6fec79",
@@ -175,6 +173,9 @@ export const BASE_PROJECT: Project = {
     images: [],
     objectCounts: [2],
     colorSchemes: ["byPair"],
+    blendModes: ["normal"],
+    textBackdrops: ["silhouette"],
     animation: 0.3,
+    locks: { colours: false, motion: false, effects: false, objects: false },
   },
 };

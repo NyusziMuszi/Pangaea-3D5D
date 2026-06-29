@@ -13,6 +13,7 @@ interface AppState {
   playing: boolean
   toast: string | null
   shaderError: string | null
+  hasGenerated: boolean
 
   setProject: (p: Project) => void
   update: (mutator: (p: Project) => void) => void
@@ -24,6 +25,7 @@ interface AppState {
   openShaderEditor: (effectDefId: string | null) => void
   setToast: (msg: string | null) => void
   setShaderError: (msg: string | null) => void
+  setHasGenerated: (v: boolean) => void
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -36,6 +38,7 @@ export const useStore = create<AppState>((set) => ({
   playing: false,
   toast: null,
   shaderError: null,
+  hasGenerated: false,
 
   setProject: (p) => set({ project: p }),
   update: (mutator) =>
@@ -51,7 +54,8 @@ export const useStore = create<AppState>((set) => ({
   selectObject: (index) => set({ selectedObjectIndex: index }),
   openShaderEditor: (effectDefId) => set({ shaderEditorEffectId: effectDefId }),
   setToast: (msg) => set({ toast: msg }),
-  setShaderError: (msg) => set({ shaderError: msg })
+  setShaderError: (msg) => set({ shaderError: msg }),
+  setHasGenerated: (v) => set({ hasGenerated: v })
 }))
 
 // The object index the inspector currently edits, clamped to a valid object

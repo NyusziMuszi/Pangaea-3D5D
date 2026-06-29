@@ -616,6 +616,14 @@ export class Engine {
   private slots: ObjectSlot[] = [];
   private overlay = new TextOverlay();
 
+  // Offscreen target for the text blend modes: holds a coverage mask of the
+  // silhouette alone (alpha 1 where the shape is drawn, 0 over the background),
+  // so the overlay shader can tell which glyph pixels sit over the shape and
+  // recombine only those with textBackdropColor — everywhere else the glyph
+  // keeps its plain textColor. Created lazily and resized to the current
+  // drawing buffer in ensureMaskRT().
+  private maskRT: THREE.WebGLRenderTarget | null = null;
+
   private project: Project | null = null;
 
   private placeholder: THREE.Texture;
@@ -816,6 +824,22 @@ export class Engine {
     );
   }
 
+  // Lazily create / resize the offscreen mask target used by the text blend
+  // modes. Matches the live drawing-buffer size (logical × renderScale).
+  // samples:4 anti-aliases the mask's edge to match the main canvas, so the
+  // blended/unblended halves of a glyph meet smoothly at the silhouette's
+  // boundary instead of with a jagged seam.
+  private ensureMaskRT(): THREE.WebGLRenderTarget {
+    const w = Math.max(1, Math.round(this.logicalWidth * this.renderScale));
+    const h = Math.max(1, Math.round(this.logicalHeight * this.renderScale));
+    if (!this.maskRT) {
+      this.maskRT = new THREE.WebGLRenderTarget(w, h, { samples: 4 });
+    } else if (this.maskRT.width !== w || this.maskRT.height !== h) {
+      this.maskRT.setSize(w, h);
+    }
+    return this.maskRT;
+  }
+
   // Change the interactive render-buffer scale (1 = full res). Re-renders the
   // current frame at the new resolution. Export forces this back to 1.
   setRenderScale(scale: number): void {
@@ -932,10 +956,38 @@ export class Engine {
         mix,
       );
     }
-    this.renderer.setClearColor(clearColor, 1);
-    this.renderer.clear();
     const overlayVisible =
       this.overlay.opacity > 0.001 && this.overlay.hasTexture;
+    // Shape-reactive blend (invert/exclusion/multiply/screen): only with a
+    // silhouette backdrop actually drawn (backdropActive) and once the glyphs
+    // are visible. The silhouette is a single flat fill (textBackdropColor),
+    // so rather than sampling the rendered scene, render just its coverage as
+    // an alpha mask — 1 where the shape is, 0 over the background — and let
+    // the overlay recombine textColor with textBackdropColor only where that
+    // mask says the glyph sits on the shape. Elsewhere the glyph stays plain.
+    const blendMode = tl.textCard?.style.textBlend ?? "normal";
+    const blendActive =
+      overlayVisible &&
+      backdropActive &&
+      tl.textCard?.style.textBackdrop === "silhouette" &&
+      blendMode !== "normal";
+    if (blendActive) {
+      const rt = this.ensureMaskRT();
+      this.renderer.setRenderTarget(rt);
+      this.renderer.setClearColor(0x000000, 0);
+      this.renderer.clear();
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.setRenderTarget(null);
+      this.overlay.setBlend(
+        blendMode,
+        rt.texture,
+        tl.textCard!.style.textBackdropColor,
+      );
+    } else {
+      this.overlay.setBlend("normal");
+    }
+    this.renderer.setClearColor(clearColor, 1);
+    this.renderer.clear();
     // Fade-in tail ("behind"): keep the scene's depth and depth-test the text
     // against it so *every* object — including transparent ones like the second
     // object — occludes the emerging glyphs. On-top cards clear depth first so
@@ -1048,6 +1100,7 @@ export class Engine {
 
   dispose(): void {
     this.pause();
+    this.maskRT?.dispose();
     this.renderer.dispose();
     this.clearTextCache();
   }

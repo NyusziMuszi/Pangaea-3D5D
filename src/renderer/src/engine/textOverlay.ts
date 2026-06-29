@@ -1,6 +1,17 @@
 import * as THREE from 'three'
-import type { TextStyle } from '../types'
+import type { TextBlendMode, TextStyle } from '../types'
 import { getTextCardFontFamily } from './fonts'
+
+// Maps TextBlendMode to the uBlendMode uniform the overlay shader switches on.
+// 0 ("normal") is never passed in — setBlend(mode) only takes a scene texture
+// for the other four, see Engine.renderFrame's invert/blend branch.
+const BLEND_MODE_INDEX: Record<TextBlendMode, number> = {
+  normal: 0,
+  invert: 1,
+  exclusion: 2,
+  multiply: 3,
+  screen: 4
+}
 
 // Render a full-frame colored text card to a 2D canvas at output resolution.
 // When transparentBg is true, the background fill is skipped so only the
@@ -83,7 +94,15 @@ export class TextOverlay {
         // Clip-space Z of the fullscreen quad. 0 = near (drawn on top); 1 = far
         // (drawn behind, so depth-tested scene geometry occludes it). See
         // setBehind().
-        uDepth: { value: 0 }
+        uDepth: { value: 0 },
+        // Blend mode (see setBlend): 0 = normal flat fill (default, ignores the
+        // next two uniforms); 1-4 select a formula below that recombines the
+        // glyph's own colour (uMap.rgb, i.e. textColor) with uShapeColor (the
+        // silhouette's flat fill) — but only where uMask says this pixel sits
+        // over the shape, not over the card background.
+        uBlendMode: { value: 0 },
+        uMask: { value: null },
+        uShapeColor: { value: new THREE.Vector3(0, 0, 0) }
       },
       vertexShader: `
         varying vec2 vUv;
@@ -92,11 +111,33 @@ export class TextOverlay {
       fragmentShader: `
         precision highp float;
         uniform sampler2D uMap;
+        uniform sampler2D uMask;
+        uniform vec3 uShapeColor;
         uniform float uOpacity;
+        uniform float uBlendMode;
         varying vec2 vUv;
         void main(){
           vec4 c = texture2D(uMap, vUv);
-          gl_FragColor = vec4(c.rgb, c.a * uOpacity);
+          vec3 text = c.rgb;
+          vec3 outc = text;
+          int mode = int(uBlendMode + 0.5);
+          if (mode != 0) {
+            // Mask alpha: 1 where the silhouette covers this pixel, 0 over the
+            // card background. mix() so the blended/plain halves of a glyph
+            // meet smoothly at the silhouette's anti-aliased edge.
+            float m = texture2D(uMask, vUv).a;
+            vec3 shape = uShapeColor;
+            vec3 blended = text;
+            if (mode == 1) blended = vec3(1.0) - shape;
+            else if (mode == 2) blended = shape + text - 2.0 * shape * text;
+            else if (mode == 3) blended = shape * text;
+            else if (mode == 4) blended = vec3(1.0) - (vec3(1.0) - shape) * (vec3(1.0) - text);
+            outc = mix(text, blended, m);
+          }
+          // Only the glyph's own alpha reaches the screen, so this quad
+          // alpha-blends over the already-drawn scene at the glyphs and leaves
+          // every non-glyph (alpha 0) pixel untouched.
+          gl_FragColor = vec4(outc, c.a * uOpacity);
         }`
     })
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material)
@@ -120,6 +161,32 @@ export class TextOverlay {
   setBehind(behind: boolean): void {
     this.material.depthTest = behind
     this.material.uniforms.uDepth.value = behind ? 1 : 0
+  }
+
+  // Blend mode: still a normal alpha-blended on-top overlay, but for any mode
+  // other than "normal" the glyphs recombine their own colour with
+  // shapeColorHex (the silhouette's flat fill) wherever `mask`'s alpha says
+  // the glyph sits over the shape, per BLEND_MODE_INDEX. Blending stays
+  // NormalBlending so only the glyph pixels touch the screen — the
+  // background is left exactly as the scene drew it.
+  setBlend(
+    mode: TextBlendMode,
+    mask: THREE.Texture | null = null,
+    shapeColorHex = '#000000'
+  ): void {
+    this.material.uniforms.uBlendMode.value = BLEND_MODE_INDEX[mode]
+    this.material.uniforms.uMask.value = mask
+    // Raw hex -> 0..1, no sRGB linearization — matches how textColor and
+    // textBackdropColor are already drawn (canvas fillStyle / hexToRgb01 in
+    // Engine.ts), so the blend reads consistently with both inputs' space.
+    let h = shapeColorHex.replace('#', '').trim()
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+    const n = parseInt(h.padEnd(6, '0').slice(0, 6), 16)
+    ;(this.material.uniforms.uShapeColor.value as THREE.Vector3).set(
+      ((n >> 16) & 255) / 255,
+      ((n >> 8) & 255) / 255,
+      (n & 255) / 255
+    )
   }
 
   get opacity(): number {

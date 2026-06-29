@@ -69,7 +69,7 @@
   --text: #e7e7ee;
 
   --text-btn: #e1e3e3;
-  --text-btn-hover: #a3d6dc;
+  --text-btn-hover: #ffffff;
   --text-section: #ffffff;
   --text-section-rule: #ffffff;
 
@@ -82,27 +82,13 @@
   --panel-active: #1f1f1f;
 
   --text-dim: #c2c2c2;
-  --accent: #a3d6dc;
-  --anim: #54ced5;
-  --accent-strong: #54ced5;
+  --accent: #cfcfcf;
+  --anim: #ffffff;
+  --accent-strong: #ffffff;
   --ok: #3b9e47;
   --err: #ff6b6b;
-  --slider-fill: #599399;
-  --slider-track: #bfd1d3;
-
-  --objectA-text: #997a59;
-  --objectA-border: #735a3e;
-  --objectA-hover: #aa8053;
-  --objectA-panel-highlight: #997a5926;
-
-  --objectB-text: #955999;
-  --objectB-border: #754678;
-  --objectB-hover: #b25fb8;
-  --objectB-panel-highlight: #9559992f;
-
-  --objectText-text-border: #599399; /* teal — used for the coloured label/title */
-  --objectText-highlight: #59939926; /* teal tint for the inspector header bg */
-  --objectText-hover: #a3d6dc; /* brighter teal — text block's hover/keyed accent */
+  --slider-fill: #7a7a7a;
+  --slider-track: #c8c8c8;
 }
 
 ::-webkit-scrollbar {
@@ -119,30 +105,13 @@
   background: var(--text-dim);
 }
 
-/* Block-identity colours. The three classes .object-a / .object-b / .id-text
-   are applied to the Library section, the timeline block, and the inspector
-   header so each block keeps the same accent across panels. These locally
-   override --text-section(-rule) — already consumed by section titles, segment
-   labels and the inspector title — so the colour cascades for free; hover
-   states use literal colours and keep working. */
-.object-a {
-  --text-section: var(--objectA-text);
-  --text-section-rule: var(--objectA-border);
-  --obj-highlight: var(--objectA-panel-highlight);
-  --obj-hover: var(--objectA-hover);
-}
-.object-b {
-  --text-section: var(--objectB-text);
-  --text-section-rule: var(--objectB-border);
-  --obj-highlight: var(--objectB-panel-highlight);
-  --obj-hover: var(--objectB-hover);
-}
-.id-text {
-  --text-section: var(--objectText-text-border);
-  --text-section-rule: var(--objectText-text-border);
-  --obj-highlight: var(--objectText-highlight);
-  --obj-hover: var(--objectText-hover);
-}
+/* Object-identity marker. Applied to an object's timeline block and its
+   inspector header/sections so it keeps the same accent across panels — only
+   an object's own colour is legitimate content to derive an accent from; text
+   segments stay neutral like the rest of the chrome. Carries no palette
+   itself — the colour ramp arrives inline via accentVars() at every site that
+   carries this class, overriding --text-section(-rule) etc. already consumed
+   by section titles, segment labels and the inspector title. */
 
 * {
   box-sizing: border-box;
@@ -252,6 +221,10 @@ button.btn-icon:active {
   transform: none;
   box-shadow: none;
 }
+.icon-75 {
+  width: 75%;
+  height: 75%;
+}
 button.btn-icon img {
   display: block;
   transition: filter var(--dur) var(--ease);
@@ -260,8 +233,9 @@ button.btn-icon img {
     hue-rotate(202deg) brightness(92%) contrast(93%);
 }
 button.btn-icon:hover img {
-  filter: brightness(0) saturate(100%) invert(54%) sepia(28%) saturate(521%)
-    hue-rotate(143deg) brightness(97%) contrast(86%);
+  /* Pure grey target (#cfcfcf, matches --accent) needs no hue-rotate — a
+     black silhouette inverted by the target's lightness gets there directly. */
+  filter: brightness(0) saturate(100%) invert(81%);
 }
 
 input,
@@ -314,8 +288,8 @@ input[type="number"]::-webkit-outer-spin-button {
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3);
-  background: var(--panel, #1e1e1e);
-  border: 1px solid var(--border, #3a3a3a);
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
@@ -392,13 +366,12 @@ textarea {
   cursor: pointer;
 }
 /* Square tab sitting just outside the panel, in line with the first
-   (Scene) section toggle. Same fill + border as the panels. */
-.library-collapse-tab {
+   (Scene) section toggle. Same fill + border as the panels. Shared by the
+   library (.right, overhangs the panel's right edge) and the inspector
+   (.left, overhangs the left edge) — same square chrome, mirrored side. */
+.collapse-tab {
   position: absolute;
   top: 2px;
-  left: calc(
-    100% - 1px
-  ); /* overlap the panel's right border into a single seam */
   width: 28px;
   height: 28px;
   display: flex;
@@ -408,19 +381,26 @@ textarea {
   border: 1px solid var(--border);
   z-index: var(--z-tab);
 }
+.collapse-tab.right {
+  left: calc(100% - 1px); /* overlap the panel's right border into a seam */
+}
+.collapse-tab.left {
+  right: calc(100% - 1px); /* overlap the panel's left border into a seam */
+}
 /* The chevron is an inline currentColor SVG, so recolor it via `color`
    (the shared .btn-icon hover filter only applies to <img> children). */
-button.library-collapse-btn {
+button.collapse-btn {
   cursor: pointer;
   color: var(--diamond);
 }
-button.library-collapse-btn:hover {
+button.collapse-btn:hover {
   color: var(--text-btn-hover);
 }
-.library-collapse-btn svg {
+.collapse-btn svg {
   transition: transform var(--dur) var(--ease);
 }
-.library-wrap.collapsed .library-collapse-btn svg {
+.library-wrap.collapsed .collapse-btn svg,
+.inspector-wrap.collapsed .collapse-btn svg {
   transform: rotate(180deg);
 }
 
@@ -445,6 +425,20 @@ button.library-collapse-btn:hover {
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-4);
+}
+.lock-panel {
+  position: absolute;
+  top: 40px; /* line up with the collapse tab */
+  left: calc(100% + 1px);
+  z-index: var(--z-badge);
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 .center {
   display: grid;
@@ -471,11 +465,11 @@ button.library-collapse-btn:hover {
   border-right: none;
   border-left: none;
 }
-/* When a block is selected its identity class (.object-a/.object-b/.id-text) is
-   set on the panel, carrying --obj-highlight. Layer that translucent tint over
-   the solid panel fill so the whole inspector takes the selected block's
-   highlight colour — the same tint the timeline segment fills with. */
-.panel.inspector:is(.object-a, .object-b, .id-text) {
+/* When a block is selected its identity class (.accented) is set on the panel,
+   carrying --obj-highlight. Layer that translucent tint over the solid panel
+   fill so the whole inspector takes the selected block's highlight colour —
+   the same tint the timeline segment fills with. */
+.panel.inspector.accented {
   background:
     linear-gradient(var(--obj-highlight), var(--obj-highlight)), var(--panel);
 }
@@ -486,8 +480,8 @@ button.library-collapse-btn:hover {
    default step, hover/focus the bright hover step, and keyframed/active state
    the emphasised "important" step. (--slider-track, the muted step, is set
    directly by accentVars so the groove follows the block too.) */
-.panel.inspector:is(.object-a, .object-b, .id-text),
-.tl-track-object .segment.object:is(.object-a, .object-b) {
+.panel.inspector.accented,
+.tl-track-object .segment.object.accented {
   --slider-fill: var(--text-section);
   --accent: var(--obj-hover);
   --anim: var(--accent-strong);
@@ -531,36 +525,6 @@ button.library-collapse-btn:hover {
 .inspector-wrap.collapsed > .panel.inspector {
   cursor: pointer;
 }
-/* Square tab sitting just outside the panel's left edge, mirroring the
-   library's tab. Same fill + border as the panels. */
-.inspector-collapse-tab {
-  position: absolute;
-  top: 2px;
-  right: calc(
-    100% - 1px
-  ); /* overlap the panel's left border into a single seam */
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  z-index: var(--z-tab);
-}
-button.inspector-collapse-btn {
-  cursor: pointer;
-  color: var(--diamond);
-}
-button.inspector-collapse-btn:hover {
-  color: var(--text-btn-hover);
-}
-.inspector-collapse-btn svg {
-  transition: transform var(--dur) var(--ease);
-}
-.inspector-wrap.collapsed .inspector-collapse-btn svg {
-  transform: rotate(180deg);
-}
 
 /* ---------- Sections / fields ---------- */
 .section {
@@ -570,19 +534,19 @@ button.inspector-collapse-btn:hover {
 .section:hover {
   background: var(--panel-active);
 }
-/* Object A / B sections carry the object's accent on their rule + title.
-   (These elements use literal colours, so set them explicitly rather than
-   relying on the --text-section cascade.) */
-.section:is(.object-a, .object-b, .id-text) {
+/* Accented sections carry the block's accent on their rule + title. (These
+   elements use literal colours, so set them explicitly rather than relying on
+   the --text-section cascade.) */
+.section.accented {
   border-top-color: var(--text-section);
 }
-.section:is(.object-a, .object-b, .id-text) .section-toggle {
+.section.accented .section-toggle {
   color: var(--text-section);
 }
-.section:is(.object-a, .object-b, .id-text) .section-toggle:hover {
+.section.accented .section-toggle:hover {
   color: var(--obj-hover);
 }
-.section:is(.object-a, .object-b, .id-text):has(.section-toggle:hover) {
+.section.accented:has(.section-toggle:hover) {
   border-top-color: var(--obj-hover);
 }
 .section-head {
@@ -668,6 +632,9 @@ button.inspector-collapse-btn:hover {
   gap: var(--space-3);
   flex: 1;
 }
+.checkbox-inline-label {
+  margin-right: var(--space-5);
+}
 .field select,
 .field input[type="number"],
 .field textarea {
@@ -738,9 +705,6 @@ button.inspector-collapse-btn:hover {
 .canvas-frame.draggable:active {
   cursor: grabbing;
 }
-.play {
-  width: 34px;
-}
 .scrub {
   /* Match the segment track width exactly so the scrub bar lines up with the
      object segments, keyframes, and playhead on the shared time scale. */
@@ -783,6 +747,10 @@ button.inspector-collapse-btn:hover {
   border-radius: var(--radius-round);
   background: var(--text-section);
   border: 1px solid var(--border);
+  transition: border-radius var(--dur) var(--ease);
+}
+.tl-play:hover {
+  border-radius: var(--radius-xs);
 }
 .tl-play .play {
   width: 100%;
@@ -797,8 +765,8 @@ button.inspector-collapse-btn:hover {
   filter: invert(1);
   transition: filter 0.15s ease;
 }
-.tl-play:hover .play img {
-  filter: invert(0);
+.tl-play .play:hover img {
+  filter: invert(1);
 }
 .timeline-section {
   flex: 1;
@@ -940,7 +908,7 @@ button.inspector-collapse-btn:hover {
 /* Text + gap segments lay out as a wrapping row: label on the left, duration
    pushed to the right. When there isn't room for both side by side, the input
    wraps onto its own line below (still right-aligned). */
-.segment.id-text,
+.segment.text,
 .segment.break {
   display: flex;
   flex-wrap: wrap;
@@ -948,7 +916,7 @@ button.inspector-collapse-btn:hover {
   align-content: flex-start;
   gap: var(--space-1) var(--space-3);
 }
-.segment.id-text .tl-dur-input,
+.segment.text .tl-dur-input,
 .segment.break .tl-dur-input {
   width: 52px;
   flex: 0 0 auto;
@@ -1061,11 +1029,13 @@ button.inspector-collapse-btn:hover {
 .scalar-slider::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: var(--radius-xs);
-  background: linear-gradient(
-    to right,
-    var(--slider-fill) var(--slider-pct, 0%),
-    var(--slider-track) var(--slider-pct, 0%)
-  );
+  background-image:
+    var(--tick-gradient, none),
+    linear-gradient(
+      to right,
+      var(--slider-fill) var(--slider-pct, 0%),
+      var(--slider-track) var(--slider-pct, 0%)
+    );
 }
 .scrub::-webkit-slider-thumb,
 .scalar-slider::-webkit-slider-thumb {
@@ -1129,7 +1099,7 @@ button.inspector-collapse-btn:hover {
   margin-left: 84px;
   margin-right: 24px;
   border-bottom: 2px dotted;
-  border-color: #727272;
+  border-color: var(--slider-track);
 }
 /* Timeline keyframe strips live inside the full-width object block, so they
    drop the inspector-era left/right alignment margins. */
@@ -1229,6 +1199,7 @@ button.inspector-collapse-btn:hover {
   padding: var(--space-5) var(--space-6); /* snap 10→12, 14→16 */
   border-top: 1px solid var(--border);
   display: flex;
+  gap: var(--space-3);
   justify-content: flex-end;
 }
 

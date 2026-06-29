@@ -1,15 +1,15 @@
 // Derives a block's identity accent (the CSS custom properties consumed by the
-// .object-a / .object-b / .id-text classes) from a single base colour, so a
-// panel/segment can take its colour scheme straight from the content it edits:
-// an object's surface colour, or a text/segment background colour.
+// .accented marker class) from a single base colour, so a panel/segment can
+// take its colour scheme straight from the content it edits: an object's
+// surface colour, or a text/segment background colour.
 //
 // The base is mapped into a legible lightness band on the dark UI so very dark,
 // very light, or near-grey inputs still read as a clear accent while keeping
 // their hue and saturation. Returns inline styles to set on the element that
-// carries the identity class (the values override the class's fixed palette).
+// carries the identity class.
 
 import type { CSSProperties } from "react";
-import type { ObjectState, Project, Segment } from "../types";
+import type { ObjectState, Project } from "../types";
 
 const clamp = (v: number, lo: number, hi: number): number =>
   Math.min(hi, Math.max(lo, v));
@@ -130,19 +130,23 @@ export function accentVars(baseHex: string): CSSProperties {
   } as CSSProperties;
 }
 
-// The base colour an object's accent is drawn from: its surface colour when the
-// surface is a solid (silhouette/wireframe/faceted), otherwise — an image
-// surface has no single colour — the scene's background (first break's colour).
-export function objectAccentColor(project: Project, obj: ObjectState): string {
-  const surface = obj.surface ?? "image";
-  if (surface !== "image") return obj.surfaceColor || "#878787";
-  const firstAnim = project.segments.find((s) => s.kind === "animation");
-  return firstAnim?.backgroundColor || "#281b6c";
+// Fixed per-object identity hues, used when an object has no colour of its own
+// (an image surface) — so each object still reads as a distinct accent. Cycles
+// if there are more objects than hues.
+const IDENTITY_HUES = ["#997a59", "#955999", "#599399", "#5a7da0", "#a06a5a"];
+export function identityHue(index: number): string {
+  return IDENTITY_HUES[index % IDENTITY_HUES.length];
 }
 
-// The base colour a segment's accent is drawn from: a text card's background,
-// or a break's clear colour.
-export function segmentAccentColor(seg: Segment): string {
-  if (seg.kind === "text" && seg.text) return seg.text.backgroundColor;
-  return seg.backgroundColor || "#281b6c";
+// The base colour an object's accent is drawn from: its surface colour when the
+// surface is a solid (silhouette/wireframe/faceted), otherwise — an image
+// surface has no single colour of its own — a fixed per-object identity hue.
+export function objectAccentColor(
+  project: Project,
+  obj: ObjectState,
+  index: number,
+): string {
+  const surface = obj.surface ?? "image";
+  if (surface !== "image") return obj.surfaceColor || "#878787";
+  return identityHue(index);
 }

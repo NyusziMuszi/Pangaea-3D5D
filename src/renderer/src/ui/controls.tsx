@@ -111,6 +111,34 @@ export function DurationField({
   return wrapInField ? <Field label="Duration">{input}</Field> : input;
 }
 
+// Tick marks for a range slider with a small, fixed number of stops (e.g.
+// line weight, 1-3 step 0.1). Returns a CSS gradient — assign it to the
+// `--tick-gradient` custom property on the `<input>` — that gets layered
+// into `.scalar-slider`'s own `::-webkit-slider-runnable-track` background
+// (styles.css). Baking ticks into the track itself (rather than an overlay
+// element) means the native thumb, which paints after the track within the
+// same atomic input, always renders on top of them — an overlay sibling div
+// can't be stacked between a single input's own track and thumb.
+export function tickGradient(
+  min: number,
+  max: number,
+  step: number,
+  thumbSize = 14,
+): string {
+  const count = Math.round((max - min) / step) + 1;
+  const stops: string[] = [];
+  // Skip the first/last tick — they sit at the thumb's travel limits, where
+  // the thumb itself already marks the position.
+  for (let i = 1; i < count - 1; i++) {
+    const pos = `${thumbSize / 2}px + ${i} / ${count - 1} * (100% - ${thumbSize}px)`;
+    stops.push(`transparent calc(${pos} - 0.75px)`);
+    stops.push(`var(--border) calc(${pos} - 0.75px)`);
+    stops.push(`var(--border) calc(${pos} + 0.75px)`);
+    stops.push(`transparent calc(${pos} + 0.75px)`);
+  }
+  return `linear-gradient(to right, ${stops.join(", ")})`;
+}
+
 // Memoized: with a stable `onChange` this skips re-rendering when an unrelated
 // part of the project changes (it still re-renders on playhead change, which it
 // subscribes to directly).

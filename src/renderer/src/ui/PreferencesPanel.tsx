@@ -14,9 +14,11 @@ import {
   type Scalar,
   type SegmentKind,
   type TextBackdrop,
+  type TextBlendMode,
   type TextStyle,
 } from "../types";
 import { Section, Field, ColorSwatch } from "./controls";
+import { Modal } from "./Modal";
 import { setCustomTextCardFont, revertTextCardFont } from "../engine/fonts";
 import { bytesToDataUrl } from "./files";
 
@@ -332,14 +334,29 @@ export function PreferencesPanel({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal prefs-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
+    <Modal
+      onClose={onClose}
+      modalClassName="prefs-dialog"
+      footClassName="prefs-foot-spread"
+      head={
+        <>
           <h3>Preferences</h3>
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
-        </div>
-
+        </>
+      }
+      foot={
+        <>
+          <button className="secondary" onClick={resetFactory}>
+            Reset to factory defaults
+          </button>
+          <div className="prefs-row-add">
+            <button onClick={onClose}>Cancel</button>
+            <button className="important" onClick={save}>Save</button>
+          </div>
+        </>
+      }
+    >
         <div className="prefs-body">
           <p className="prefs-note">
             These set the defaults for <strong>new</strong> projects. Your
@@ -445,6 +462,11 @@ export function PreferencesPanel({
                         <ColorSwatch value={seg.text.textBackdropColor} onChange={(v) => mutateText(i, (t) => { t.textBackdropColor = v; })} />
                       </Field>
                     )}
+                    {seg.text.textBackdrop === "silhouette" && (
+                      <SelectField label="Blend over shape" value={seg.text.textBlend ?? "normal"}
+                        options={["normal", "invert", "exclusion", "multiply", "screen"] as const satisfies readonly TextBlendMode[]}
+                        onChange={(v) => mutateText(i, (t) => { t.textBlend = v; })} />
+                    )}
                     {seg.text.textBackdrop === "wireframe" && (
                       <NumField label="Line weight" value={seg.text.textBackdropWireWidth} step={0.1} min={1} max={3}
                         onChange={(v) => mutateText(i, (t) => { t.textBackdropWireWidth = v; })} />
@@ -515,7 +537,7 @@ export function PreferencesPanel({
             <Field label="Object counts">
               <span className="field-control">
                 {([1, 2] as const).map((n) => (
-                  <label key={n} style={{ marginRight: 12 }}>
+                  <label key={n} className="checkbox-inline-label">
                     <input
                       type="checkbox"
                       checked={draft.project.lucky.objectCounts.includes(n)}
@@ -533,7 +555,7 @@ export function PreferencesPanel({
             <Field label="Colour schemes">
               <span className="field-control">
                 {SCHEMES.map((s) => (
-                  <label key={s} style={{ marginRight: 12 }}>
+                  <label key={s} className="checkbox-inline-label">
                     <input
                       type="checkbox"
                       checked={draft.project.lucky.colorSchemes.includes(s)}
@@ -566,17 +588,6 @@ export function PreferencesPanel({
             </div>
           </Section>
         </div>
-
-        <div className="modal-foot prefs-foot-spread">
-          <button className="secondary" onClick={resetFactory}>
-            Reset to factory defaults
-          </button>
-          <div className="prefs-row-add">
-            <button onClick={onClose}>Cancel</button>
-            <button className="important" onClick={save}>Save</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -29,15 +29,17 @@
 import type {
   EffectDef,
   EffectInstance,
+  LuckLocks,
   Mapping,
   ObjectState,
   ObjectSurface,
   PrimitiveModel,
   Project,
   Scalar,
+  TextBlendMode,
   TextStyle,
 } from "../types";
-import { constant, totalDuration } from "../types";
+import { ALL_UNLOCKED, constant, totalDuration } from "../types";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import {
   defaultObjectImage,
@@ -166,7 +168,76 @@ function spreadKeys(
 export interface LuckyOptions {
   objectCounts: (1 | 2)[];
   colorSchemes: ("byType" | "byPair" | "random")[];
+  blendModes: TextBlendMode[];
+  textBackdrops: ("silhouette" | "wireframe")[];
   animation: number; // 0..1 overall animation amount
+  locks?: LuckLocks;
+}
+
+// Restore locked categories' values from `base` (the pre-generation project)
+// onto `next`, so a locked category survives a re-roll untouched. Sub-objects
+// copied across are structuredClone'd so `next` shares no references with
+// `base` (which is the live store project when called from the UI).
+//
+// Per-object copies (motion/effects/objects) are guarded on `base.objects[i]`
+// existing: when Objects is unlocked the generated object count may differ
+// from base, so indices beyond base just keep their freshly generated values.
+// Segment copies (colours) are always 1:1 — generateLuckyScene never changes
+// segment count or order.
+//
+// Fresnel tint lives in the effect instance's values, so it follows the
+// Effects lock, not Colours — no special-casing needed here.
+function applyLocks(base: Project, next: Project, locks: LuckLocks): void {
+  if (locks.objects) {
+    next.objects.forEach((o, i) => {
+      const b = base.objects[i];
+      if (!b) return;
+      o.primitive = b.primitive;
+      o.modelName = b.modelName;
+      o.modelDataUrl = b.modelDataUrl;
+      o.mapping = b.mapping;
+      o.surface = b.surface;
+      o.surfaceWireWidth = b.surfaceWireWidth;
+      o.image = structuredClone(b.image);
+    });
+  }
+  if (locks.motion) {
+    next.objects.forEach((o, i) => {
+      const b = base.objects[i];
+      if (!b) return;
+      o.rotX = structuredClone(b.rotX);
+      o.rotY = structuredClone(b.rotY);
+      o.rotZ = structuredClone(b.rotZ);
+      o.scale = structuredClone(b.scale);
+      o.posX = structuredClone(b.posX);
+      o.posY = structuredClone(b.posY);
+      o.posZ = structuredClone(b.posZ);
+    });
+  }
+  if (locks.effects) {
+    next.objects.forEach((o, i) => {
+      const b = base.objects[i];
+      if (!b) return;
+      o.effects = structuredClone(b.effects);
+    });
+  }
+  if (locks.colours) {
+    next.segments.forEach((seg, i) => {
+      const b = base.segments[i];
+      if (seg.kind === "animation") seg.backgroundColor = b.backgroundColor;
+      else if (seg.text && b.text) {
+        seg.text.textColor = b.text.textColor;
+        seg.text.backgroundColor = b.text.backgroundColor;
+        seg.text.textBackdropColor = b.text.textBackdropColor;
+        seg.text.textBackdrop = b.text.textBackdrop;
+        seg.text.textBlend = b.text.textBlend;
+      }
+    });
+    next.objects.forEach((o, i) => {
+      const b = base.objects[i];
+      if (b) o.surfaceColor = b.surfaceColor;
+    });
+  }
 }
 
 export function generateLuckyScene(
@@ -178,14 +249,25 @@ export function generateLuckyScene(
 ): Project {
   const anim = clamp(opts.animation, 0, 1);
   const effectCount = clamp(1 + Math.round(anim * 6), 1, 7);
-  // Pick one entry from each explored set (empty falls back to the full range).
-  const objectCount = pick(
-    opts.objectCounts.length ? opts.objectCounts : [1, 2],
-  );
+  const locks = opts.locks ?? ALL_UNLOCKED;
+  // Pin count when Objects locked, so per-object motion/effects/colour locks
+  // (which copy by matching index) always line up with base. Otherwise pick
+  // one entry from each explored set (empty falls back to the full range).
+  const objectCount = locks.objects
+    ? (clamp(base.objects.length, 1, 2) as 1 | 2)
+    : pick(opts.objectCounts.length ? opts.objectCounts : [1, 2]);
   const colorScheme = pick(
     opts.colorSchemes.length
       ? opts.colorSchemes
       : ["byType", "byPair", "random"],
+  );
+  const blendMode = pick<TextBlendMode>(
+    opts.blendModes.length
+      ? opts.blendModes
+      : ["normal", "invert", "exclusion", "multiply", "screen"],
+  );
+  const textBackdrop = pick<"silhouette" | "wireframe">(
+    opts.textBackdrops.length ? opts.textBackdrops : ["silhouette", "wireframe"],
   );
   const twoObjects = objectCount === 2;
   // No slider is ever worth more than 3 keyframes — even at the hottest setting.
@@ -212,6 +294,12 @@ export function generateLuckyScene(
   // room (5) so trios can differ; the single-type scheme stays tighter (4).
   const colorBudget = colorScheme === "byType" ? 4 : 5;
   const scenePalette = buildScenePalette(palette, colorBudget);
+  // buildScenePalette pads scenePalette with synthetic fallback colours
+  // (including #000000/#ffffff) to guarantee a light+dark side for text
+  // contrast. Those synthetics must never paint an object's flat surface
+  // (silhouette/wireframe/faceted) — pickSurfaceColor below draws only from
+  // this unpadded set, same reasoning as typePalette just above.
+  const realSurfacePalette = Array.from(new Set(palette));
   // The type palette only ever supplies a single text colour per card, so it
   // needs no budget and no padding. Pass the user's distinct type colours
   // through unchanged — buildScenePalette would inject undefined fallback
@@ -330,6 +418,16 @@ export function generateLuckyScene(
     }
   }
 
+  // One backdrop style + blend per generation, applied to every text card.
+  // textBlend only visibly matters when textBackdrop is "silhouette" (see
+  // types.ts), but setting it unconditionally keeps the field consistent if
+  // the card's backdrop is later switched to silhouette by hand.
+  for (const seg of next.segments) {
+    if (!seg.text) continue;
+    seg.text.textBackdrop = textBackdrop;
+    seg.text.textBlend = blendMode;
+  }
+
   // A silhouette object is drawn flat in its surfaceColor against the animation
   // background, so picking the same colour as a background it sits on makes the
   // object vanish. Collect the backgrounds in use and pick surface colours from
@@ -345,13 +443,13 @@ export function generateLuckyScene(
   // background colour, then allow a repeat — so a call always returns something.
   const usedSurfaceColors = new Set<string>();
   const pickSurfaceColor = (): string => {
-    const fresh = scenePalette.filter(
+    const fresh = realSurfacePalette.filter(
       (c) => !animBackgrounds.has(c) && !usedSurfaceColors.has(c),
     );
     const pool = fresh.length
       ? fresh
-      : scenePalette.filter((c) => !usedSurfaceColors.has(c));
-    const chosen = pick(pool.length ? pool : scenePalette);
+      : realSurfacePalette.filter((c) => !usedSurfaceColors.has(c));
+    const chosen = pick(pool.length ? pool : realSurfacePalette);
     usedSurfaceColors.add(chosen);
     return chosen;
   };
@@ -466,6 +564,8 @@ export function generateLuckyScene(
 
   // Keyframe exactly one effect's intensity so the scene always animates a fx.
   if (instances.length) keyframeIntensity(pick(instances));
+
+  applyLocks(base, next, locks);
 
   return next;
 }

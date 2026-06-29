@@ -92,6 +92,21 @@ export type TextBackdrop = "none" | "silhouette" | "wireframe";
 // surfaceColor and flat-shaded by a fixed light so its planes are visible.
 export type ObjectSurface = "image" | "silhouette" | "wireframe" | "faceted";
 
+// How the glyphs combine with whatever is beneath them (only applies when
+// textBackdrop is "silhouette"). "normal" is today's flat textColor fill;
+// the rest sample the rendered scene under each glyph and recombine it with
+// textColor per-pixel:
+//   invert:     1 - scene                  (photo-negative)
+//   exclusion:  scene + text - 2*scene*text (softer negative, keeps some hue)
+//   multiply:   scene * text                (darkens, tints toward textColor)
+//   screen:     1 - (1-scene)*(1-text)      (lightens, tints toward textColor)
+export type TextBlendMode =
+  | "normal"
+  | "invert"
+  | "exclusion"
+  | "multiply"
+  | "screen";
+
 export interface TextStyle {
   content: string;
   fontSize: number;
@@ -102,6 +117,8 @@ export interface TextStyle {
   textBackdrop: TextBackdrop;
   textBackdropColor: string;
   textBackdropWireWidth: number; // wireframe line weight, ~screen px
+  // Optional so older .pangaea files load (undefined = "normal").
+  textBlend?: TextBlendMode;
 }
 
 export type SegmentKind = "animation" | "text";
@@ -184,9 +201,23 @@ export interface Project {
     images: string[];
     objectCounts: (1 | 2)[];
     colorSchemes: ("byType" | "byPair" | "random")[];
+    blendModes: TextBlendMode[];
+    textBackdrops: ("silhouette" | "wireframe")[];
     animation: number; // 0..1 overall animation amount
+    // Per-category locks: when true, that category's values are restored from
+    // the pre-generation project after a "Feeling lucky" roll. Optional for
+    // back-compat with projects saved before this field existed.
+    locks?: { colours: boolean; motion: boolean; effects: boolean; objects: boolean };
   };
 }
+
+export type LuckLocks = NonNullable<Project["lucky"]["locks"]>;
+export const ALL_UNLOCKED: LuckLocks = {
+  colours: false,
+  motion: false,
+  effects: false,
+  objects: false,
+};
 
 export function totalDuration(p: Project): number {
   return p.segments.reduce((s, seg) => s + seg.durationSec, 0);
@@ -201,8 +232,3 @@ export function objectLabel(o: ObjectState): string {
   }
   return o.primitive.charAt(0).toUpperCase() + o.primitive.slice(1);
 }
-
-// CSS accent class for an object by index, so the per-object colour accent
-// stays consistent across panels.
-export const objectAccentClass = (index: number): string =>
-  index === 0 ? "object-a" : "object-b";

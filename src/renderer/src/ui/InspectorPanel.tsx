@@ -1,4 +1,7 @@
-import { activeObjectIndex as resolveActiveIndex, useStore } from "../state/store";
+import {
+  activeObjectIndex as resolveActiveIndex,
+  useStore,
+} from "../state/store";
 import arrowUpIcon from "../assets/arrow_drop_up_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
 import arrowDownIcon from "../assets/arrow_drop_down_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
 import closeIcon from "../assets/close_small_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
@@ -7,23 +10,24 @@ import deleteIcon from "../assets/cancel.svg";
 import { findEffectDef } from "../engine/effects/catalog";
 import {
   constant,
-  objectAccentClass,
   type Mapping,
   type ObjectState,
   type ObjectSurface,
   type PrimitiveModel,
   type Scalar,
   type TextBackdrop,
+  type TextBlendMode,
 } from "../types";
 import {
   Section,
   Field,
   ScalarControl,
+  tickGradient,
   ColorRow,
   DurationField,
 } from "./controls";
 import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS } from "./objectOptions";
-import { accentVars, objectAccentColor, segmentAccentColor } from "./accent";
+import { accentVars, objectAccentColor } from "./accent";
 import { defaultProject } from "../state/defaults";
 import { assetUrl, registerAsset } from "../state/assets";
 import { bytesToDataUrl, mimeForName } from "./files";
@@ -103,25 +107,19 @@ export function InspectorPanel({
   const activeObject: ObjectState | undefined =
     project.objects[activeObjectIndex];
 
-  // Identity class for the currently-edited block (text segment, or object A/B),
-  // applied to the whole panel so it carries that block's --obj-highlight tint —
-  // matching the highlight the selected timeline segment fills with. Empty when
+  // Identity marker for the currently-edited object, applied to the whole
+  // panel so it carries that object's --obj-highlight tint — matching the
+  // highlight the selected timeline segment fills with. Segments (text or
+  // break) stay neutral like the rest of the chrome — only an object's own
+  // colour is legitimate content to derive an accent from. Empty when
   // nothing is selected, so the panel stays untinted.
-  const panelAccentClass = segment
-    ? "id-text"
-    : activeObject
-      ? objectAccentClass(activeObjectIndex)
-      : "";
+  const panelAccentClass = activeObject ? "accented" : "";
 
-  // The accent colour scheme for the active block, taken from its content: a
-  // text segment's background, or an object's surface/scene colour. Set as
-  // inline CSS variables on the panel and each section so they override the
-  // identity class's fixed palette.
-  const accentStyle: CSSProperties | undefined = segment
-    ? accentVars(segmentAccentColor(segment))
-    : activeObject
-      ? accentVars(objectAccentColor(project, activeObject))
-      : undefined;
+  // The accent colour scheme for the active object: its surface/identity
+  // colour. Set as inline CSS variables on the panel and each section.
+  const accentStyle: CSSProperties | undefined = activeObject
+    ? accentVars(objectAccentColor(project, activeObject, activeObjectIndex))
+    : undefined;
 
   function updateObject(fn: (o: ObjectState) => void): void {
     update((p) => {
@@ -227,475 +225,533 @@ export function InspectorPanel({
         {!collapsed && (
           <>
             {segment && (
-        <>
-          {segment.kind === "text" && segment.text ? (
-            <>
-              <Section title="Message" className="id-text" style={accentStyle}>
-                <DurationField
-                  value={segment.durationSec}
-                  onChange={(v) =>
-                    update((p) => {
-                      const s = p.segments.find((x) => x.id === segment.id);
-                      if (s) s.durationSec = v;
-                    })
-                  }
-                />
-                <Field label="Message">
-                  <textarea
-                    rows={3}
-                    value={segment.text.content}
-                    onChange={(e) =>
-                      update((p) => {
-                        const s = p.segments.find((x) => x.id === segment.id);
-                        if (s?.text) s.text.content = e.target.value;
-                      })
-                    }
-                  />
-                </Field>
-                <Field label="Font size">
-                  <input
-                    type="number"
-                    min={20}
-                    max={300}
-                    value={segment.text.fontSize}
-                    onChange={(e) =>
-                      update((p) => {
-                        const s = p.segments.find((x) => x.id === segment.id);
-                        if (s?.text)
-                          s.text.fontSize = parseInt(
-                            e.target.value || "96",
-                            10,
-                          );
-                      })
-                    }
-                  />
-                </Field>
-                <Field label="Alignment">
-                  <select
-                    value={segment.text.align}
-                    onChange={(e) =>
-                      update((p) => {
-                        const s = p.segments.find((x) => x.id === segment.id);
-                        if (s?.text)
-                          s.text.align = e.target.value as
-                            | "left"
-                            | "center"
-                            | "right";
-                      })
-                    }
-                  >
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
-                  </select>
-                </Field>
-                <ColorRow
-                  label="Text colour"
-                  value={segment.text.textColor}
-                  onChange={(v) =>
-                    update((p) => {
-                      const s = p.segments.find((x) => x.id === segment.id);
-                      if (s?.text) s.text.textColor = v;
-                    })
-                  }
-                />
-              </Section>
-
-              <Section title="Background" className="id-text" style={accentStyle}>
-                <ColorRow
-                  label="Background colour"
-                  value={segment.text.backgroundColor}
-                  onChange={(v) =>
-                    update((p) => {
-                      const s = p.segments.find((x) => x.id === segment.id);
-                      if (s?.text) s.text.backgroundColor = v;
-                    })
-                  }
-                />
-                {segment.text.textBackdrop !== "none" && (
-                  <ColorRow
-                    label="Object colour"
-                    value={segment.text.textBackdropColor}
-                    onChange={(v) =>
-                      update((p) => {
-                        const s = p.segments.find((x) => x.id === segment.id);
-                        if (s?.text) s.text.textBackdropColor = v;
-                      })
-                    }
-                  />
-                )}
-                <Field label="Object styling">
-                  <select
-                    value={segment.text.textBackdrop}
-                    onChange={(e) =>
-                      update((p) => {
-                        const s = p.segments.find((x) => x.id === segment.id);
-                        if (s?.text)
-                          s.text.textBackdrop = e.target.value as TextBackdrop;
-                      })
-                    }
-                  >
-                    <option value="none">None</option>
-                    <option value="silhouette">Silhouette</option>
-                    <option value="wireframe">Wireframe</option>
-                  </select>
-                </Field>
-                {segment.text.textBackdrop === "wireframe" && (
-                  <Field label="Line weight">
-                    <input
-                      className="scalar-slider"
-                      type="range"
-                      min={1}
-                      max={3}
-                      step={0.1}
-                      value={segment.text.textBackdropWireWidth ?? 1.5}
-                      style={
-                        {
-                          ["--slider-pct" as string]: `${
-                            (((segment.text.textBackdropWireWidth ?? 1.5) - 1) /
-                              2) *
-                            100
-                          }%`,
-                        } as CSSProperties
-                      }
-                      onChange={(e) =>
-                        update((p) => {
-                          const s = p.segments.find((x) => x.id === segment.id);
-                          if (s?.text)
-                            s.text.textBackdropWireWidth = parseFloat(
-                              e.target.value || "1.5",
+              <>
+                {segment.kind === "text" && segment.text ? (
+                  <>
+                    <Section title="Text">
+                      <DurationField
+                        value={segment.durationSec}
+                        onChange={(v) =>
+                          update((p) => {
+                            const s = p.segments.find(
+                              (x) => x.id === segment.id,
                             );
-                        })
-                      }
-                    />
-                  </Field>
-                )}
-                <Field label="Reveal">
-                  <select
-                    value={segment.text.reveal}
-                    onChange={(e) =>
-                      update((p) => {
-                        const s = p.segments.find((x) => x.id === segment.id);
-                        if (s?.text)
-                          s.text.reveal = e.target.value as "fade" | "cut";
-                      })
-                    }
-                  >
-                    <option value="fade">Fade</option>
-                    <option value="cut">Cut</option>
-                  </select>
-                </Field>
-              </Section>
-            </>
-          ) : (
-            <Section title="None" className="id-text" style={accentStyle}>
-              <DurationField
-                value={segment.durationSec}
-                onChange={(v) =>
-                  update((p) => {
-                    const s = p.segments.find((x) => x.id === segment.id);
-                    if (s) s.durationSec = v;
-                  })
-                }
-              />
-              <ColorRow
-                label="Background colour"
-                value={segment.backgroundColor ?? "#281b6c"}
-                onChange={(v) =>
-                  update((p) => {
-                    const s = p.segments.find((x) => x.id === segment.id);
-                    if (s) s.backgroundColor = v;
-                  })
-                }
-              />
-            </Section>
-          )}
-        </>
-      )}
-
-      {!segment && !activeObject && (
-        <div className="inspector-empty hint">No object selected.</div>
-      )}
-
-      {!segment && activeObject && (
-        <>
-          <Section
-            title="Shape"
-            className={objectAccentClass(activeObjectIndex)}
-            style={accentStyle}
-          >
-            <Field label="Type">
-              <select
-                value={activeObject.modelDataUrl ? "bespoke" : activeObject.primitive}
-                onChange={(e) => setObjectType(e.target.value)}
-              >
-                <option value="none">None</option>
-                {PRIMITIVE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-                <option value="bespoke">Bespoke</option>
-              </select>
-            </Field>
-            <Field label="Surface">
-              <select
-                value={activeObject.surface ?? "image"}
-                onChange={(e) =>
-                  updateObject((o) => {
-                    o.surface = e.target.value as ObjectSurface;
-                  })
-                }
-              >
-                {SURFACE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {activeObject.surface !== "image" && (
-              <ColorRow
-                label="Surface colour"
-                value={activeObject.surfaceColor ?? "#878787"}
-                onChange={(v) =>
-                  updateObject((o) => {
-                    o.surfaceColor = v;
-                  })
-                }
-              />
-            )}
-            {activeObject.surface === "wireframe" && (
-              <Field label="Line weight">
-                <input
-                  className="scalar-slider"
-                  type="range"
-                  min={1}
-                  max={3}
-                  step={0.1}
-                  value={activeObject.surfaceWireWidth ?? 1.5}
-                  style={
-                    {
-                      "--slider-pct": `${(((activeObject.surfaceWireWidth ?? 1.5) - 1) / 2) * 100}%`,
-                    } as CSSProperties
-                  }
-                  onChange={(e) =>
-                    updateObject((o) => {
-                      o.surfaceWireWidth = Number(e.target.value);
-                    })
-                  }
-                />
-              </Field>
-            )}
-            {activeObject.surface === "image" && (
-              <Field label="Mapping">
-                <select
-                  value={activeObject.mapping}
-                  onChange={(e) =>
-                    updateObject((o) => {
-                      o.mapping = e.target.value as Mapping;
-                    })
-                  }
-                >
-                  <option value="uv">UV</option>
-                  <option value="triplanar">Triplanar</option>
-                  <option value="spherical">Spherical</option>
-                  <option value="cylindrical">Cylindrical</option>
-                  <option value="reflection">Reflection</option>
-                </select>
-              </Field>
-            )}
-            {activeObject.surface === "image" &&
-              (activeObject.image.assetId ? (
-                <div className="lucky-img-cell">
-                  <button
-                    className="lucky-img-thumb"
-                    title="Replace image"
-                    onClick={loadImageFor}
-                  >
-                    <img
-                      src={assetUrl(activeObject.image.assetId) ?? undefined}
-                      alt={activeObject.image.name ?? ""}
-                    />
-                  </button>
-                  <button
-                    className="btn-icon"
-                    title="Remove image"
-                    onClick={clearImageFor}
-                  >
-                    <img src={deleteIcon} alt="remove" />
-                  </button>
-                </div>
-              ) : (
-                <button className="full important" onClick={loadImageFor}>
-                  Load image
-                </button>
-              ))}
-          </Section>
-
-          <Section
-            title="Transform"
-            className={objectAccentClass(activeObjectIndex)}
-            style={accentStyle}
-          >
-            <ScalarControl
-              label="Rotate X"
-              scalar={activeObject.rotX}
-              min={-TAU}
-              max={TAU}
-              onChange={(s) =>
-                updateObject((o) => {
-                  o.rotX = s;
-                })
-              }
-            />
-            <ScalarControl
-              label="Rotate Y"
-              scalar={activeObject.rotY}
-              min={-TAU}
-              max={TAU}
-              onChange={(s) =>
-                updateObject((o) => {
-                  o.rotY = s;
-                })
-              }
-            />
-            <ScalarControl
-              label="Rotate Z"
-              scalar={activeObject.rotZ}
-              min={-TAU}
-              max={TAU}
-              onChange={(s) =>
-                updateObject((o) => {
-                  o.rotZ = s;
-                })
-              }
-            />
-            <ScalarControl
-              label="Scale"
-              scalar={activeObject.scale}
-              min={0.1}
-              max={4}
-              onChange={(s) =>
-                updateObject((o) => {
-                  o.scale = s;
-                })
-              }
-            />
-            <ScalarControl
-              label="Position X"
-              scalar={activeObject.posX ?? constant(0)}
-              min={-3}
-              max={3}
-              onChange={(s) =>
-                updateObject((o) => {
-                  o.posX = s;
-                })
-              }
-            />
-            <ScalarControl
-              label="Position Y"
-              scalar={activeObject.posY ?? constant(0)}
-              min={-3}
-              max={3}
-              onChange={(s) =>
-                updateObject((o) => {
-                  o.posY = s;
-                })
-              }
-            />
-            <ScalarControl
-              label="Position Z"
-              scalar={activeObject.posZ ?? constant(0)}
-              min={-3}
-              max={3}
-              onChange={(s) =>
-                updateObject((o) => {
-                  o.posZ = s;
-                })
-              }
-            />
-          </Section>
-
-          {activeObject.effects.map((inst, i) => {
-            const def = findEffectDef(inst.defId, project.customEffects);
-            return (
-              <Section
-                key={inst.instanceId}
-                className={objectAccentClass(activeObjectIndex)}
-                style={accentStyle}
-                title={def?.name ?? inst.defId}
-                right={
-                  <div className="fx-row-controls">
-                    {def && !def.builtin && (
-                      <button
-                        className="mini"
-                        onClick={() => openShaderEditor(def.id)}
-                      >
-                        Edit GLSL
-                      </button>
-                    )}
-                    <div className="fx-row-actions">
-                      <input
-                        type="checkbox"
-                        checked={inst.enabled}
-                        onChange={(e) =>
-                          toggleEffect(inst.instanceId, e.target.checked)
+                            if (s) s.durationSec = v;
+                          })
                         }
                       />
-                      <button
-                        className="btn-icon"
-                        onClick={() => moveEffect(i, -1)}
-                      >
-                        <img src={arrowUpIcon} alt="move up" />
-                      </button>
-                      <button
-                        className="btn-icon"
-                        onClick={() => moveEffect(i, 1)}
-                      >
-                        <img src={arrowDownIcon} alt="move down" />
-                      </button>
-                      <button
-                        className="btn-icon"
-                        onClick={() => deleteEffect(inst.instanceId)}
-                      >
-                        <img
-                          src={deleteIcon}
-                          alt="delete"
-                          style={{ width: "75%", height: "75%" }}
+                      <Field label="Message">
+                        <textarea
+                          rows={3}
+                          value={segment.text.content}
+                          onChange={(e) =>
+                            update((p) => {
+                              const s = p.segments.find(
+                                (x) => x.id === segment.id,
+                              );
+                              if (s?.text) s.text.content = e.target.value;
+                            })
+                          }
                         />
-                      </button>
-                    </div>
-                  </div>
-                }
-              >
-                {def?.description && <p className="hint">{def.description}</p>}
-                {def?.uniforms.map((u) => {
-                  const scalar: Scalar =
-                    inst.values[u.name] ?? constant(u.default);
-                  return (
-                    <ScalarControl
-                      key={u.name}
-                      label={u.label}
-                      scalar={scalar}
-                      min={u.min}
-                      max={u.max}
-                      onChange={(s) =>
-                        updateObject((o) => {
-                          const target = o.effects.find(
-                            (e) => e.instanceId === inst.instanceId,
-                          );
-                          if (target) target.values[u.name] = s;
+                      </Field>
+                      <Field label="Font size">
+                        <input
+                          type="number"
+                          min={20}
+                          max={300}
+                          value={segment.text.fontSize}
+                          onChange={(e) =>
+                            update((p) => {
+                              const s = p.segments.find(
+                                (x) => x.id === segment.id,
+                              );
+                              if (s?.text)
+                                s.text.fontSize = parseInt(
+                                  e.target.value || "96",
+                                  10,
+                                );
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Alignment">
+                        <select
+                          value={segment.text.align}
+                          onChange={(e) =>
+                            update((p) => {
+                              const s = p.segments.find(
+                                (x) => x.id === segment.id,
+                              );
+                              if (s?.text)
+                                s.text.align = e.target.value as
+                                  | "left"
+                                  | "center"
+                                  | "right";
+                            })
+                          }
+                        >
+                          <option value="left">Left</option>
+                          <option value="center">Center</option>
+                          <option value="right">Right</option>
+                        </select>
+                      </Field>
+                      <ColorRow
+                        label="Text colour"
+                        value={segment.text.textColor}
+                        onChange={(v) =>
+                          update((p) => {
+                            const s = p.segments.find(
+                              (x) => x.id === segment.id,
+                            );
+                            if (s?.text) s.text.textColor = v;
+                          })
+                        }
+                      />
+                    </Section>
+
+                    <Section title="Background">
+                      <ColorRow
+                        label="Background colour"
+                        value={segment.text.backgroundColor}
+                        onChange={(v) =>
+                          update((p) => {
+                            const s = p.segments.find(
+                              (x) => x.id === segment.id,
+                            );
+                            if (s?.text) s.text.backgroundColor = v;
+                          })
+                        }
+                      />
+                      {segment.text.textBackdrop !== "none" && (
+                        <ColorRow
+                          label="Object colour"
+                          value={segment.text.textBackdropColor}
+                          onChange={(v) =>
+                            update((p) => {
+                              const s = p.segments.find(
+                                (x) => x.id === segment.id,
+                              );
+                              if (s?.text) s.text.textBackdropColor = v;
+                            })
+                          }
+                        />
+                      )}
+                      <Field label="Object styling">
+                        <select
+                          value={segment.text.textBackdrop}
+                          onChange={(e) =>
+                            update((p) => {
+                              const s = p.segments.find(
+                                (x) => x.id === segment.id,
+                              );
+                              if (s?.text)
+                                s.text.textBackdrop = e.target
+                                  .value as TextBackdrop;
+                            })
+                          }
+                        >
+                          <option value="none">None</option>
+                          <option value="silhouette">Silhouette</option>
+                          <option value="wireframe">Wireframe</option>
+                        </select>
+                      </Field>
+                      {segment.text.textBackdrop === "silhouette" && (
+                        <Field label="Blend">
+                          <select
+                            value={segment.text.textBlend ?? "normal"}
+                            onChange={(e) =>
+                              update((p) => {
+                                const s = p.segments.find(
+                                  (x) => x.id === segment.id,
+                                );
+                                if (s?.text)
+                                  s.text.textBlend = e.target
+                                    .value as TextBlendMode;
+                              })
+                            }
+                          >
+                            <option value="normal">Normal</option>
+                            <option value="invert">Invert</option>
+                            <option value="exclusion">Exclusion</option>
+                            <option value="multiply">Multiply</option>
+                            <option value="screen">Screen</option>
+                          </select>
+                        </Field>
+                      )}
+                      {segment.text.textBackdrop === "wireframe" && (
+                        <Field label="Line weight">
+                          <input
+                            className="scalar-slider"
+                            type="range"
+                            min={1}
+                            max={3}
+                            step={0.1}
+                            value={segment.text.textBackdropWireWidth ?? 1.5}
+                            style={
+                              {
+                                ["--slider-pct" as string]: `${
+                                  (((segment.text.textBackdropWireWidth ??
+                                    1.5) -
+                                    1) /
+                                    2) *
+                                  100
+                                }%`,
+                                ["--tick-gradient" as string]: tickGradient(
+                                  1,
+                                  3,
+                                  0.1,
+                                ),
+                              } as CSSProperties
+                            }
+                            onChange={(e) =>
+                              update((p) => {
+                                const s = p.segments.find(
+                                  (x) => x.id === segment.id,
+                                );
+                                if (s?.text)
+                                  s.text.textBackdropWireWidth = parseFloat(
+                                    e.target.value || "1.5",
+                                  );
+                              })
+                            }
+                          />
+                        </Field>
+                      )}
+                      <Field label="Reveal">
+                        <select
+                          value={segment.text.reveal}
+                          onChange={(e) =>
+                            update((p) => {
+                              const s = p.segments.find(
+                                (x) => x.id === segment.id,
+                              );
+                              if (s?.text)
+                                s.text.reveal = e.target.value as
+                                  | "fade"
+                                  | "cut";
+                            })
+                          }
+                        >
+                          <option value="fade">Fade</option>
+                          <option value="cut">Cut</option>
+                        </select>
+                      </Field>
+                    </Section>
+                  </>
+                ) : (
+                  <Section title="None">
+                    <DurationField
+                      value={segment.durationSec}
+                      onChange={(v) =>
+                        update((p) => {
+                          const s = p.segments.find((x) => x.id === segment.id);
+                          if (s) s.durationSec = v;
                         })
                       }
                     />
+                    <ColorRow
+                      label="Background colour"
+                      value={segment.backgroundColor ?? "#281b6c"}
+                      onChange={(v) =>
+                        update((p) => {
+                          const s = p.segments.find((x) => x.id === segment.id);
+                          if (s) s.backgroundColor = v;
+                        })
+                      }
+                    />
+                  </Section>
+                )}
+              </>
+            )}
+
+            {!segment && !activeObject && (
+              <div className="inspector-empty hint">No object selected.</div>
+            )}
+
+            {!segment && activeObject && (
+              <>
+                <Section title="Shape" className="accented" style={accentStyle}>
+                  <Field label="Type">
+                    <select
+                      value={
+                        activeObject.modelDataUrl
+                          ? "bespoke"
+                          : activeObject.primitive
+                      }
+                      onChange={(e) => setObjectType(e.target.value)}
+                    >
+                      <option value="none">None</option>
+                      {PRIMITIVE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                      <option value="bespoke">Bespoke</option>
+                    </select>
+                  </Field>
+                  <Field label="Surface">
+                    <select
+                      value={activeObject.surface ?? "image"}
+                      onChange={(e) =>
+                        updateObject((o) => {
+                          o.surface = e.target.value as ObjectSurface;
+                        })
+                      }
+                    >
+                      {SURFACE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  {activeObject.surface !== "image" && (
+                    <ColorRow
+                      label="Surface colour"
+                      value={activeObject.surfaceColor ?? "#878787"}
+                      onChange={(v) =>
+                        updateObject((o) => {
+                          o.surfaceColor = v;
+                        })
+                      }
+                    />
+                  )}
+                  {activeObject.surface === "wireframe" && (
+                    <Field label="Line weight">
+                      <input
+                        className="scalar-slider"
+                        type="range"
+                        min={1}
+                        max={3}
+                        step={0.1}
+                        value={activeObject.surfaceWireWidth ?? 1.5}
+                        style={
+                          {
+                            "--slider-pct": `${(((activeObject.surfaceWireWidth ?? 1.5) - 1) / 2) * 100}%`,
+                            "--tick-gradient": tickGradient(1, 3, 0.1),
+                          } as CSSProperties
+                        }
+                        onChange={(e) =>
+                          updateObject((o) => {
+                            o.surfaceWireWidth = Number(e.target.value);
+                          })
+                        }
+                      />
+                    </Field>
+                  )}
+                  {activeObject.surface === "image" && (
+                    <Field label="Mapping">
+                      <select
+                        value={activeObject.mapping}
+                        onChange={(e) =>
+                          updateObject((o) => {
+                            o.mapping = e.target.value as Mapping;
+                          })
+                        }
+                      >
+                        <option value="uv">UV</option>
+                        <option value="triplanar">Triplanar</option>
+                        <option value="spherical">Spherical</option>
+                        <option value="cylindrical">Cylindrical</option>
+                        <option value="reflection">Reflection</option>
+                      </select>
+                    </Field>
+                  )}
+                  {activeObject.surface === "image" &&
+                    (activeObject.image.assetId ? (
+                      <div className="lucky-img-cell">
+                        <button
+                          className="lucky-img-thumb"
+                          title="Replace image"
+                          onClick={loadImageFor}
+                        >
+                          <img
+                            src={
+                              assetUrl(activeObject.image.assetId) ?? undefined
+                            }
+                            alt={activeObject.image.name ?? ""}
+                          />
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title="Remove image"
+                          onClick={clearImageFor}
+                        >
+                          <img src={deleteIcon} alt="remove" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button className="full important" onClick={loadImageFor}>
+                        Load image
+                      </button>
+                    ))}
+                </Section>
+
+                <Section
+                  title="Transform"
+                  className="accented"
+                  style={accentStyle}
+                >
+                  <ScalarControl
+                    label="Rotate X"
+                    scalar={activeObject.rotX}
+                    min={-TAU}
+                    max={TAU}
+                    onChange={(s) =>
+                      updateObject((o) => {
+                        o.rotX = s;
+                      })
+                    }
+                  />
+                  <ScalarControl
+                    label="Rotate Y"
+                    scalar={activeObject.rotY}
+                    min={-TAU}
+                    max={TAU}
+                    onChange={(s) =>
+                      updateObject((o) => {
+                        o.rotY = s;
+                      })
+                    }
+                  />
+                  <ScalarControl
+                    label="Rotate Z"
+                    scalar={activeObject.rotZ}
+                    min={-TAU}
+                    max={TAU}
+                    onChange={(s) =>
+                      updateObject((o) => {
+                        o.rotZ = s;
+                      })
+                    }
+                  />
+                  <ScalarControl
+                    label="Scale"
+                    scalar={activeObject.scale}
+                    min={0.1}
+                    max={4}
+                    onChange={(s) =>
+                      updateObject((o) => {
+                        o.scale = s;
+                      })
+                    }
+                  />
+                  <ScalarControl
+                    label="Position X"
+                    scalar={activeObject.posX ?? constant(0)}
+                    min={-3}
+                    max={3}
+                    onChange={(s) =>
+                      updateObject((o) => {
+                        o.posX = s;
+                      })
+                    }
+                  />
+                  <ScalarControl
+                    label="Position Y"
+                    scalar={activeObject.posY ?? constant(0)}
+                    min={-3}
+                    max={3}
+                    onChange={(s) =>
+                      updateObject((o) => {
+                        o.posY = s;
+                      })
+                    }
+                  />
+                  <ScalarControl
+                    label="Position Z"
+                    scalar={activeObject.posZ ?? constant(0)}
+                    min={-3}
+                    max={3}
+                    onChange={(s) =>
+                      updateObject((o) => {
+                        o.posZ = s;
+                      })
+                    }
+                  />
+                </Section>
+
+                {activeObject.effects.map((inst, i) => {
+                  const def = findEffectDef(inst.defId, project.customEffects);
+                  return (
+                    <Section
+                      key={inst.instanceId}
+                      className="accented"
+                      style={accentStyle}
+                      title={def?.name ?? inst.defId}
+                      right={
+                        <div className="fx-row-controls">
+                          {def && !def.builtin && (
+                            <button
+                              className="mini"
+                              onClick={() => openShaderEditor(def.id)}
+                            >
+                              Edit GLSL
+                            </button>
+                          )}
+                          <div className="fx-row-actions">
+                            <input
+                              type="checkbox"
+                              checked={inst.enabled}
+                              onChange={(e) =>
+                                toggleEffect(inst.instanceId, e.target.checked)
+                              }
+                            />
+                            <button
+                              className="btn-icon"
+                              onClick={() => moveEffect(i, -1)}
+                            >
+                              <img src={arrowUpIcon} alt="move up" />
+                            </button>
+                            <button
+                              className="btn-icon"
+                              onClick={() => moveEffect(i, 1)}
+                            >
+                              <img src={arrowDownIcon} alt="move down" />
+                            </button>
+                            <button
+                              className="btn-icon"
+                              onClick={() => deleteEffect(inst.instanceId)}
+                            >
+                              <img
+                                src={deleteIcon}
+                                alt="delete"
+                                className="icon-75"
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      }
+                    >
+                      {def?.description && (
+                        <p className="hint">{def.description}</p>
+                      )}
+                      {def?.uniforms.map((u) => {
+                        const scalar: Scalar =
+                          inst.values[u.name] ?? constant(u.default);
+                        return (
+                          <ScalarControl
+                            key={u.name}
+                            label={u.label}
+                            scalar={scalar}
+                            min={u.min}
+                            max={u.max}
+                            onChange={(s) =>
+                              updateObject((o) => {
+                                const target = o.effects.find(
+                                  (e) => e.instanceId === inst.instanceId,
+                                );
+                                if (target) target.values[u.name] = s;
+                              })
+                            }
+                          />
+                        );
+                      })}
+                    </Section>
                   );
                 })}
-              </Section>
-            );
-          })}
-        </>
-      )}
+              </>
+            )}
 
             <div className="inspector-footer">
               <button className="secondary" onClick={resetToDefault}>
@@ -705,9 +761,9 @@ export function InspectorPanel({
           </>
         )}
       </div>
-      <div className="inspector-collapse-tab">
+      <div className="collapse-tab left">
         <button
-          className="btn-icon inspector-collapse-btn"
+          className="btn-icon collapse-btn"
           onClick={onToggleCollapse}
           title={collapsed ? "Expand inspector" : "Collapse inspector"}
           aria-label={collapsed ? "Expand inspector" : "Collapse inspector"}
