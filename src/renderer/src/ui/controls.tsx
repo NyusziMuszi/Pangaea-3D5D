@@ -68,12 +68,16 @@ export function Section({
 export function Field({
   label,
   children,
+  stacked = false,
 }: {
   label: string;
   children: ReactNode;
+  // Label on its own line above the controls, which then flow in a row
+  // underneath. Used for wide multi-checkbox groups (Effects, Explore).
+  stacked?: boolean;
 }): JSX.Element {
   return (
-    <label className="field">
+    <label className={stacked ? "field field-stacked" : "field"}>
       <span className="field-label">{label}</span>
       <span className="field-control">{children}</span>
     </label>
@@ -105,7 +109,9 @@ export function DurationField({
       step={0.1}
       value={value}
       onClick={stopClickPropagation ? (e) => e.stopPropagation() : undefined}
-      onChange={(e) => onChange(Math.max(0.2, parseFloat(e.target.value || "1")))}
+      onChange={(e) =>
+        onChange(Math.max(0.2, parseFloat(e.target.value || "1")))
+      }
     />
   );
   return wrapInField ? <Field label="Duration">{input}</Field> : input;
@@ -231,7 +237,9 @@ export function KeyframeTrack({
   const total = totalDuration(project) || 1;
 
   const trackRef = useRef<HTMLDivElement | null>(null);
-  const [drag, setDrag] = useState<{ origT: number; curT: number } | null>(null);
+  const [drag, setDrag] = useState<{ origT: number; curT: number } | null>(
+    null,
+  );
   const dragRef = useRef<{ origT: number; curT: number } | null>(null);
   const movedRef = useRef(false);
   const suppressClickRef = useRef(false);
@@ -275,7 +283,9 @@ export function KeyframeTrack({
       window.removeEventListener("pointerup", onUp);
       if (movedRef.current && dragRef.current) {
         suppressClickRef.current = true;
-        onChange(moveKeyAt(scalar, dragRef.current.origT, dragRef.current.curT));
+        onChange(
+          moveKeyAt(scalar, dragRef.current.origT, dragRef.current.curT),
+        );
       }
       dragRef.current = null;
       setDrag(null);
@@ -380,11 +390,15 @@ export function ColorSwatch({
   onChange,
   className,
   title,
+  selected,
+  onShiftClick,
 }: {
   value: string;
   onChange: (v: string) => void;
   className?: string;
   title?: string;
+  selected?: boolean;
+  onShiftClick?: () => void;
 }): JSX.Element {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -393,10 +407,17 @@ export function ColorSwatch({
 
   // Anchor the popover to the swatch in viewport coordinates. It renders into a
   // portal (fixed position) so it isn't clipped by panels/segments that hide
-  // their overflow.
+  // their overflow. Flip above the swatch when there isn't enough space below.
   const openAt = (): void => {
     const r = btnRef.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + 6, left: r.left });
+    if (!r) return;
+    const estimatedPickerHeight = 260;
+    const spaceBelow = window.innerHeight - r.bottom;
+    const top =
+      spaceBelow < estimatedPickerHeight + 6
+        ? r.top - estimatedPickerHeight + 75
+        : r.bottom + 6;
+    setPos({ top, left: r.left });
   };
 
   const Ctor = (window as unknown as { EyeDropper?: EyeDropperCtor })
@@ -415,10 +436,7 @@ export function ColorSwatch({
     if (!open) return;
     const onDocPointer = (e: MouseEvent): void => {
       const t = e.target as Node;
-      if (
-        btnRef.current?.contains(t) ||
-        popRef.current?.contains(t)
-      ) {
+      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) {
         return;
       }
       setPos(null);
@@ -439,11 +457,19 @@ export function ColorSwatch({
       <button
         type="button"
         ref={btnRef}
-        className={"color-swatch-btn" + (className ? " " + className : "")}
+        className={
+          "color-swatch-btn" +
+          (className ? " " + className : "") +
+          (selected ? " selected" : "")
+        }
         title={title}
         style={{ background: value }}
         onClick={(e) => {
           e.stopPropagation();
+          if (e.shiftKey && onShiftClick) {
+            onShiftClick();
+            return;
+          }
           if (open) setPos(null);
           else openAt();
         }}

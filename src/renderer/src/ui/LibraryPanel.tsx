@@ -8,14 +8,17 @@ import {
 import { activeObjectIndex, useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import { instanceFromDef, uid } from "../state/defaults";
+import { getPrefs } from "../state/prefs";
 import type { EffectDef, ObjectState, CameraType } from "../types";
 import { makeThumbnailUrl, mimeForName } from "./files";
 import { registerAsset } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
 import { engine } from "../engine/engineSingleton";
 import { Section, Field, ColorSwatch, tickGradient } from "./controls";
+import { MAPPINGS } from "../state/taste";
 import { LockPanel } from "./LockPanel";
 import cancelIcon from "@assets/cancel.svg";
+import addIcon from "@assets/add_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 
 const MAX_COLORS = 12;
 const MAX_IMAGES = 10;
@@ -47,9 +50,18 @@ export function LibraryPanel({
   const openShaderEditor = useStore((s) => s.openShaderEditor);
   const hasGenerated = useStore((s) => s.hasGenerated);
   const setHasGenerated = useStore((s) => s.setHasGenerated);
+  const setLastLuckyColorScheme = useStore((s) => s.setLastLuckyColorScheme);
 
   const lucky = project.lucky;
   const [generating, setGenerating] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+
+  // The Animations slider has 7 discrete stops (step = 1/6). The browser snaps
+  // the thumb to the nearest stop, so the CSS fill must snap the same way —
+  // otherwise an off-grid default (e.g. 0.3) leaves the fill short of the thumb,
+  // showing a sliver of track just before the handle until the first drag.
+  const ANIM_STEP = 1 / 6;
+  const animPct = Math.round(lucky.animation / ANIM_STEP) * ANIM_STEP * 100;
 
   // lucky.images stores absolute file paths. The palette grid only ever shows a
   // small thumbnail, so we decode + downscale each path off the main thread into
@@ -144,7 +156,7 @@ export function LibraryPanel({
         if (id) assetIds.push(id);
         else setToast(`Skipped ${path.split(/[\\/]/).pop()}`);
       }
-      const next = generateLuckyScene(
+      const { project: next, colorScheme } = generateLuckyScene(
         project,
         lucky.surfaceColors,
         lucky.typeColors,
@@ -156,10 +168,14 @@ export function LibraryPanel({
           textBackdrops: lucky.textBackdrops,
           animation: lucky.animation,
           locks: lucky.locks,
+          enabledEffectIds: lucky.enabledEffectIds,
+          mappings: lucky.mappings,
+          tasteProfile: getPrefs().tasteProfile,
         },
       );
       // New identity re-syncs the engine via App.tsx's useEffect([project]).
       setProject(next);
+      setLastLuckyColorScheme(colorScheme);
       // Reset the engine's own clock, not just the store. setPlayhead alone
       // leaves the engine's internal playhead at the old timestamp, so playback
       // would resume there; seekTo(0) moves the real clock and fires
@@ -261,7 +277,67 @@ export function LibraryPanel({
       >
         {!collapsed && (
           <>
-            <Section title="Explore" className="lucky">
+            <Section
+              title="Explore"
+              className="lucky"
+              right={
+                <button
+                  className={`explore-info-btn${showInfo ? " active" : ""}`}
+                  title="About Explore"
+                  onClick={() => setShowInfo((v) => !v)}
+                >
+                  ⓘ
+                </button>
+              }
+            >
+              {showInfo && (
+                <div className="explore-info">
+                  <p className="prefs-note">
+                    Explore randomizes <strong>visuals only</strong> — object
+                    shapes, surfaces and transforms, effects, keyframes, and
+                    scene and text-card colours. Your timeline is preserved:
+                    segment count, durations, and text content stay exactly as
+                    they are. Every result is animated — scale, one rotation
+                    axis, and one effect&rsquo;s intensity are always keyframed.
+                  </p>
+                  <p className="prefs-note">
+                    Each generation draws one entry from your chosen options (an
+                    empty set falls back to all options):
+                  </p>
+                  <ul className="prefs-note prefs-rules">
+                    <li>
+                      <strong>Objects</strong> — If there are 2 objects, and
+                      images have been loaded into the palette, by default only
+                      one object is generated with an image.
+                    </li>
+                    <li>
+                      <strong>Colour Rhythm</strong> <em>~ + ~ + ~ +</em>:
+                      animation is treated as a continuous sequence with the
+                      message cards interrupting it. <em>~ ~ + + x x</em>: each
+                      animation belongs to a message. <em>Random</em>: every
+                      segment is coloured independently.
+                    </li>
+                    <li>
+                      <strong>Blend</strong> — how text glyphs composite over
+                      the object silhouette on text cards.
+                    </li>
+                    <li>
+                      <strong>Text background</strong> — whether text cards show
+                      the object as a silhouette, none or wireframe backdrop.
+                    </li>
+                    <li>
+                      <strong>Animations</strong> (0–1) — drives effect count,
+                      keyframe count, extra animated transforms, and rotation
+                      intensity.
+                    </li>
+                  </ul>
+                  <li>
+                    <strong>Colours</strong> — Every trio puts the background
+                    and silhouette on one lightness side and the text on the
+                    opposite side, so text always stays legible.
+                  </li>
+                </div>
+              )}
               <div className="subhead">Palette: Typography</div>
               <div className="swatch-list">
                 {lucky.typeColors.map((c, i) => (
@@ -287,19 +363,20 @@ export function LibraryPanel({
                     </button>
                   </div>
                 ))}
+                {lucky.typeColors.length < MAX_COLORS && (
+                  <button
+                    className="swatch-add-btn"
+                    title="Add colour"
+                    onClick={() =>
+                      update((p) => {
+                        p.lucky.typeColors.push("#a3d6dc");
+                      })
+                    }
+                  >
+                    <img src={addIcon} alt="add" />
+                  </button>
+                )}
               </div>
-              {lucky.typeColors.length < MAX_COLORS && (
-                <button
-                  className="full"
-                  onClick={() =>
-                    update((p) => {
-                      p.lucky.typeColors.push("#a3d6dc");
-                    })
-                  }
-                >
-                  Add colours
-                </button>
-              )}
               <div className="subhead">Palette: Surface</div>
               <div className="swatch-list">
                 {lucky.surfaceColors.map((c, i) => (
@@ -325,19 +402,20 @@ export function LibraryPanel({
                     </button>
                   </div>
                 ))}
+                {lucky.surfaceColors.length < MAX_COLORS && (
+                  <button
+                    className="swatch-add-btn"
+                    title="Add colour"
+                    onClick={() =>
+                      update((p) => {
+                        p.lucky.surfaceColors.push("#a3d6dc");
+                      })
+                    }
+                  >
+                    <img src={addIcon} alt="add" />
+                  </button>
+                )}
               </div>
-              {lucky.surfaceColors.length < MAX_COLORS && (
-                <button
-                  className="full"
-                  onClick={() =>
-                    update((p) => {
-                      p.lucky.surfaceColors.push("#a3d6dc");
-                    })
-                  }
-                >
-                  Add colours
-                </button>
-              )}
 
               <div className="subhead">Palette: Image</div>
               {lucky.images.length > 0 && (
@@ -371,6 +449,38 @@ export function LibraryPanel({
                 <button className="full default" onClick={addLuckyImage}>
                   Add images
                 </button>
+              )}
+
+              {lucky.images.length > 0 && (
+                <>
+                  <div className="subhead">Image mapping</div>
+                  <div className="lucky-radio-group">
+                    {MAPPINGS.map((v) => (
+                      <label className="lucky-radio" key={v}>
+                        <input
+                          type="checkbox"
+                          checked={
+                            !lucky.mappings || lucky.mappings.includes(v)
+                          }
+                          onChange={() =>
+                            update((p) => {
+                              p.lucky.mappings = toggleExplore(
+                                p.lucky.mappings ?? [...MAPPINGS],
+                                v,
+                                MAPPINGS,
+                              );
+                            })
+                          }
+                        />
+                        <span>
+                          {v === "uv"
+                            ? "UV"
+                            : v.charAt(0).toUpperCase() + v.slice(1)}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </>
               )}
 
               <div className="subhead">Objects</div>
@@ -428,36 +538,6 @@ export function LibraryPanel({
                 ))}
               </div>
 
-              <div className="subhead">Blend</div>
-              <div className="lucky-radio-group">
-                {(
-                  [
-                    ["normal", "Normal"],
-                    ["invert", "Invert"],
-                    ["exclusion", "Exclusion"],
-                    ["multiply", "Multiply"],
-                    ["screen", "Screen"],
-                  ] as const
-                ).map(([v, label]) => (
-                  <label className="lucky-radio" key={v}>
-                    <input
-                      type="checkbox"
-                      checked={lucky.blendModes.includes(v)}
-                      onChange={() =>
-                        update((p) => {
-                          p.lucky.blendModes = toggleExplore(
-                            p.lucky.blendModes,
-                            v,
-                            ["normal", "invert", "exclusion", "multiply", "screen"],
-                          );
-                        })
-                      }
-                    />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
-
               <div className="subhead">Text background</div>
               <div className="lucky-radio-group">
                 {(
@@ -485,18 +565,58 @@ export function LibraryPanel({
                 ))}
               </div>
 
+              <div className="subhead">Blend</div>
+              <div className="lucky-radio-group">
+                {(
+                  [
+                    ["normal", "Normal"],
+                    ["invert", "Invert"],
+                    ["exclusion", "Exclusion"],
+                    ["multiply", "Multiply"],
+                    ["screen", "Screen"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <label className="lucky-radio" key={v}>
+                    <input
+                      type="checkbox"
+                      checked={lucky.blendModes.includes(v)}
+                      onChange={() =>
+                        update((p) => {
+                          p.lucky.blendModes = toggleExplore(
+                            p.lucky.blendModes,
+                            v,
+                            [
+                              "normal",
+                              "invert",
+                              "exclusion",
+                              "multiply",
+                              "screen",
+                            ],
+                          );
+                        })
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+
               <div className="subhead">Animations</div>
               <input
                 className="scalar-slider"
                 type="range"
                 min={0}
                 max={1}
-                step={1 / 6}
+                step={ANIM_STEP}
                 value={lucky.animation}
                 style={
                   {
-                    ["--slider-pct" as string]: `${lucky.animation * 100}%`,
-                    ["--tick-gradient" as string]: tickGradient(0, 1, 1 / 6),
+                    ["--slider-pct" as string]: `${animPct}%`,
+                    ["--tick-gradient" as string]: tickGradient(
+                      0,
+                      1,
+                      ANIM_STEP,
+                    ),
                   } as CSSProperties
                 }
                 onChange={(e) =>
@@ -510,15 +630,43 @@ export function LibraryPanel({
                 <span>Many</span>
               </div>
 
-              <button
-                className="full important"
-                disabled={generating}
-                onClick={onGenerate}
-              >
-                Feeling lucky
-              </button>
+              <div className="lucky-actions">
+                <button
+                  className="full important"
+                  disabled={generating}
+                  onClick={onGenerate}
+                >
+                  Feeling lucky
+                </button>
+                <button
+                  className="secondary lucky-vote"
+                  title="More rolls like this"
+                  onClick={() => {
+                    getPrefs().recordLike(
+                      project,
+                      useStore.getState().lastLuckyColorScheme,
+                    );
+                    setToast("More like this");
+                  }}
+                >
+                  👍
+                </button>
+                <button
+                  className="secondary lucky-vote"
+                  title="Fewer rolls like this"
+                  onClick={() => {
+                    getPrefs().recordDislike(
+                      project,
+                      useStore.getState().lastLuckyColorScheme,
+                    );
+                    setToast("Less like this");
+                  }}
+                >
+                  👎
+                </button>
+              </div>
             </Section>
-            <Section title="Scene">
+            <Section title="Scene" defaultOpen={false}>
               <Field label="Camera">
                 <select
                   value={project.scene.cameraType}
@@ -534,7 +682,7 @@ export function LibraryPanel({
               </Field>
             </Section>
 
-            <Section title="Effects">
+            <Section title="Effects" defaultOpen={false}>
               <div className="catalog">
                 {allDefs.map((def) => (
                   <Fragment key={def.id}>

@@ -1,19 +1,21 @@
-import fontUrl from '@assets/parabole-mediumdisplay.otf?url'
+import fontUrl from '@assets/SpaceMono-Bold.ttf?url'
 
 // Family name used in canvas `ctx.font` strings for the text cards.
-export const TEXT_CARD_FONT_FAMILY = 'Parabole Medium Display'
+export const TEXT_CARD_FONT_FAMILY = 'Space Mono Bold'
 
 // Family the uploaded custom font is registered under, when one is set.
 export const CUSTOM_FONT_FAMILY = 'Pangaea Custom Card Font'
 
-// The family text cards currently draw with. Starts as the bundled Parabole and
-// flips to the custom family once a user font is loaded (and back on revert).
+// The family text cards currently draw with. Starts as the bundled Space Mono
+// Bold and flips to the custom family once a user font is loaded (and back on
+// revert).
 let activeFamily = TEXT_CARD_FONT_FAMILY
 
 let loadPromise: Promise<void> | null = null
 let loaded = false
 
-// Register the bundled Parabole OTF so the 2D canvas can draw text cards with it.
+// Register the bundled Space Mono Bold TTF so the 2D canvas can draw text cards
+// with it.
 // Idempotent: the FontFace is loaded and added to document.fonts exactly once.
 export function loadTextCardFont(): Promise<void> {
   if (loadPromise) return loadPromise
@@ -52,8 +54,8 @@ export async function setCustomTextCardFont(dataUrl: string): Promise<void> {
   activeFamily = CUSTOM_FONT_FAMILY
 }
 
-// Switch back to the bundled Parabole family (the registered custom face is left
-// in document.fonts; it's simply no longer referenced).
+// Switch back to the bundled Space Mono Bold family (the registered custom face
+// is left in document.fonts; it's simply no longer referenced).
 export function revertTextCardFont(): void {
   activeFamily = TEXT_CARD_FONT_FAMILY
 }

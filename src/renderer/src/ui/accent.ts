@@ -44,7 +44,7 @@ function rgbToHsl(
     s = d / (1 - Math.abs(2 * l - 1));
     switch (max) {
       case r:
-        h = (((g - b) / d) % 6 + 6) % 6;
+        h = ((((g - b) / d) % 6) + 6) % 6;
         break;
       case g:
         h = (b - r) / d + 2;
@@ -84,10 +84,7 @@ function hslToRgb(
 
 function hslToHex(h: number, s: number, l: number): string {
   const { r, g, b } = hslToRgb(h, s, l);
-  return (
-    "#" +
-    [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")
-  );
+  return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
 }
 
 // Pull a saturation into a legible range. Hue is always kept, but a very
@@ -113,13 +110,13 @@ export function accentVars(baseHex: string): CSSProperties {
   const { r, g, b } = hexToRgb(baseHex);
   const { h, s, l } = rgbToHsl(r, g, b);
   const mainS = legibleSaturation(s);
-  const mainL = clamp(l, 0.5, 0.72);
+  const mainL = clamp(l, 0.55, 0.72);
   const main = hslToHex(h, mainS, mainL);
   const rule = hslToHex(h, mainS, clamp(mainL - 0.12, 0.32, 0.66));
   const muted = hslToHex(h, mainS, clamp(mainL - 0.16, 0.28, 0.44));
   const important = hslToHex(h, mainS, clamp(mainL + 0.08, 0.56, 0.8));
   const hover = hslToHex(h, mainS, clamp(mainL + 0.16, 0.62, 0.88));
-  const hl = hslToRgb(h, mainS, mainL);
+  const hl = hslToRgb(h, mainS, Math.max(mainL, 0.7));
   return {
     ["--text-section" as string]: main,
     ["--text-section-rule" as string]: rule,

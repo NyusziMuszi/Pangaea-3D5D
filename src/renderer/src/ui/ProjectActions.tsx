@@ -1,5 +1,6 @@
 import { useStore } from "../state/store";
 import { defaultProject } from "../state/defaults";
+import { getPrefs } from "../state/prefs";
 import type { Project } from "../types";
 import { defaultFilename } from "../state/filename";
 import {
@@ -60,6 +61,7 @@ export function ProjectActions({
     const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
     await window.api.writeFile(path, bytes);
     setToast("Project saved");
+    getPrefs().recordSave(project, useStore.getState().lastLuckyColorScheme);
   }
 
   async function open(): Promise<void> {

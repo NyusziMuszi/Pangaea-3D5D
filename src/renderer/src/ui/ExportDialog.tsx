@@ -4,6 +4,7 @@ import { engine } from "../engine/engineSingleton";
 import { totalDuration } from "../types";
 import { defaultFilename } from "../state/filename";
 import { exportVideo, type ExportProgress } from "../engine/export/exporter";
+import { getPrefs } from "../state/prefs";
 import { Modal } from "./Modal";
 
 const QUALITY = {
@@ -52,6 +53,7 @@ export function ExportDialog({
       );
       setStatus(`Done — exported with ${encoder}. Saved to ${path}`);
       setDone(true);
+      getPrefs().recordExport(project, useStore.getState().lastLuckyColorScheme);
     } catch (e) {
       if ((e as DOMException)?.name === "AbortError") setStatus("Cancelled.");
       else setStatus(`Export failed: ${(e as Error).message}`);

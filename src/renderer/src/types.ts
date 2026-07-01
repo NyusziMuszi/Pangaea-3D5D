@@ -67,6 +67,8 @@ export interface EffectInstance {
 
 export type CameraType = "perspective" | "isometric";
 export type Mapping = "uv" | "triplanar" | "spherical" | "cylindrical" | "reflection";
+// How colour trios are dealt across segments by "Feeling lucky" — see lucky.ts.
+export type ColorScheme = "byType" | "byPair" | "random";
 export type PrimitiveModel =
   | "plane"
   | "sphere"
@@ -200,10 +202,14 @@ export interface Project {
     surfaceColors: string[];
     images: string[];
     objectCounts: (1 | 2)[];
-    colorSchemes: ("byType" | "byPair" | "random")[];
+    colorSchemes: ColorScheme[];
     blendModes: TextBlendMode[];
     textBackdrops: ("silhouette" | "wireframe")[];
     animation: number; // 0..1 overall animation amount
+    // Which built-in effect IDs Lucky is allowed to pick from. Undefined = all.
+    enabledEffectIds?: string[];
+    // Which mapping modes Lucky is allowed to use for image surfaces. Undefined = all.
+    mappings?: Mapping[];
     // Per-category locks: when true, that category's values are restored from
     // the pre-generation project after a "Feeling lucky" roll. Optional for
     // back-compat with projects saved before this field existed.

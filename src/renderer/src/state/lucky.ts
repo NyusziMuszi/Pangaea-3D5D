@@ -27,13 +27,12 @@
 // ---------------------------------------------------------------------------
 
 import type {
+  ColorScheme,
   EffectDef,
   EffectInstance,
   LuckLocks,
   Mapping,
   ObjectState,
-  ObjectSurface,
-  PrimitiveModel,
   Project,
   Scalar,
   TextBlendMode,
@@ -46,22 +45,15 @@ import {
   defaultSecondObject,
   instanceFromDef,
 } from "./defaults";
-
-// The full set of primitive shapes. Kept inline so this module is independent
-// of any UI list.
-const PRIMITIVE_MODELS: PrimitiveModel[] = [
-  "plane",
-  "sphere",
-  "portal",
-  "cylinder",
-  "torus",
-  "box",
-  "lathe",
-  "knot",
-  "twist",
-  "polyhedron",
-  "dodecahedron",
-];
+import {
+  EMPTY_TASTE_PROFILE,
+  FLAT_SURFACES,
+  MAPPINGS,
+  PRIMITIVE_MODELS,
+  pickDistinctWeighted,
+  pickWeighted,
+  type TasteProfile,
+} from "./taste";
 
 const clamp = (v: number, lo: number, hi: number): number =>
   Math.max(lo, Math.min(hi, v));
@@ -115,6 +107,8 @@ function buildScenePalette(palette: string[], budget: number): string[] {
 function pickTextColors(
   surfacePool: string[],
   typePool: string[],
+  surfScore: (c: string) => number,
+  typeScore: (c: string) => number,
 ): {
   backdropColor: string;
   background: string;
@@ -134,9 +128,9 @@ function pickTextColors(
   const lightTheme = canLight && canDark ? Math.random() < 0.5 : canLight;
   const sameSide = lightTheme ? sLight : sDark; // background + silhouette
   const opposite = lightTheme ? tDark : tLight; // text, from the type palette
-  const [background, second] = pickDistinct(sameSide, 2);
+  const [background, second] = pickDistinctWeighted(sameSide, 2, surfScore);
   const textChoices = opposite.length ? opposite : typePool;
-  return { background, backdropColor: second ?? background, text: pick(textChoices) };
+  return { background, backdropColor: second ?? background, text: pickWeighted(textChoices, typeScore) };
 }
 
 // Build an animated scalar of `n` keys spread evenly across [0, dur], easing
@@ -167,11 +161,18 @@ function spreadKeys(
 
 export interface LuckyOptions {
   objectCounts: (1 | 2)[];
-  colorSchemes: ("byType" | "byPair" | "random")[];
+  colorSchemes: ColorScheme[];
   blendModes: TextBlendMode[];
   textBackdrops: ("silhouette" | "wireframe")[];
   animation: number; // 0..1 overall animation amount
   locks?: LuckLocks;
+  // Which built-in effect IDs to draw from; undefined = all.
+  enabledEffectIds?: string[];
+  // Which mapping modes to use for image surfaces; undefined = all.
+  mappings?: Mapping[];
+  // Learned bias toward the user's taste (see state/taste.ts). Absent (e.g.
+  // older callers) is treated as no bias — rolls stay uniform.
+  tasteProfile?: TasteProfile;
 }
 
 // Restore locked categories' values from `base` (the pre-generation project)
@@ -246,20 +247,28 @@ export function generateLuckyScene(
   typeColors: string[],
   imageAssetIds: string[],
   opts: LuckyOptions,
-): Project {
+): { project: Project; colorScheme: ColorScheme } {
   const anim = clamp(opts.animation, 0, 1);
   const effectCount = clamp(1 + Math.round(anim * 6), 1, 7);
   const locks = opts.locks ?? ALL_UNLOCKED;
+  const tasteProfile = opts.tasteProfile ?? EMPTY_TASTE_PROFILE;
+  const surfScore = (c: string): number => tasteProfile.surfaceColors?.[c.toLowerCase()] ?? 0;
+  const typeScore = (c: string): number => tasteProfile.textColors?.[c.toLowerCase()] ?? 0;
   // Pin count when Objects locked, so per-object motion/effects/colour locks
   // (which copy by matching index) always line up with base. Otherwise pick
-  // one entry from each explored set (empty falls back to the full range).
+  // one entry from each explored set (empty falls back to the full range),
+  // biased toward the learned taste profile.
   const objectCount = locks.objects
     ? (clamp(base.objects.length, 1, 2) as 1 | 2)
-    : pick(opts.objectCounts.length ? opts.objectCounts : [1, 2]);
-  const colorScheme = pick(
+    : pickWeighted(
+        opts.objectCounts.length ? opts.objectCounts : [1, 2],
+        (n) => tasteProfile.objectCounts[String(n) as "1" | "2"] ?? 0,
+      );
+  const colorScheme = pickWeighted<ColorScheme>(
     opts.colorSchemes.length
       ? opts.colorSchemes
       : ["byType", "byPair", "random"],
+    (cs) => tasteProfile.colorSchemes[cs] ?? 0,
   );
   const blendMode = pick<TextBlendMode>(
     opts.blendModes.length
@@ -320,17 +329,13 @@ export function generateLuckyScene(
   // distinct so a fully-flat pair still reads differently.
   const hasImages = imageAssetIds.length > 0;
   const imageObject = !hasImages ? -1 : twoObjects && Math.random() < 0.5 ? 1 : 0;
-  const flatSurfaces = pickDistinct(
-    ["silhouette", "wireframe", "faceted"] as ObjectSurface[],
+  const flatSurfaces = pickDistinctWeighted(
+    FLAT_SURFACES,
     2,
+    (s) => tasteProfile.flatSurfaces[s] ?? 0,
   );
-  const MAPPINGS: Mapping[] = [
-    "uv",
-    "triplanar",
-    "spherical",
-    "cylindrical",
-    "reflection",
-  ];
+  const availableMappings =
+    opts.mappings && opts.mappings.length ? opts.mappings : MAPPINGS;
 
   // Set an object's surface + image slot for its index. The image object gets a
   // textured surface (random asset + mapping); any other object gets a flat
@@ -338,7 +343,7 @@ export function generateLuckyScene(
   const dressObject = (o: ObjectState, i: number): void => {
     if (i === imageObject) {
       o.surface = "image";
-      o.mapping = pick(MAPPINGS);
+      o.mapping = pickWeighted(availableMappings, (m) => tasteProfile.mappings[m] ?? 0);
       o.image = {
         name: "lucky",
         assetId: pick(imageAssetIds),
@@ -368,10 +373,10 @@ export function generateLuckyScene(
   // other (pickTextColors guarantees this), keeping text legible everywhere.
   if (colorScheme === "byType") {
     // One trio for all animation breaks, a different one for all text cards.
-    const objTrio = pickTextColors(scenePalette, typePalette);
-    let textTrio = pickTextColors(scenePalette, typePalette);
+    const objTrio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
+    let textTrio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
     for (let i = 0; i < 6 && textTrio.background === objTrio.background; i++) {
-      textTrio = pickTextColors(scenePalette, typePalette);
+      textTrio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
     }
     for (const seg of next.segments) {
       if (seg.kind === "animation") seg.backgroundColor = objTrio.background;
@@ -388,13 +393,13 @@ export function generateLuckyScene(
     );
     const trios: ReturnType<typeof pickTextColors>[] = [];
     for (let i = 0; i < breakCount; i++) {
-      let trio = pickTextColors(scenePalette, typePalette);
+      let trio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
       for (
         let r = 0;
         r < 6 && trios.some((t) => t.background === trio.background);
         r++
       ) {
-        trio = pickTextColors(scenePalette, typePalette);
+        trio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
       }
       trios.push(trio);
     }
@@ -413,8 +418,8 @@ export function generateLuckyScene(
   } else {
     // random: every segment coloured independently.
     for (const seg of next.segments) {
-      if (seg.kind === "animation") seg.backgroundColor = pick(scenePalette);
-      else if (seg.text) applyTrio(seg.text, pickTextColors(scenePalette, typePalette));
+      if (seg.kind === "animation") seg.backgroundColor = pickWeighted(scenePalette, surfScore);
+      else if (seg.text) applyTrio(seg.text, pickTextColors(scenePalette, typePalette, surfScore, typeScore));
     }
   }
 
@@ -449,7 +454,7 @@ export function generateLuckyScene(
     const pool = fresh.length
       ? fresh
       : realSurfacePalette.filter((c) => !usedSurfaceColors.has(c));
-    const chosen = pick(pool.length ? pool : realSurfacePalette);
+    const chosen = pickWeighted(pool.length ? pool : realSurfacePalette, surfScore);
     usedSurfaceColors.add(chosen);
     return chosen;
   };
@@ -511,7 +516,7 @@ export function generateLuckyScene(
 
   // ----- Object A -----
   const a = next.objects[0];
-  a.primitive = pick(PRIMITIVE_MODELS);
+  a.primitive = pickWeighted(PRIMITIVE_MODELS, (m) => tasteProfile.shapes[m] ?? 0);
   a.modelName = null;
   a.modelDataUrl = null;
   dressObject(a, 0);
@@ -525,7 +530,7 @@ export function generateLuckyScene(
   // ----- Object B -----
   if (twoObjects) {
     const b = defaultSecondObject();
-    b.primitive = pick(PRIMITIVE_MODELS);
+    b.primitive = pickWeighted(PRIMITIVE_MODELS, (m) => tasteProfile.shapes[m] ?? 0);
     dressObject(b, 1);
     b.posX = constant(halfGap);
     animateTransform(b, 0.3, 0.7, 0);
@@ -534,15 +539,25 @@ export function generateLuckyScene(
   next.objects = objects;
 
   // ----- Effects (distributed across both objects) -----
-  const deformPool = BUILTIN_EFFECTS.filter((d) => d.kind === "deform");
+  const enabledIds = opts.enabledEffectIds;
+  const isEnabled = (id: string): boolean =>
+    !enabledIds?.length || enabledIds.includes(id);
+  const deformPool = BUILTIN_EFFECTS.filter(
+    (d) => d.kind === "deform" && isEnabled(d.id),
+  );
   const shadePool: EffectDef[] = BUILTIN_EFFECTS.filter(
     (d) =>
-      d.id === "grayscale" ||
-      d.id === "fresnel" ||
-      // multiply/mask sample the *other* object (pg_sampleOther) — two objects only.
-      (twoObjects && (d.id === "multiply" || d.id === "mask")),
+      isEnabled(d.id) &&
+      (d.id === "grayscale" ||
+        d.id === "fresnel" ||
+        // multiply/mask sample the *other* object (pg_sampleOther) — two objects only.
+        (twoObjects && (d.id === "multiply" || d.id === "mask"))),
   );
-  const selected = pickDistinct([...deformPool, ...shadePool], effectCount);
+  const selected = pickDistinctWeighted(
+    [...deformPool, ...shadePool],
+    effectCount,
+    (d) => tasteProfile.effects[d.id] ?? 0,
+  );
   const instances = selected.map((def) => instanceFromDef(def));
 
   // Tint any fresnel instance from a palette colour.
@@ -567,5 +582,5 @@ export function generateLuckyScene(
 
   applyLocks(base, next, locks);
 
-  return next;
+  return { project: next, colorScheme };
 }

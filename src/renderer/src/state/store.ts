@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import type { ObjectState, Project } from '../types'
+import type { ColorScheme, ObjectState, Project } from '../types'
 import { defaultProject } from './defaults'
+import { getPrefs } from './prefs'
 
 interface AppState {
   project: Project
@@ -14,6 +15,9 @@ interface AppState {
   toast: string | null
   shaderError: string | null
   hasGenerated: boolean
+  // Colour scheme of the last "Feeling lucky" roll this session, so Like/Save/
+  // Export can credit it. Transient — not persisted, not part of Project.
+  lastLuckyColorScheme: ColorScheme | null
 
   setProject: (p: Project) => void
   update: (mutator: (p: Project) => void) => void
@@ -26,6 +30,7 @@ interface AppState {
   setToast: (msg: string | null) => void
   setShaderError: (msg: string | null) => void
   setHasGenerated: (v: boolean) => void
+  setLastLuckyColorScheme: (cs: ColorScheme | null) => void
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -39,12 +44,17 @@ export const useStore = create<AppState>((set) => ({
   toast: null,
   shaderError: null,
   hasGenerated: false,
+  lastLuckyColorScheme: null,
 
   setProject: (p) => set({ project: p }),
   update: (mutator) =>
     set((s) => {
       const next = structuredClone(s.project) as Project
       mutator(next)
+      // Rolls go through setProject, not update(), so this never mistakes a
+      // fresh roll for a hand-edit; recordEdit no-ops cheaply when nothing
+      // taste-relevant changed (see state/taste.ts).
+      if (s.hasGenerated) getPrefs().recordEdit(s.project, next)
       return { project: next }
     }),
   setPlayhead: (t) => set({ playhead: t }),
@@ -55,7 +65,8 @@ export const useStore = create<AppState>((set) => ({
   openShaderEditor: (effectDefId) => set({ shaderEditorEffectId: effectDefId }),
   setToast: (msg) => set({ toast: msg }),
   setShaderError: (msg) => set({ shaderError: msg }),
-  setHasGenerated: (v) => set({ hasGenerated: v })
+  setHasGenerated: (v) => set({ hasGenerated: v }),
+  setLastLuckyColorScheme: (cs) => set({ lastLuckyColorScheme: cs })
 }))
 
 // The object index the inspector currently edits, clamped to a valid object

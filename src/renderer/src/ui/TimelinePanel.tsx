@@ -1,4 +1,4 @@
-import { type CSSProperties, useEffect } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import playIcon from "../assets/play_arrow_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import pauseIcon from "../assets/pause_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import { useStore } from "../state/store";
@@ -15,7 +15,10 @@ import {
   type ObjectState,
   type ObjectSurface,
   type PrimitiveModel,
+  type Project,
   type Scalar,
+  type TextBackdrop,
+  type TextBlendMode,
   type TextStyle,
 } from "../types";
 
@@ -36,6 +39,63 @@ export function TimelinePanel(): JSX.Element {
   const setPlaying = useStore((s) => s.setPlaying);
   const playhead = useStore((s) => s.playhead);
   const total = totalDuration(project) || 1;
+
+  // Swatches across segments/objects can be Shift-clicked into a group so one
+  // colour edit applies to all of them at once; ephemeral UI state, not part
+  // of the serializable Project.
+  const [groupKeys, setGroupKeys] = useState<Set<string>>(new Set());
+  // Rebuilt every render so keys + mutators always match what's on screen.
+  const swatchMutators = new Map<string, (p: Project, v: string) => void>();
+
+  function toggleGroup(key: string): void {
+    setGroupKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // onChange handler shared by every timeline swatch: a swatch that belongs to
+  // a group of 2+ applies the change to the whole group; otherwise it edits
+  // only itself and collapses the group down to just that swatch (today's
+  // plain-click behaviour).
+  function applyColor(key: string, v: string): void {
+    const keys =
+      groupKeys.has(key) && groupKeys.size > 1 ? [...groupKeys] : [key];
+    if (keys.length === 1) setGroupKeys(new Set(keys));
+    update((p) => {
+      for (const k of keys) swatchMutators.get(k)?.(p, v);
+    });
+  }
+
+  // Same multi-select mechanic for text-segment dropdowns (textBackdrop,
+  // textBlend). Shift-clicking a select prevents it from opening and instead
+  // toggles its group membership; changing any grouped select applies to all.
+  const [dropdownGroupKeys, setDropdownGroupKeys] = useState<Set<string>>(
+    new Set(),
+  );
+  const dropdownMutators = new Map<string, (p: Project, v: string) => void>();
+
+  function toggleDropdownGroup(key: string): void {
+    setDropdownGroupKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function applyDropdown(key: string, v: string): void {
+    const keys =
+      dropdownGroupKeys.has(key) && dropdownGroupKeys.size > 1
+        ? [...dropdownGroupKeys]
+        : [key];
+    if (keys.length === 1) setDropdownGroupKeys(new Set(keys));
+    update((p) => {
+      for (const k of keys) dropdownMutators.get(k)?.(p, v);
+    });
+  }
 
   // Cumulative start time of each segment, so blocks can be positioned
   // faithfully to time on a shared horizontal scale across both tracks.
@@ -151,6 +211,39 @@ export function TimelinePanel(): JSX.Element {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // Escape, or a click anywhere outside a swatch, clears the selection group.
+  // mousedown fires before React's onClick (and its stopPropagation), so we
+  // can't rely on that to keep clicks on a swatch from reaching this
+  // listener — explicitly exclude swatches and their open colour popover
+  // (portaled to document.body), mirroring ColorSwatch's own outside-click
+  // handling for closing the popover.
+  useEffect(() => {
+    if (groupKeys.size === 0 && dropdownGroupKeys.size === 0) return;
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        setGroupKeys(new Set());
+        setDropdownGroupKeys(new Set());
+      }
+    }
+    function onDocPointer(e: MouseEvent): void {
+      const t = e.target as Element | null;
+      if (
+        t?.closest(
+          ".color-swatch, .color-popover, .object-head-select.selected",
+        )
+      )
+        return;
+      setGroupKeys(new Set());
+      setDropdownGroupKeys(new Set());
+    }
+    window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onDocPointer);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onDocPointer);
+    };
+  }, [groupKeys.size, dropdownGroupKeys.size]);
+
   function updateObject(
     index: number,
     apply: (o: ObjectState, s: Scalar) => void,
@@ -253,77 +346,192 @@ export function TimelinePanel(): JSX.Element {
                       onClick={isText ? () => selectOnly(seg.id) : undefined}
                     >
                       {isText && seg.text && (
-                        <div className="seg-swatches">
-                          {(
-                            [
+                        <>
+                          <div className="seg-swatches">
+                            {(
                               [
-                                "Background colour",
-                                seg.text.backgroundColor,
-                                (t, v) => (t.backgroundColor = v),
-                              ],
-                              [
-                                "Text colour",
-                                seg.text.textColor,
-                                (t, v) => (t.textColor = v),
-                              ],
-
-                              [
-                                "Object colour",
-                                seg.text.textBackdropColor,
-                                (t, v) => (t.textBackdropColor = v),
-                              ],
-                            ] as [
-                              string,
-                              string,
-                              (t: TextStyle, v: string) => void,
-                            ][]
-                          ).map(([title, value, set]) => (
-                            <ColorSwatch
-                              key={title}
-                              className="seg-swatch"
-                              title={title}
-                              value={value}
-                              onChange={(v) =>
-                                update((p) => {
-                                  const s = p.segments.find(
-                                    (x) => x.id === seg.id,
-                                  );
-                                  if (s?.text) set(s.text, v);
-                                })
-                              }
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {!isText && (
-                        <div className="seg-swatches">
-                          <ColorSwatch
-                            className="seg-swatch"
-                            title="Background colour"
-                            value={seg.backgroundColor ?? "#281b6c"}
+                                [
+                                  "Background colour",
+                                  seg.text.backgroundColor,
+                                  (t: TextStyle, v: string) =>
+                                    (t.backgroundColor = v),
+                                  `${seg.id}:bg`,
+                                ],
+                                [
+                                  "Text colour",
+                                  seg.text.textColor,
+                                  (t: TextStyle, v: string) =>
+                                    (t.textColor = v),
+                                  `${seg.id}:text`,
+                                ],
+                              ] as [
+                                string,
+                                string,
+                                (t: TextStyle, v: string) => void,
+                                string,
+                              ][]
+                            ).map(([title, value, set, groupKey]) => {
+                              swatchMutators.set(groupKey, (p, v) => {
+                                const s = p.segments.find(
+                                  (x) => x.id === seg.id,
+                                );
+                                if (s?.text) set(s.text, v);
+                              });
+                              return (
+                                <ColorSwatch
+                                  key={title}
+                                  className="seg-swatch"
+                                  title={title}
+                                  value={value}
+                                  selected={groupKeys.has(groupKey)}
+                                  onShiftClick={() => toggleGroup(groupKey)}
+                                  onChange={(v) => applyColor(groupKey, v)}
+                                />
+                              );
+                            })}
+                          </div>
+                          <DurationField
+                            className="tl-dur-input"
+                            wrapInField={false}
+                            stopClickPropagation
+                            value={seg.durationSec}
                             onChange={(v) =>
                               update((p) => {
                                 const s = p.segments.find(
                                   (x) => x.id === seg.id,
                                 );
-                                if (s) s.backgroundColor = v;
+                                if (s) s.durationSec = v;
                               })
                             }
                           />
-                        </div>
+                          <div className="text-head">
+                            {seg.text.textBackdrop !== "none" &&
+                              (() => {
+                                const groupKey = `${seg.id}:obj`;
+                                swatchMutators.set(groupKey, (p, v) => {
+                                  const s = p.segments.find(
+                                    (x) => x.id === seg.id,
+                                  );
+                                  if (s?.text) s.text.textBackdropColor = v;
+                                });
+                                return (
+                                  <ColorSwatch
+                                    className="seg-swatch"
+                                    title="Object colour"
+                                    value={seg.text.textBackdropColor}
+                                    selected={groupKeys.has(groupKey)}
+                                    onShiftClick={() => toggleGroup(groupKey)}
+                                    onChange={(v) => applyColor(groupKey, v)}
+                                  />
+                                );
+                              })()}
+                            {(() => {
+                              const key = `${seg.id}:backdrop`;
+                              dropdownMutators.set(key, (p, v) => {
+                                const s = p.segments.find(
+                                  (x) => x.id === seg.id,
+                                );
+                                if (s?.text)
+                                  s.text.textBackdrop = v as TextBackdrop;
+                              });
+                              return (
+                                <select
+                                  className={`object-head-select${dropdownGroupKeys.has(key) ? " selected" : ""}`}
+                                  value={seg.text.textBackdrop}
+                                  onMouseDown={(e) => {
+                                    if (e.shiftKey) {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      toggleDropdownGroup(key);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) =>
+                                    applyDropdown(key, e.target.value)
+                                  }
+                                >
+                                  <option value="none">None</option>
+                                  <option value="silhouette">Silhouette</option>
+                                  <option value="wireframe">Wireframe</option>
+                                </select>
+                              );
+                            })()}
+                            {seg.text.textBackdrop === "silhouette" && (() => {
+                              const key = `${seg.id}:blend`;
+                              dropdownMutators.set(key, (p, v) => {
+                                const s = p.segments.find(
+                                  (x) => x.id === seg.id,
+                                );
+                                if (s?.text)
+                                  s.text.textBlend = v as TextBlendMode;
+                              });
+                              return (
+                                <span className="tl-wide-only">
+                                  <select
+                                    className={`object-head-select${dropdownGroupKeys.has(key) ? " selected" : ""}`}
+                                    value={seg.text.textBlend ?? "normal"}
+                                    onMouseDown={(e) => {
+                                      if (e.shiftKey) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        toggleDropdownGroup(key);
+                                      }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) =>
+                                      applyDropdown(key, e.target.value)
+                                    }
+                                  >
+                                    <option value="normal">Normal</option>
+                                    <option value="invert">Invert</option>
+                                    <option value="exclusion">Exclusion</option>
+                                    <option value="multiply">Multiply</option>
+                                    <option value="screen">Screen</option>
+                                  </select>
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </>
                       )}
-                      <DurationField
-                        className="tl-dur-input"
-                        wrapInField={false}
-                        stopClickPropagation
-                        value={seg.durationSec}
-                        onChange={(v) =>
-                          update((p) => {
-                            const s = p.segments.find((x) => x.id === seg.id);
-                            if (s) s.durationSec = v;
-                          })
-                        }
-                      />
+                      {!isText &&
+                        (() => {
+                          const groupKey = `${seg.id}:bg`;
+                          swatchMutators.set(groupKey, (p, v) => {
+                            const s = p.segments.find(
+                              (x) => x.id === seg.id,
+                            );
+                            if (s) s.backgroundColor = v;
+                          });
+                          return (
+                            <div className="seg-swatches">
+                              <ColorSwatch
+                                className="seg-swatch"
+                                title="Background colour"
+                                value={seg.backgroundColor ?? "#281b6c"}
+                                selected={groupKeys.has(groupKey)}
+                                onShiftClick={() => toggleGroup(groupKey)}
+                                onChange={(v) => applyColor(groupKey, v)}
+                              />
+                            </div>
+                          );
+                        })()}
+                      {!isText && (
+                        <DurationField
+                          className="tl-dur-input"
+                          wrapInField={false}
+                          stopClickPropagation
+                          value={seg.durationSec}
+                          onChange={(v) =>
+                            update((p) => {
+                              const s = p.segments.find(
+                                (x) => x.id === seg.id,
+                              );
+                              if (s) s.durationSec = v;
+                            })
+                          }
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -376,19 +584,24 @@ export function TimelinePanel(): JSX.Element {
                         </option>
                       ))}
                     </select>
-                    {obj.surface !== "image" && (
-                      <ColorSwatch
-                        className="seg-swatch"
-                        title="Surface colour"
-                        value={obj.surfaceColor ?? "#878787"}
-                        onChange={(v) =>
-                          update((p) => {
-                            const o = p.objects[index];
-                            if (o) o.surfaceColor = v;
-                          })
-                        }
-                      />
-                    )}
+                    {obj.surface !== "image" &&
+                      (() => {
+                        const groupKey = `obj:${index}:surface`;
+                        swatchMutators.set(groupKey, (p, v) => {
+                          const o = p.objects[index];
+                          if (o) o.surfaceColor = v;
+                        });
+                        return (
+                          <ColorSwatch
+                            className="seg-swatch"
+                            title="Surface colour"
+                            value={obj.surfaceColor ?? "#878787"}
+                            selected={groupKeys.has(groupKey)}
+                            onShiftClick={() => toggleGroup(groupKey)}
+                            onChange={(v) => applyColor(groupKey, v)}
+                          />
+                        );
+                      })()}
                   </div>
                   {renderKeyframes(obj, index)}
                 </div>

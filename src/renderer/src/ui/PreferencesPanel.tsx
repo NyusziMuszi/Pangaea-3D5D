@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useStore } from "../state/store";
 import { usePrefs } from "../state/prefs";
 import { engine } from "../engine/engineSingleton";
-import { uid, defaultObjectImage } from "../state/defaults";
+import { uid } from "../state/defaults";
 import {
   constant,
   type CameraType,
@@ -21,20 +21,44 @@ import { Section, Field, ColorSwatch } from "./controls";
 import { Modal } from "./Modal";
 import { setCustomTextCardFont, revertTextCardFont } from "../engine/fonts";
 import { bytesToDataUrl } from "./files";
+import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 
 const PRIMITIVES: readonly PrimitiveModel[] = [
-  "plane", "sphere", "portal", "cylinder", "capsule", "torus",
-  "box", "lathe", "knot", "twist", "polyhedron", "dodecahedron",
+  "plane",
+  "sphere",
+  "portal",
+  "cylinder",
+  "capsule",
+  "torus",
+  "box",
+  "lathe",
+  "knot",
+  "twist",
+  "polyhedron",
+  "dodecahedron",
 ];
 const MAPPINGS: readonly Mapping[] = [
-  "uv", "triplanar", "spherical", "cylindrical", "reflection",
+  "uv",
+  "triplanar",
+  "spherical",
+  "cylindrical",
+  "reflection",
 ];
 const SURFACES: readonly ObjectSurface[] = [
-  "image", "silhouette", "wireframe", "faceted",
+  "image",
+  "silhouette",
+  "wireframe",
+  "faceted",
 ];
 const CAMERAS: readonly CameraType[] = ["perspective", "isometric"];
 const SCHEMES = ["byType", "byPair", "random"] as const;
 type ColorScheme = (typeof SCHEMES)[number];
+
+const SCHEME_LABELS: Record<ColorScheme, string> = {
+  byType: "~ + ~ + ~ +",
+  byPair: "~ ~ + + x x",
+  random: "Random",
+};
 
 // Extension -> font mime, embedded in the stored data URL. The browser parses
 // the face by content, so an approximate mime is fine.
@@ -95,7 +119,7 @@ function SelectField<T extends string>({
       <select value={value} onChange={(e) => onChange(e.target.value as T)}>
         {options.map((o) => (
           <option key={o} value={o}>
-            {o}
+            {o.charAt(0).toUpperCase() + o.slice(1)}
           </option>
         ))}
       </select>
@@ -117,33 +141,105 @@ function ObjectFields({
         label="Shape"
         value={obj.primitive}
         options={PRIMITIVES}
-        onChange={(v) => onChange((o) => { o.primitive = v; })}
+        onChange={(v) =>
+          onChange((o) => {
+            o.primitive = v;
+          })
+        }
       />
       <SelectField
         label="Mapping"
         value={obj.mapping}
         options={MAPPINGS}
-        onChange={(v) => onChange((o) => { o.mapping = v; })}
+        onChange={(v) =>
+          onChange((o) => {
+            o.mapping = v;
+          })
+        }
       />
       <SelectField
         label="Surface"
         value={obj.surface}
         options={SURFACES}
-        onChange={(v) => onChange((o) => { o.surface = v; })}
+        onChange={(v) =>
+          onChange((o) => {
+            o.surface = v;
+          })
+        }
       />
-      <Field label="Surface colour">
+      <Field label="Surface colour" stacked>
         <ColorSwatch
           value={obj.surfaceColor}
-          onChange={(v) => onChange((o) => { o.surfaceColor = v; })}
+          onChange={(v) =>
+            onChange((o) => {
+              o.surfaceColor = v;
+            })
+          }
         />
       </Field>
-      <NumField label="Scale" value={cval(obj.scale)} onChange={(v) => onChange((o) => { o.scale = constant(v); })} />
-      <NumField label="Rotate X" value={cval(obj.rotX)} onChange={(v) => onChange((o) => { o.rotX = constant(v); })} />
-      <NumField label="Rotate Y" value={cval(obj.rotY)} onChange={(v) => onChange((o) => { o.rotY = constant(v); })} />
-      <NumField label="Rotate Z" value={cval(obj.rotZ)} onChange={(v) => onChange((o) => { o.rotZ = constant(v); })} />
-      <NumField label="Position X" value={cval(obj.posX)} onChange={(v) => onChange((o) => { o.posX = constant(v); })} />
-      <NumField label="Position Y" value={cval(obj.posY)} onChange={(v) => onChange((o) => { o.posY = constant(v); })} />
-      <NumField label="Position Z" value={cval(obj.posZ)} onChange={(v) => onChange((o) => { o.posZ = constant(v); })} />
+      <NumField
+        label="Scale"
+        value={cval(obj.scale)}
+        onChange={(v) =>
+          onChange((o) => {
+            o.scale = constant(v);
+          })
+        }
+      />
+      <NumField
+        label="Rotate X"
+        value={cval(obj.rotX)}
+        onChange={(v) =>
+          onChange((o) => {
+            o.rotX = constant(v);
+          })
+        }
+      />
+      <NumField
+        label="Rotate Y"
+        value={cval(obj.rotY)}
+        onChange={(v) =>
+          onChange((o) => {
+            o.rotY = constant(v);
+          })
+        }
+      />
+      <NumField
+        label="Rotate Z"
+        value={cval(obj.rotZ)}
+        onChange={(v) =>
+          onChange((o) => {
+            o.rotZ = constant(v);
+          })
+        }
+      />
+      <NumField
+        label="Position X"
+        value={cval(obj.posX)}
+        onChange={(v) =>
+          onChange((o) => {
+            o.posX = constant(v);
+          })
+        }
+      />
+      <NumField
+        label="Position Y"
+        value={cval(obj.posY)}
+        onChange={(v) =>
+          onChange((o) => {
+            o.posY = constant(v);
+          })
+        }
+      />
+      <NumField
+        label="Position Z"
+        value={cval(obj.posZ)}
+        onChange={(v) =>
+          onChange((o) => {
+            o.posZ = constant(v);
+          })
+        }
+      />
     </>
   );
 }
@@ -229,19 +325,22 @@ export function PreferencesPanel({
     revertTextCardFont();
     usePrefs.getState().setCustomFont(null);
     rerenderCards();
-    setToast("Reverted to Parabole");
+    setToast("Reverted to Space Mono Bold");
   }
 
-  // Pull the currently-open project into the draft so it becomes the blueprint
-  // for new projects (committed on Save). Object images reference in-memory asset
-  // ids that aren't stored in preferences.json, so they'd dangle after a restart
-  // — reset them to empty so captured defaults are self-contained. Inline model
-  // data URLs and everything else (effects, segments, colours, output, lucky)
-  // are kept.
+  // Pull explore settings, camera, and segment structure from the live project
+  // into the draft. Object shapes, effects, and transforms are left as-is.
   function captureWorkspace(): void {
     const live = structuredClone(useStore.getState().project) as Project;
-    for (const o of live.objects) o.image = defaultObjectImage();
-    setDraft((d) => ({ ...d, project: live }));
+    setDraft((d) => ({
+      ...d,
+      project: {
+        ...d.project,
+        lucky: live.lucky,
+        scene: live.scene,
+        segments: live.segments,
+      },
+    }));
     setToast("Loaded current workspace — review and Save");
   }
 
@@ -251,6 +350,11 @@ export function PreferencesPanel({
     p.setSecondObject(draft.secondObject);
     setToast("Preferences saved");
     onClose();
+  }
+
+  function resetTaste(): void {
+    usePrefs.getState().resetTaste();
+    setToast("Taste profile reset");
   }
 
   function resetFactory(): void {
@@ -268,13 +372,27 @@ export function PreferencesPanel({
     mutate((d) => {
       d.project.segments.push(
         kind === "text"
-          ? { id: uid("seg"), kind: "text", label: "New text", durationSec: 2.5, text: makeTextStyle() }
-          : { id: uid("seg"), kind: "animation", label: "New break", durationSec: 2.5, backgroundColor: "#281b6c" },
+          ? {
+              id: uid("seg"),
+              kind: "text",
+              label: "New text",
+              durationSec: 2.5,
+              text: makeTextStyle(),
+            }
+          : {
+              id: uid("seg"),
+              kind: "animation",
+              label: "New break",
+              durationSec: 2.5,
+              backgroundColor: "#281b6c",
+            },
       );
     });
   }
   function removeSegment(i: number): void {
-    mutate((d) => { d.project.segments.splice(i, 1); });
+    mutate((d) => {
+      d.project.segments.splice(i, 1);
+    });
   }
   function moveSegment(i: number, dir: -1 | 1): void {
     mutate((d) => {
@@ -315,12 +433,16 @@ export function PreferencesPanel({
     onSet: (i: number, v: string) => void;
   }): JSX.Element {
     return (
-      <Field label={label}>
+      <Field label={label} stacked>
         <div className="swatch-list">
           {colors.map((c, i) => (
             <div className="swatch-row" key={`${label}-${i}`}>
               <ColorSwatch value={c} onChange={(v) => onSet(i, v)} />
-              <button className="btn-icon" title="Remove" onClick={() => onRemove(i)}>
+              <button
+                className="btn-icon"
+                title="Remove"
+                onClick={() => onRemove(i)}
+              >
                 ✕
               </button>
             </div>
@@ -347,247 +469,570 @@ export function PreferencesPanel({
       }
       foot={
         <>
-          <button className="secondary" onClick={resetFactory}>
-            Reset to factory defaults
-          </button>
+          <div className="prefs-row-add">
+            <button className="secondary" onClick={resetFactory}>
+              Reset to factory
+            </button>
+            <button
+              className="secondary"
+              onClick={captureWorkspace}
+              title="Copies your open project's Explore settings, camera, and segment structure (text content, colours, durations) into the fields below. Object shapes, effects, and transforms are not included. Review, then Save."
+            >
+              Make current the default
+            </button>
+          </div>
           <div className="prefs-row-add">
             <button onClick={onClose}>Cancel</button>
-            <button className="important" onClick={save}>Save</button>
+            <button className="important" onClick={save}>
+              Save
+            </button>
           </div>
         </>
       }
     >
-        <div className="prefs-body">
-          <p className="prefs-note">
-            These set the defaults for <strong>new</strong> projects. Your
-            current project is untouched.
-          </p>
+      <div className="prefs-body">
+        <p className="prefs-note">
+          These set the defaults for <strong>new</strong> projects. Your current
+          project is untouched.
+        </p>
 
+        <Section title="General">
+          <NumField
+            label="Width"
+            value={draft.project.output.width}
+            step={1}
+            min={16}
+            onChange={(v) =>
+              mutate((d) => {
+                d.project.output.width = Math.round(v);
+              })
+            }
+          />
+          <NumField
+            label="Height"
+            value={draft.project.output.height}
+            step={1}
+            min={16}
+            onChange={(v) =>
+              mutate((d) => {
+                d.project.output.height = Math.round(v);
+              })
+            }
+          />
+          <NumField
+            label="FPS"
+            value={draft.project.output.fps}
+            step={1}
+            min={1}
+            onChange={(v) =>
+              mutate((d) => {
+                d.project.output.fps = Math.round(v);
+              })
+            }
+          />
+          <SelectField
+            label="Camera"
+            value={draft.project.scene.cameraType}
+            options={CAMERAS}
+            onChange={(v) =>
+              mutate((d) => {
+                d.project.scene.cameraType = v;
+              })
+            }
+          />
+
+          <Field label="Current font">
+            <span className="prefs-font-current">
+              {customFont ? customFont.name : "Space Mono Bold (bundled)"}
+            </span>
+          </Field>
           <div className="prefs-row-add">
-            <button className="mini" onClick={captureWorkspace}>
-              Use current workspace as defaults
+            <button className="mini" onClick={uploadFont}>
+              Upload font…
+            </button>
+            <button
+              className="mini"
+              onClick={revertFont}
+              disabled={!customFont}
+            >
+              Revert to Space Mono Bold
             </button>
           </div>
-          <p className="prefs-note">
-            Copies your open project into the fields below — shapes, effects,
-            segments, colours, output and Feeling Lucky. Object images aren't
-            included. Review, then Save.
-          </p>
+        </Section>
 
-          <Section title="Output">
-            <NumField label="Width" value={draft.project.output.width} step={1} min={16}
-              onChange={(v) => mutate((d) => { d.project.output.width = Math.round(v); })} />
-            <NumField label="Height" value={draft.project.output.height} step={1} min={16}
-              onChange={(v) => mutate((d) => { d.project.output.height = Math.round(v); })} />
-            <NumField label="FPS" value={draft.project.output.fps} step={1} min={1}
-              onChange={(v) => mutate((d) => { d.project.output.fps = Math.round(v); })} />
-          </Section>
+        <Section title="Structure" defaultOpen={false}>
+          {draft.project.segments.map((seg, i) => (
+            <div className="prefs-seg" key={seg.id}>
+              <div className="prefs-seg-head">
+                <input
+                  className="grow"
+                  type="text"
+                  value={seg.label}
+                  onChange={(e) =>
+                    mutate((d) => {
+                      const s = d.project.segments[i];
+                      if (s) s.label = e.target.value;
+                    })
+                  }
+                />
+                <select
+                  value={seg.kind}
+                  onChange={(e) => setSegKind(i, e.target.value as SegmentKind)}
+                >
+                  <option value="animation">Animation</option>
+                  <option value="text">Text</option>
+                </select>
+                <button
+                  className="btn-icon"
+                  title="Move up"
+                  onClick={() => moveSegment(i, -1)}
+                >
+                  ↑
+                </button>
+                <button
+                  className="btn-icon"
+                  title="Move down"
+                  onClick={() => moveSegment(i, 1)}
+                >
+                  ↓
+                </button>
+                <button
+                  className="btn-icon"
+                  title="Remove"
+                  onClick={() => removeSegment(i)}
+                >
+                  ✕
+                </button>
+              </div>
+              <NumField
+                label="Duration (s)"
+                value={seg.durationSec}
+                step={0.1}
+                min={0.2}
+                onChange={(v) =>
+                  mutate((d) => {
+                    const s = d.project.segments[i];
+                    if (s) s.durationSec = Math.max(0.2, v);
+                  })
+                }
+              />
 
-          <Section title="Scene">
-            <SelectField label="Camera" value={draft.project.scene.cameraType} options={CAMERAS}
-              onChange={(v) => mutate((d) => { d.project.scene.cameraType = v; })} />
-          </Section>
-
-          <Section title="Default object (A)" defaultOpen={false}>
-            {objA ? (
-              <ObjectFields obj={objA} onChange={mutateObjectA} />
-            ) : (
-              <p className="prefs-note">No primary object in the blueprint.</p>
-            )}
-          </Section>
-
-          <Section title="Second object (B)" defaultOpen={false}>
-            <ObjectFields
-              obj={draft.secondObject}
-              onChange={(fn) => mutate((d) => fn(d.secondObject))}
-            />
-          </Section>
-
-          <Section title="Starter segments" defaultOpen={false}>
-            {draft.project.segments.map((seg, i) => (
-              <div className="prefs-seg" key={seg.id}>
-                <div className="prefs-seg-head">
-                  <input
-                    className="grow"
-                    type="text"
-                    value={seg.label}
-                    onChange={(e) => mutate((d) => { const s = d.project.segments[i]; if (s) s.label = e.target.value; })}
+              {seg.kind === "animation" && (
+                <Field label="Background colour" stacked>
+                  <ColorSwatch
+                    value={seg.backgroundColor ?? "#281b6c"}
+                    onChange={(v) =>
+                      mutate((d) => {
+                        const s = d.project.segments[i];
+                        if (s) s.backgroundColor = v;
+                      })
+                    }
                   />
-                  <select value={seg.kind} onChange={(e) => setSegKind(i, e.target.value as SegmentKind)}>
-                    <option value="animation">Animation</option>
-                    <option value="text">Text</option>
-                  </select>
-                  <button className="btn-icon" title="Move up" onClick={() => moveSegment(i, -1)}>↑</button>
-                  <button className="btn-icon" title="Move down" onClick={() => moveSegment(i, 1)}>↓</button>
-                  <button className="btn-icon" title="Remove" onClick={() => removeSegment(i)}>✕</button>
-                </div>
-                <NumField label="Duration (s)" value={seg.durationSec} step={0.1} min={0.2}
-                  onChange={(v) => mutate((d) => { const s = d.project.segments[i]; if (s) s.durationSec = Math.max(0.2, v); })} />
+                </Field>
+              )}
 
-                {seg.kind === "animation" && (
-                  <Field label="Background colour">
-                    <ColorSwatch
-                      value={seg.backgroundColor ?? "#281b6c"}
-                      onChange={(v) => mutate((d) => { const s = d.project.segments[i]; if (s) s.backgroundColor = v; })}
+              {seg.kind === "text" && seg.text && (
+                <>
+                  <Field label="Message">
+                    <textarea
+                      rows={3}
+                      value={seg.text.content}
+                      onChange={(e) =>
+                        mutateText(i, (t) => {
+                          t.content = e.target.value;
+                        })
+                      }
                     />
                   </Field>
-                )}
-
-                {seg.kind === "text" && seg.text && (
-                  <>
-                    <Field label="Message">
-                      <textarea
-                        rows={3}
-                        value={seg.text.content}
-                        onChange={(e) => mutateText(i, (t) => { t.content = e.target.value; })}
+                  <NumField
+                    label="Font size"
+                    value={seg.text.fontSize}
+                    step={1}
+                    min={10}
+                    onChange={(v) =>
+                      mutateText(i, (t) => {
+                        t.fontSize = Math.round(v);
+                      })
+                    }
+                  />
+                  <SelectField
+                    label="Alignment"
+                    value={seg.text.align}
+                    options={["left", "center", "right"] as const}
+                    onChange={(v) =>
+                      mutateText(i, (t) => {
+                        t.align = v;
+                      })
+                    }
+                  />
+                  <Field label="Text colour" stacked>
+                    <ColorSwatch
+                      value={seg.text.textColor}
+                      onChange={(v) =>
+                        mutateText(i, (t) => {
+                          t.textColor = v;
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Background colour" stacked>
+                    <ColorSwatch
+                      value={seg.text.backgroundColor}
+                      onChange={(v) =>
+                        mutateText(i, (t) => {
+                          t.backgroundColor = v;
+                        })
+                      }
+                    />
+                  </Field>
+                  <SelectField
+                    label="Reveal"
+                    value={seg.text.reveal}
+                    options={["fade", "cut"] as const}
+                    onChange={(v) =>
+                      mutateText(i, (t) => {
+                        t.reveal = v;
+                      })
+                    }
+                  />
+                  <SelectField
+                    label="Object styling"
+                    value={seg.text.textBackdrop}
+                    options={
+                      [
+                        "none",
+                        "silhouette",
+                        "wireframe",
+                      ] as const satisfies readonly TextBackdrop[]
+                    }
+                    onChange={(v) =>
+                      mutateText(i, (t) => {
+                        t.textBackdrop = v;
+                      })
+                    }
+                  />
+                  {seg.text.textBackdrop !== "none" && (
+                    <Field label="Object colour" stacked>
+                      <ColorSwatch
+                        value={seg.text.textBackdropColor}
+                        onChange={(v) =>
+                          mutateText(i, (t) => {
+                            t.textBackdropColor = v;
+                          })
+                        }
                       />
                     </Field>
-                    <NumField label="Font size" value={seg.text.fontSize} step={1} min={10}
-                      onChange={(v) => mutateText(i, (t) => { t.fontSize = Math.round(v); })} />
-                    <SelectField label="Alignment" value={seg.text.align} options={["left", "center", "right"] as const}
-                      onChange={(v) => mutateText(i, (t) => { t.align = v; })} />
-                    <Field label="Text colour">
-                      <ColorSwatch value={seg.text.textColor} onChange={(v) => mutateText(i, (t) => { t.textColor = v; })} />
-                    </Field>
-                    <Field label="Background colour">
-                      <ColorSwatch value={seg.text.backgroundColor} onChange={(v) => mutateText(i, (t) => { t.backgroundColor = v; })} />
-                    </Field>
-                    <SelectField label="Reveal" value={seg.text.reveal} options={["fade", "cut"] as const}
-                      onChange={(v) => mutateText(i, (t) => { t.reveal = v; })} />
-                    <SelectField label="Object styling" value={seg.text.textBackdrop}
-                      options={["none", "silhouette", "wireframe"] as const satisfies readonly TextBackdrop[]}
-                      onChange={(v) => mutateText(i, (t) => { t.textBackdrop = v; })} />
-                    {seg.text.textBackdrop !== "none" && (
-                      <Field label="Object colour">
-                        <ColorSwatch value={seg.text.textBackdropColor} onChange={(v) => mutateText(i, (t) => { t.textBackdropColor = v; })} />
-                      </Field>
-                    )}
-                    {seg.text.textBackdrop === "silhouette" && (
-                      <SelectField label="Blend over shape" value={seg.text.textBlend ?? "normal"}
-                        options={["normal", "invert", "exclusion", "multiply", "screen"] as const satisfies readonly TextBlendMode[]}
-                        onChange={(v) => mutateText(i, (t) => { t.textBlend = v; })} />
-                    )}
-                    {seg.text.textBackdrop === "wireframe" && (
-                      <NumField label="Line weight" value={seg.text.textBackdropWireWidth} step={0.1} min={1} max={3}
-                        onChange={(v) => mutateText(i, (t) => { t.textBackdropWireWidth = v; })} />
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
-            <div className="prefs-row-add">
-              <button className="mini" onClick={() => addSegment("animation")}>+ Animation</button>
-              <button className="mini" onClick={() => addSegment("text")}>+ Text</button>
+                  )}
+                  {seg.text.textBackdrop === "silhouette" && (
+                    <SelectField
+                      label="Blend over shape"
+                      value={seg.text.textBlend ?? "normal"}
+                      options={
+                        [
+                          "normal",
+                          "invert",
+                          "exclusion",
+                          "multiply",
+                          "screen",
+                        ] as const satisfies readonly TextBlendMode[]
+                      }
+                      onChange={(v) =>
+                        mutateText(i, (t) => {
+                          t.textBlend = v;
+                        })
+                      }
+                    />
+                  )}
+                  {seg.text.textBackdrop === "wireframe" && (
+                    <NumField
+                      label="Line weight"
+                      value={seg.text.textBackdropWireWidth}
+                      step={0.1}
+                      min={1}
+                      max={3}
+                      onChange={(v) =>
+                        mutateText(i, (t) => {
+                          t.textBackdropWireWidth = v;
+                        })
+                      }
+                    />
+                  )}
+                </>
+              )}
             </div>
-          </Section>
+          ))}
+          <div className="prefs-row-add">
+            <button className="mini" onClick={() => addSegment("animation")}>
+              + Animation
+            </button>
+            <button className="mini" onClick={() => addSegment("text")}>
+              + Text
+            </button>
+          </div>
+        </Section>
 
-          <Section title="Feeling Lucky" defaultOpen={false}>
-            <p className="prefs-note">
-              Feeling Lucky randomizes <strong>visuals only</strong> — object
-              shapes, surfaces and transforms, effects, keyframes, and scene
-              and text-card colours. Your timeline is preserved: segment count,
-              durations, and text content stay exactly as they are. Every result
-              is animated — scale, one rotation axis, and one effect&rsquo;s
-              intensity are always keyframed.
-            </p>
-            <p className="prefs-note">
-              Each generation draws one entry from your chosen object counts and
-              colour schemes (an empty set falls back to all options):
-            </p>
-            <ul className="prefs-note prefs-rules">
-              <li>
-                <strong>Object counts</strong> — render one object, or two. With
-                two objects and at least one surface image, one object wears the
-                image and the other takes a flat silhouette, so the pair reads as
-                image-against-silhouette rather than two textured shapes.
-              </li>
-              <li>
-                <strong>Colour schemes</strong> — how colour trios are dealt
-                across segments. <em>byType</em>: one trio for all animation
-                breaks, a different one for all text cards. <em>byPair</em>: each
-                break and the text card(s) that follow it share a trio, reading
-                continuously. <em>random</em>: every segment coloured
-                independently.
-              </li>
-              <li>
-                <strong>Animation amount</strong> (0–1) — drives effect count,
-                keyframe count, extra animated transforms, and rotation
-                intensity.
-              </li>
-            </ul>
-            <p className="prefs-note">
-              Colours are drawn from your text and surface palettes below. Every
-              trio puts the background and silhouette on one lightness side and
-              the text on the opposite side, so text always stays legible.
-            </p>
-            <ColorList
-              label="Text colours"
-              colors={draft.project.lucky.typeColors}
-              onAdd={() => mutateLucky((l) => { l.typeColors.push("#ffffff"); })}
-              onRemove={(i) => mutateLucky((l) => { l.typeColors.splice(i, 1); })}
-              onSet={(i, v) => mutateLucky((l) => { l.typeColors[i] = v; })}
-            />
-            <ColorList
-              label="Surface colours"
-              colors={draft.project.lucky.surfaceColors}
-              onAdd={() => mutateLucky((l) => { l.surfaceColors.push("#ffffff"); })}
-              onRemove={(i) => mutateLucky((l) => { l.surfaceColors.splice(i, 1); })}
-              onSet={(i, v) => mutateLucky((l) => { l.surfaceColors[i] = v; })}
-            />
-            <Field label="Object counts">
-              <span className="field-control">
-                {([1, 2] as const).map((n) => (
-                  <label key={n} className="checkbox-inline-label">
-                    <input
-                      type="checkbox"
-                      checked={draft.project.lucky.objectCounts.includes(n)}
-                      onChange={() => mutateLucky((l) => {
+        <Section title="Effects" defaultOpen={false}>
+          <p className="prefs-note">
+            Choose which built-in effects Explore is allowed to use. All are
+            enabled by default — uncheck any you never want generated.
+          </p>
+          <Field label="Deform" stacked>
+            <span className="field-control">
+              {BUILTIN_EFFECTS.filter((e) => e.kind === "deform").map((e) => (
+                <label key={e.id} className="checkbox-inline-label">
+                  <input
+                    type="checkbox"
+                    checked={
+                      !draft.project.lucky.enabledEffectIds ||
+                      draft.project.lucky.enabledEffectIds.includes(e.id)
+                    }
+                    onChange={() =>
+                      mutateLucky((l) => {
+                        const all = BUILTIN_EFFECTS.map((x) => x.id);
+                        const current = l.enabledEffectIds ?? all;
+                        const idx = current.indexOf(e.id);
+                        if (idx >= 0) {
+                          l.enabledEffectIds = current.filter(
+                            (id) => id !== e.id,
+                          );
+                        } else {
+                          const next = [...current, e.id];
+                          l.enabledEffectIds =
+                            next.length === all.length ? undefined : next;
+                        }
+                      })
+                    }
+                  />{" "}
+                  {e.name}
+                </label>
+              ))}
+            </span>
+          </Field>
+          <hr className="prefs-hr" />
+
+          <Field label="Shade" stacked>
+            <span className="field-control">
+              {BUILTIN_EFFECTS.filter((e) => e.kind === "shade").map((e) => (
+                <label key={e.id} className="checkbox-inline-label">
+                  <input
+                    type="checkbox"
+                    checked={
+                      !draft.project.lucky.enabledEffectIds ||
+                      draft.project.lucky.enabledEffectIds.includes(e.id)
+                    }
+                    onChange={() =>
+                      mutateLucky((l) => {
+                        const all = BUILTIN_EFFECTS.map((x) => x.id);
+                        const current = l.enabledEffectIds ?? all;
+                        const idx = current.indexOf(e.id);
+                        if (idx >= 0) {
+                          l.enabledEffectIds = current.filter(
+                            (id) => id !== e.id,
+                          );
+                        } else {
+                          const next = [...current, e.id];
+                          l.enabledEffectIds =
+                            next.length === all.length ? undefined : next;
+                        }
+                      })
+                    }
+                  />{" "}
+                  {e.name}
+                </label>
+              ))}
+            </span>
+          </Field>
+        </Section>
+
+        <Section title="Explore" defaultOpen={false}>
+          <ColorList
+            label="Text colours"
+            colors={draft.project.lucky.typeColors}
+            onAdd={() =>
+              mutateLucky((l) => {
+                l.typeColors.push("#ffffff");
+              })
+            }
+            onRemove={(i) =>
+              mutateLucky((l) => {
+                l.typeColors.splice(i, 1);
+              })
+            }
+            onSet={(i, v) =>
+              mutateLucky((l) => {
+                l.typeColors[i] = v;
+              })
+            }
+          />
+          <hr className="prefs-hr" />
+          <ColorList
+            label="Surface colours"
+            colors={draft.project.lucky.surfaceColors}
+            onAdd={() =>
+              mutateLucky((l) => {
+                l.surfaceColors.push("#ffffff");
+              })
+            }
+            onRemove={(i) =>
+              mutateLucky((l) => {
+                l.surfaceColors.splice(i, 1);
+              })
+            }
+            onSet={(i, v) =>
+              mutateLucky((l) => {
+                l.surfaceColors[i] = v;
+              })
+            }
+          />
+          <hr className="prefs-hr" />
+          <Field label="Objects" stacked>
+            <span className="field-control">
+              {([1, 2] as const).map((n, i) => (
+                <label key={n} className="checkbox-inline-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.project.lucky.objectCounts.includes(n)}
+                    onChange={() =>
+                      mutateLucky((l) => {
                         const idx = l.objectCounts.indexOf(n);
                         if (idx >= 0) l.objectCounts.splice(idx, 1);
                         else l.objectCounts.push(n);
-                      })}
-                    />{" "}
-                    {n}
-                  </label>
-                ))}
-              </span>
-            </Field>
-            <Field label="Colour schemes">
-              <span className="field-control">
-                {SCHEMES.map((s) => (
-                  <label key={s} className="checkbox-inline-label">
-                    <input
-                      type="checkbox"
-                      checked={draft.project.lucky.colorSchemes.includes(s)}
-                      onChange={() => mutateLucky((l) => {
+                      })
+                    }
+                  />{" "}
+                  {i === 0 ? "Mono" : "Duo"}
+                </label>
+              ))}
+            </span>
+          </Field>
+          <hr className="prefs-hr" />
+          <Field label="Colour Rhythm" stacked>
+            <span className="field-control">
+              {SCHEMES.map((s) => (
+                <label key={s} className="checkbox-inline-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.project.lucky.colorSchemes.includes(s)}
+                    onChange={() =>
+                      mutateLucky((l) => {
                         const idx = l.colorSchemes.indexOf(s as ColorScheme);
                         if (idx >= 0) l.colorSchemes.splice(idx, 1);
                         else l.colorSchemes.push(s as ColorScheme);
-                      })}
-                    />{" "}
-                    {s}
-                  </label>
-                ))}
-              </span>
-            </Field>
-            <NumField label="Animation amount" value={draft.project.lucky.animation} step={0.05} min={0} max={1}
-              onChange={(v) => mutateLucky((l) => { l.animation = Math.max(0, Math.min(1, v)); })} />
-          </Section>
-
-          <Section title="Text card font" defaultOpen={false}>
-            <Field label="Current font">
-              <span className="prefs-font-current">
-                {customFont ? customFont.name : "Parabole (bundled)"}
-              </span>
-            </Field>
-            <div className="prefs-row-add">
-              <button className="mini" onClick={uploadFont}>Upload font…</button>
-              <button className="mini" onClick={revertFont} disabled={!customFont}>
-                Revert to Parabole
-              </button>
-            </div>
-          </Section>
-        </div>
+                      })
+                    }
+                  />{" "}
+                  {SCHEME_LABELS[s]}
+                </label>
+              ))}
+            </span>
+          </Field>
+          <hr className="prefs-hr" />
+          <Field label="Blend" stacked>
+            <span className="field-control">
+              {(
+                [
+                  "normal",
+                  "invert",
+                  "exclusion",
+                  "multiply",
+                  "screen",
+                ] as const satisfies readonly TextBlendMode[]
+              ).map((v) => (
+                <label key={v} className="checkbox-inline-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.project.lucky.blendModes.includes(v)}
+                    onChange={() =>
+                      mutateLucky((l) => {
+                        const idx = l.blendModes.indexOf(v);
+                        if (idx >= 0) l.blendModes.splice(idx, 1);
+                        else l.blendModes.push(v);
+                      })
+                    }
+                  />{" "}
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </label>
+              ))}
+            </span>
+          </Field>
+          <hr className="prefs-hr" />
+          <Field label="Text background" stacked>
+            <span className="field-control">
+              {(["silhouette", "wireframe"] as const).map((v) => (
+                <label key={v} className="checkbox-inline-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.project.lucky.textBackdrops.includes(v)}
+                    onChange={() =>
+                      mutateLucky((l) => {
+                        const idx = l.textBackdrops.indexOf(v);
+                        if (idx >= 0) l.textBackdrops.splice(idx, 1);
+                        else l.textBackdrops.push(v);
+                      })
+                    }
+                  />{" "}
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </label>
+              ))}
+            </span>
+          </Field>
+          <hr className="prefs-hr" />
+          <Field label="Image mapping" stacked>
+            <span className="field-control">
+              {MAPPINGS.map((v) => (
+                <label key={v} className="checkbox-inline-label">
+                  <input
+                    type="checkbox"
+                    checked={
+                      !draft.project.lucky.mappings ||
+                      draft.project.lucky.mappings.includes(v)
+                    }
+                    onChange={() =>
+                      mutateLucky((l) => {
+                        const all = [...MAPPINGS];
+                        const current = l.mappings ?? all;
+                        const idx = current.indexOf(v);
+                        if (idx >= 0) {
+                          const next = current.filter((m) => m !== v);
+                          l.mappings = next.length ? next : all;
+                        } else {
+                          const next = [...current, v];
+                          l.mappings =
+                            next.length === all.length ? undefined : next;
+                        }
+                      })
+                    }
+                  />{" "}
+                  {v === "uv" ? "UV" : v.charAt(0).toUpperCase() + v.slice(1)}
+                </label>
+              ))}
+            </span>
+          </Field>
+          <hr className="prefs-hr" />
+          <NumField
+            label="Animations"
+            value={draft.project.lucky.animation}
+            step={0.05}
+            min={0}
+            max={1}
+            onChange={(v) =>
+              mutateLucky((l) => {
+                l.animation = Math.max(0, Math.min(1, v));
+              })
+            }
+          />
+          <hr className="prefs-hr" />
+          <div className="prefs-row-add">
+            <button className="important" onClick={resetTaste}>
+              Reset taste profile
+            </button>
+          </div>
+          <p className="prefs-note">
+            Clears the bias learned from likes, saves, exports, and hand-edits
+            of generated scenes — future rolls go back to even odds.
+          </p>
+        </Section>
+      </div>
     </Modal>
   );
 }
