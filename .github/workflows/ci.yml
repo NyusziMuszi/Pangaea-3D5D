@@ -1,0 +1,28 @@
+name: CI
+
+# PR-time gate for both build targets. deploy-pages.yml only runs on push to
+# main, so without this a PR could break the web bundle (or the web-side
+# typecheck) and it wouldn't surface until deploy. Runs the fast deterministic
+# checks: typecheck of both tsconfig projects + a full web bundle.
+on:
+  pull_request:
+  # Let it run on direct pushes to main too, as a backstop.
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Covers both the node-side (main/preload) and web-side (renderer) projects.
+      - run: npm run typecheck
+      # Proves the static SPA target still bundles. The Electron target is left to
+      # `npm run dist` locally — it needs macOS + signing config and is heavier
+      # than a PR gate warrants; typecheck:node catches most desktop breakage.
+      - run: npm run build:web

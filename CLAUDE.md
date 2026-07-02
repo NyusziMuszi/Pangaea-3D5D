@@ -118,6 +118,18 @@ Start with [types.ts](src/renderer/src/types.ts) (the `Project` data model), the
    learned "Feeling lucky" taste profile) live in `state/prefs.ts`, `state/taste.ts`,
    `state/lucky.ts`, `state/defaultsBase.ts`, `state/assets.ts` — see README for detail.
 
+7. **Platform seam — the same renderer ships as Electron *and* a static web app.** Nothing under
+   `src/renderer/` (renderer or engine) may import `electron` or Node built-ins; every OS call goes
+   through the single `window.api` bridge (the `PangaeaApi` interface in `src/preload/index.ts`).
+   Electron's preload injects it; the browser build installs a shim in
+   [platform/webApi.ts](src/renderer/src/platform/webApi.ts) when `window.api` is absent. To add a
+   platform capability: extend `PangaeaApi`, then implement it in **both** preload and webApi.ts
+   (the shim's type-only `PangaeaApi` import makes the typecheck fail if they drift). Prefer runtime
+   feature-detection (`if (!window.api)`, WebCodecs capability checks) over an `IS_WEB` global;
+   where a capability can't exist on web, fail fast with an actionable message. Both targets are
+   gated on every PR by `.github/workflows/ci.yml` (`typecheck` + `build:web`) — keep it green. See
+   README's [Web build](README.md#web-build-github-pages) section.
+
 ### Known unresolved issue
 
 Deformed closed primitives (most visibly `cone`) render with an alternating-triangle dropout

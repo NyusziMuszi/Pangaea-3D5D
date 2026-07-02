@@ -152,6 +152,13 @@ export async function exportVideo(
       if ((e as DOMException)?.name === 'AbortError') throw e
       console.warn('WebCodecs export failed; falling back to ffmpeg.', e)
     }
+  } else {
+    // No WebCodecs H.264 encoder at all (a non-Chromium browser). The ffmpeg
+    // fallback below only exists in Electron's main process, so fail fast with an
+    // actionable message instead of capturing frames encodeFrames can't consume.
+    throw new Error(
+      "This browser can't export MP4 — it has no WebCodecs H.264 support. Use Chrome or Edge."
+    )
   }
 
   // Fallback: capture PNG frames, encode with bundled ffmpeg in the main process.

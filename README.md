@@ -33,6 +33,7 @@ exports a valid file; `ffmpeg` confirms `h264 (High) yuv420p, 1080x1350, 30 fps`
 | Export: WebCodecs H.264 → mp4-muxer, ffmpeg fallback      | ✅                                                   |
 | Project save/load (`.pangaea` JSON, embedded assets)      | ✅                                                   |
 | Packaging to `.dmg` (electron-builder)                    | configured; the 2026-06-16 build predates a security fix and is stale — see [PACKAGING.md](PACKAGING.md) |
+| Web build (static site, GitHub Pages)                     | ✅ `window.api` shimmed for the browser; export needs Chromium |
 | Preferences (editable defaults, custom font)               | ✅                                                   |
 | "Feeling lucky" + taste learning, per-category locks       | ✅                                                   |
 | Object surfaces (image/silhouette/wireframe/faceted), dual objects | ✅                                        |
@@ -47,6 +48,8 @@ See [Known limitations & roadmap](#known-limitations--roadmap) for what's intent
 npm install
 npm run dev          # dev server + Electron with HMR
 npm run build        # production bundle into out/  (also the type-check gate via build)
+npm run build:web    # static browser bundle into dist-web/ (GitHub Pages — see Web build)
+npm run preview:web  # serve the built dist-web/ locally (open the /pangaea/ path)
 npm run typecheck    # tsc on node-side and web-side projects
 npm run dist         # electron-builder → macOS .dmg
 ```
@@ -78,6 +81,59 @@ env -u ELECTRON_RUN_AS_NODE PANGAEA_SELFTEST=1 npx electron . --enable-logging=s
 
 The self-test launches a hidden, never-quitting process — kill it by PID when done
 (`pkill` on `Electron` would also kill your VS Code; don't).
+
+---
+
+## Web build (GitHub Pages)
+
+The renderer is plain React/Three.js/WebGL with **no direct `electron`/Node imports** — every OS
+call goes through one bridge object, `window.api` (the `PangaeaApi` interface in
+[src/preload/index.ts](src/preload/index.ts)). Under Electron the preload sets `window.api` before
+renderer scripts run; in a browser it's `undefined`. So the *same* renderer runs as a static site
+once that bridge is implemented with browser APIs — `src/main` and `src/preload` are not built for
+the web at all.
+
+- [src/renderer/src/platform/webApi.ts](src/renderer/src/platform/webApi.ts) — `installWebApi()`
+  builds a `PangaeaApi`-typed shim from browser primitives. [main.tsx](src/renderer/src/main.tsx)
+  calls it **only when `window.api` is absent**, so Electron is untouched. The shim imports the
+  `PangaeaApi` type from preload (type-only, so no `electron` code enters the web bundle), which
+  keeps it from drifting out of sync with the real bridge.
+- [vite.config.web.ts](vite.config.web.ts) — a standalone (non-electron-vite) Vite build:
+  `root: src/renderer`, output to `dist-web/`, `base` defaulting to `/pangaea/` (a project Pages
+  site lives under `/<repo>/`; override with the `PANGAEA_BASE` env var, e.g. `/` for a user/org
+  page served at the domain root).
+- [.github/workflows/deploy-pages.yml](.github/workflows/deploy-pages.yml) — builds and publishes
+  to Pages on every push to `main`. **One-time setup:** repo **Settings → Pages → Source = "GitHub
+  Actions"** (without it the workflow runs but has nowhere to publish).
+- [.github/workflows/ci.yml](.github/workflows/ci.yml) — PR gate that runs `npm run typecheck`
+  (both tsconfig projects) and `npm run build:web`, so a change that breaks the web target is caught
+  on the PR rather than at deploy time.
+
+```bash
+npm run build:web     # → dist-web/
+npm run preview:web   # serve it locally; open http://localhost:4173/pangaea/ (the base path matters)
+```
+
+How each `window.api` method maps in the browser:
+
+| Electron (native)                      | Browser shim                                             |
+| -------------------------------------- | ------------------------------------------------------- |
+| open dialogs → file path + bytes       | hidden `<input type="file">` → bytes                    |
+| `saveFileDialog` + `writeFile`         | synthetic path → anchor **download** (no folder picker) |
+| `readImagePath` (absolute disk path)   | in-memory `handleStore`, keyed by a `webfile:` handle   |
+| `readPreferences` / `writePreferences` | `localStorage['pangaea:prefs']`                         |
+| `encodeFrames` (ffmpeg fallback)       | rejects — the browser has no ffmpeg main process        |
+
+Web-specific limitations:
+
+- **Export needs a Chromium browser** (Chrome/Edge) for the WebCodecs H.264 path; there is no
+  ffmpeg fallback in the browser, so [exporter.ts](src/renderer/src/engine/export/exporter.ts)
+  fails fast with an actionable message when WebCodecs is missing. Editing works in any browser.
+- **"Feeling lucky" image presets are session-scoped** — their bytes live in the in-memory
+  `handleStore` (paths are `webfile:` handles, not disk paths), so they don't survive a reload.
+  Making them portable would mean embedding the bytes in the `Project`, which also affects Electron
+  — out of scope for now.
+- **Saves and exports are downloads only** — no silent save-to-folder.
 
 ---
 
@@ -136,6 +192,8 @@ src/
         objectOptions.ts   PRIMITIVE_OPTIONS / SURFACE_OPTIONS — labeled dropdown options
         accent.ts          accent-colour helpers for UI theming
         scalarUtils.ts     toggleKeyAt/setValueAt/startAnimating/stopAnimating for ScalarControl
+      platform/
+        webApi.ts          browser window.api shim for the static web build (absent under Electron)
 ```
 
 ---
