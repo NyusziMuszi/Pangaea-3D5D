@@ -38,7 +38,7 @@ import type {
   TextBlendMode,
   TextStyle,
 } from "../types";
-import { ALL_UNLOCKED, constant, totalDuration } from "../types";
+import { ALL_UNLOCKED, constant, MAPPINGS, PRIMITIVE_MODELS, totalDuration } from "../types";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import {
   defaultObjectImage,
@@ -48,8 +48,6 @@ import {
 import {
   EMPTY_TASTE_PROFILE,
   FLAT_SURFACES,
-  MAPPINGS,
-  PRIMITIVE_MODELS,
   pickDistinctWeighted,
   pickWeighted,
   type TasteProfile,

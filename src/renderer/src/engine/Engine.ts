@@ -458,7 +458,8 @@ class ObjectSlot {
     effects: ResolvedEffect[],
   ): void {
     this.activeBindings = bindings.map((b) => {
-      const re = effects.find((e) => e.instance.instanceId === b.instanceId)!;
+      const re = effects.find((e) => e.instance.instanceId === b.instanceId);
+      if (!re) throw new Error(`Effect instance ${b.instanceId} not found in active effects`);
       const ud = re.def.uniforms.find((u) => u.name === b.uniformName);
       return {
         ...b,
@@ -538,16 +539,27 @@ class ObjectSlot {
     } else {
       // silhouette, wireframe and faceted all colour the surface with
       // surfaceColor; each then sets exactly one flag for its shader branch.
-      hexToRgb01(
-        object.surfaceColor ?? "#878787",
-        mat.uniforms.uFlatColor.value as THREE.Vector3,
-      );
-      mat.uniforms.uSilhouette.value = surface === "silhouette" ? 1 : 0;
-      mat.uniforms.uWireframe.value = surface === "wireframe" ? 1 : 0;
-      mat.uniforms.uFaceted.value = surface === "faceted" ? 1 : 0;
+      this.setSurfaceUniforms(mat, object.surfaceColor ?? "#878787", {
+        silhouette: surface === "silhouette",
+        wireframe: surface === "wireframe",
+        faceted: surface === "faceted",
+      });
       mat.uniforms.uWireWidth.value = object.surfaceWireWidth ?? 1.5;
     }
     mat.uniforms.uOpacity.value = 1;
+  }
+
+  // Shared by applySurface and applyBackdrop: colours the flat-shading path
+  // (uFlatColor) and sets the three mutually-adjustable shader-branch flags.
+  private setSurfaceUniforms(
+    mat: THREE.ShaderMaterial,
+    color: string,
+    flags: { silhouette: boolean; wireframe: boolean; faceted: boolean },
+  ): void {
+    hexToRgb01(color, mat.uniforms.uFlatColor.value as THREE.Vector3);
+    mat.uniforms.uSilhouette.value = flags.silhouette ? 1 : 0;
+    mat.uniforms.uWireframe.value = flags.wireframe ? 1 : 0;
+    mat.uniforms.uFaceted.value = flags.faceted ? 1 : 0;
   }
 
   // Text-card backdrop: draw the object as a flat silhouette or wireframe
@@ -558,21 +570,19 @@ class ObjectSlot {
     const mat = this.material;
     if (!mat) return;
     if (active && tl.textCard) {
-      mat.uniforms.uSilhouette.value = 1;
-      hexToRgb01(
-        tl.textCard.style.textBackdropColor,
-        mat.uniforms.uFlatColor.value as THREE.Vector3,
-      );
+      const isWire = tl.textCard.style.textBackdrop === "wireframe";
+      // Clear any faceted flag left by the object's own surface, else its shader
+      // branch would override the flat backdrop fill.
+      this.setSurfaceUniforms(mat, tl.textCard.style.textBackdropColor, {
+        silhouette: true,
+        wireframe: isWire,
+        faceted: false,
+      });
       // The backdrop cuts in/out at full strength — only the card's background
       // colour and text fade, so the silhouette/wireframe stays fully opaque.
       mat.uniforms.uOpacity.value = 1;
-      const isWire = tl.textCard.style.textBackdrop === "wireframe";
-      mat.uniforms.uWireframe.value = isWire ? 1 : 0;
       mat.uniforms.uWireWidth.value =
         tl.textCard.style.textBackdropWireWidth ?? 1.5;
-      // Clear any faceted flag left by the object's own surface, else its shader
-      // branch would override the flat backdrop fill.
-      mat.uniforms.uFaceted.value = 0;
     }
   }
 

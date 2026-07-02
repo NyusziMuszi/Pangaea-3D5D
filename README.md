@@ -32,7 +32,10 @@ exports a valid file; `ffmpeg` confirms `h264 (High) yuv420p, 1080x1350, 30 fps`
 | In-app GLSL editor (live recompile, uniform auto-UI)      | ✅ (plain textarea, **not Monaco yet**)              |
 | Export: WebCodecs H.264 → mp4-muxer, ffmpeg fallback      | ✅                                                   |
 | Project save/load (`.pangaea` JSON, embedded assets)      | ✅                                                   |
-| Packaging to `.dmg` (electron-builder)                    | configured, not exercised                            |
+| Packaging to `.dmg` (electron-builder)                    | configured; the 2026-06-16 build predates a security fix and is stale — see [PACKAGING.md](PACKAGING.md) |
+| Preferences (editable defaults, custom font)               | ✅                                                   |
+| "Feeling lucky" + taste learning, per-category locks       | ✅                                                   |
+| Object surfaces (image/silhouette/wireframe/faceted), dual objects | ✅                                        |
 
 See [Known limitations & roadmap](#known-limitations--roadmap) for what's intentionally missing.
 
@@ -104,7 +107,13 @@ src/
       types.ts             Project data model + Scalar/Keyframe types  ← read this first
       state/
         defaults.ts        defaultProject(), instanceFromDef(), uid()
+        defaultsBase.ts    BASE_PROJECT / BASE_SECOND_OBJECT hard-coded blueprints
         store.ts           zustand store: project + selection + toast/shaderError; update(mutator)
+        prefs.ts           usePrefs: persisted preferences (base defaults, custom font, taste profile)
+        taste.ts           TasteProfile model + weighted pick/learn for "Feeling lucky"
+        lucky.ts           generateLuckyScene() — the "Feeling lucky" random-scene generator
+        assets.ts          image asset registry (bytes keyed by id, referenced from Project)
+        filename.ts        defaultFilename() for save/export dialogs
       engine/
         Engine.ts          THE core: scene/camera/subject/overlay, reconcile, renderFrame(t), playback
         engineSingleton.ts single Engine instance (creates the WebGL context at import)
@@ -112,13 +121,21 @@ src/
         timeline.ts        computeTimeline(project, t) — active segment, scene clock, card opacity
         textOverlay.ts     renderTextCard() → canvas; TextOverlay fullscreen quad
         loaders.ts         loadImage(), loadModelGeometry() (glb/gltf/obj)
+        fonts.ts           setCustomTextCardFont() / revertTextCardFont() for custom card fonts
         effects/
           catalog.ts       BUILTIN_EFFECTS (EffectDef[]) + findEffectDef()
           composer.ts      composeSubjectShader() — stacks GLSL chunks into one ShaderMaterial
           particle.ts      particle ShaderMaterial + buildParticleGeometry()
         export/
           exporter.ts      exportVideo() — WebCodecs primary, ffmpeg fallback
-      ui/                  React panels + controls (see UI section)
+      ui/                  React panels + controls (see UI section), plus:
+        PreferencesPanel.tsx  editable base defaults + custom card font, in a shared Modal
+        LockPanel.tsx      per-category "Feeling lucky" locks (colours/motion/effects/objects)
+        Modal.tsx          shared modal chrome (ExportDialog, ShaderEditorModal, PreferencesPanel)
+        ProjectActions.tsx New / Open / Save / Export / Preferences
+        objectOptions.ts   PRIMITIVE_OPTIONS / SURFACE_OPTIONS — labeled dropdown options
+        accent.ts          accent-colour helpers for UI theming
+        scalarUtils.ts     toggleKeyAt/setValueAt/startAnimating/stopAnimating for ScalarControl
 ```
 
 ---
@@ -195,9 +212,14 @@ GLSL compile errors are surfaced through `Engine.onShaderError` (wired to
 (`mode|primitive|model?|mapping|density|imageReady`):
 
 - `plane` — subdivided `PlaneGeometry`, the canvas for deformers.
-- `model` — a primitive (sphere/cylinder/torus/box/plane) **or** an imported glb/gltf/obj
-  (dominant mesh, normalized; UV or **triplanar** mapping for un-UV'd meshes). Uses the composed
-  ShaderMaterial, so deformers/shaders apply to it too.
+- `model` — one of the 12 `PrimitiveModel`s (plane, sphere, portal, cylinder, capsule, torus, box,
+  lathe, knot, twist, polyhedron, dodecahedron) **or** an imported glb/gltf/obj (dominant mesh,
+  normalized; UV or **triplanar** mapping for un-UV'd meshes). Uses the composed ShaderMaterial, so
+  deformers/shaders apply to it too. Each object's **surface** is `image` (textured, default),
+  `silhouette`/`wireframe` (flat-filled or edge-only in `surfaceColor`), or `faceted` (flat-shaded
+  by a fixed light so facets read). `Project.objects` may hold 1 or 2 objects — a second object is a
+  full peer (its own shape/transform/effects) that may additionally sample the first object's
+  texture (used by multiply/mask-style effects).
 - `particles` — image sampled into a colored point cloud; uses the separate particle material
   with its own controls on `subject.particle` (also `Scalar`s, also keyframeable).
 
@@ -215,14 +237,17 @@ A single `Project` lives in the zustand store ([state/store.ts](src/renderer/src
 Mutations go through `update(mutator)`, which `structuredClone`s the project, applies the mutator,
 and sets new state (cheap, avoids deep-immutable boilerplate). [App.tsx](src/renderer/src/App.tsx)
 subscribes and calls `engine.setProject(project)` on every change, re-rendering the current frame
-when paused. The `Project` is the entire serializable `.pangaea` file; assets (image, model) are
-embedded as **data URLs** so a project is one portable JSON.
+when paused. The `Project` is the entire serializable `.pangaea` file. Image assets live in the
+**asset registry** ([state/assets.ts](src/renderer/src/state/assets.ts)), referenced from the
+`Project` by id, and are re-embedded as base64 alongside the project only at save/load time
+([ProjectActions.tsx](src/renderer/src/ui/ProjectActions.tsx)); a model is still embedded inline as
+a data URL.
 
 ---
 
 ## UI map
 
-- [TopBar.tsx](src/renderer/src/ui/TopBar.tsx) — New / Open / Save / Export.
+- [ProjectActions.tsx](src/renderer/src/ui/ProjectActions.tsx) — New / Open / Save / Export / Preferences.
 - [LibraryPanel.tsx](src/renderer/src/ui/LibraryPanel.tsx) — image, subject mode/primitive/mapping/
   model import, effect catalog (Add), `+ Shader` (author custom).
 - [PreviewPanel.tsx](src/renderer/src/ui/PreviewPanel.tsx) — mounts the engine canvas (aspect-locked
@@ -234,6 +259,12 @@ embedded as **data URLs** so a project is one portable JSON.
 - [ShaderEditorModal.tsx](src/renderer/src/ui/ShaderEditorModal.tsx) — GLSL body editor + uniform
   list editor; recompiles live, shows compile errors.
 - [ExportDialog.tsx](src/renderer/src/ui/ExportDialog.tsx) — fps/duration/quality, progress, cancel.
+- [PreferencesPanel.tsx](src/renderer/src/ui/PreferencesPanel.tsx) — editable base project/second-object
+  defaults, custom card font upload, reset-to-defaults, reset learned taste.
+- [LockPanel.tsx](src/renderer/src/ui/LockPanel.tsx) — per-category locks (colours/motion/effects/
+  objects) that pin a category across "Feeling lucky" rolls.
+- [Modal.tsx](src/renderer/src/ui/Modal.tsx) — shared modal chrome; `ExportDialog`,
+  `ShaderEditorModal`, and `PreferencesPanel` all render inside it.
 - [controls.tsx](src/renderer/src/ui/controls.tsx) — `Section`, `Field`, `ScalarControl`, `ColorRow`.
 
 ---
@@ -264,6 +295,37 @@ needs local worker bundling under Electron (CSP-friendly, offline); the textarea
 
 ---
 
+## Additional features (beyond the original v1 spec)
+
+**Preferences system** ([state/prefs.ts](src/renderer/src/state/prefs.ts),
+[ui/PreferencesPanel.tsx](src/renderer/src/ui/PreferencesPanel.tsx)) — a persisted
+`preferences.json` holds editable base defaults (the blueprint `defaultProject()` /
+`defaultSecondObject()` clone from), an optional custom text-card font (embedded as a data URL —
+see [engine/fonts.ts](src/renderer/src/engine/fonts.ts)), and the learned taste profile below.
+`getPrefs()` is the non-hook accessor used from `state/defaults.ts`.
+
+**"Feeling lucky" + taste learning** ([state/lucky.ts](src/renderer/src/state/lucky.ts),
+[state/taste.ts](src/renderer/src/state/taste.ts)) — `generateLuckyScene()` produces a randomized
+scene (shape, mapping/surface, effects, keyframes, colours) from the user's chosen object count /
+colour scheme / animation-amount controls. Explicit 👍/👎 signals plus implicit ones (save, export,
+hand-edit) bump a per-axis `TasteProfile` score that biases future rolls via `pickWeighted` /
+`pickDistinctWeighted` (exponential weighting, gently — a never-seen option is always reachable).
+[ui/LockPanel.tsx](src/renderer/src/ui/LockPanel.tsx) lets the user pin categories
+(colours/motion/effects/objects) so a roll leaves them untouched.
+
+**Object surfaces** — see invariant #4 above (`image`/`silhouette`/`wireframe`/`faceted`).
+
+**Text blend modes + backdrops** — a text card can show a `textBackdrop` (`silhouette` or
+`wireframe` render of the object, still animated by the active deformers) instead of the flat
+card background; when the backdrop is `silhouette`, `textBlend` (`normal`/`invert`/`exclusion`/
+`multiply`/`screen`) recombines each glyph with the scene pixels under it instead of a flat fill.
+
+**Per-segment `backgroundColor`** — each `animation` segment can set its own WebGL clear colour,
+which holds through the text card(s) that follow it (see
+[engine/timeline.ts](src/renderer/src/engine/timeline.ts)).
+
+---
+
 ## Conventions
 
 - TypeScript `strict`; keep `npm run typecheck` clean (it's the CI gate alongside `npm run build`).
@@ -289,7 +351,7 @@ needs local worker bundling under Electron (CSP-friendly, offline); the textarea
     `transparent: true`. With `forceSinglePass` unset, three.js draws such a mesh in two passes
     (`BackSide` then `FrontSide`) — and each pass **re-enables backface culling**
     (`three.module.js` `renderObject` ~L30332 / `setMaterial` ~L23370). The deform shader rewrites
-    `gl_Position` ([composer.ts](src/renderer/src/engine/effects/composer.ts) ~L95), flipping
+    `gl_Position` ([composer.ts](src/renderer/src/engine/effects/composer.ts) ~L107), flipping
     per-triangle winding, so triangles get misclassified/depth-rejected between the two passes.
   - **Attempted fix that did NOT resolve it:** adding `forceSinglePass: true` to the
     `ShaderMaterial`. It is left in place (correct in principle, harmless), but the lattice

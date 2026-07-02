@@ -5,12 +5,6 @@
 // asset bytes are re-embedded alongside the project (see ProjectActions).
 // ---------------------------------------------------------------------------
 
-export interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
-
 export type Easing = "linear" | "easeIn" | "easeOut" | "easeInOut" | "hold";
 
 export interface Keyframe {
@@ -66,7 +60,9 @@ export interface EffectInstance {
 }
 
 export type CameraType = "perspective" | "isometric";
+export const CAMERA_TYPES = ["perspective", "isometric"] as const satisfies readonly CameraType[];
 export type Mapping = "uv" | "triplanar" | "spherical" | "cylindrical" | "reflection";
+export const MAPPINGS = ["uv", "triplanar", "spherical", "cylindrical", "reflection"] as const satisfies readonly Mapping[];
 // How colour trios are dealt across segments by "Feeling lucky" — see lucky.ts.
 export type ColorScheme = "byType" | "byPair" | "random";
 export type PrimitiveModel =
@@ -82,6 +78,10 @@ export type PrimitiveModel =
   | "twist"
   | "polyhedron"
   | "dodecahedron";
+export const PRIMITIVE_MODELS = [
+  "plane", "sphere", "portal", "cylinder", "capsule", "torus",
+  "box", "lathe", "knot", "twist", "polyhedron", "dodecahedron",
+] as const satisfies readonly PrimitiveModel[];
 
 // Backdrop drawn behind a text card, in place of the textured object.
 // 'none' keeps today's opaque card. The object's deformers still animate
@@ -93,6 +93,7 @@ export type TextBackdrop = "none" | "silhouette" | "wireframe";
 // or "wireframe" drawn in surfaceColor, or as a "faceted" solid coloured in
 // surfaceColor and flat-shaded by a fixed light so its planes are visible.
 export type ObjectSurface = "image" | "silhouette" | "wireframe" | "faceted";
+export const OBJECT_SURFACES = ["image", "silhouette", "wireframe", "faceted"] as const satisfies readonly ObjectSurface[];
 
 // How the glyphs combine with whatever is beneath them (only applies when
 // textBackdrop is "silhouette"). "normal" is today's flat textColor fill;

@@ -16,40 +16,16 @@
 // into a rut, and dislikes fade naturally as positive signals accumulate.
 // ---------------------------------------------------------------------------
 
-import type {
-  ColorScheme,
-  Mapping,
-  ObjectSurface,
-  PrimitiveModel,
-  Project,
+import {
+  OBJECT_SURFACES,
+  type ColorScheme,
+  type Mapping,
+  type ObjectSurface,
+  type PrimitiveModel,
+  type Project,
 } from "../types";
 
-// The full set of primitive shapes and surface mappings. Lives here (not
-// lucky.ts) so both lucky.ts and this module share one definition with no
-// circular import between them.
-export const PRIMITIVE_MODELS: PrimitiveModel[] = [
-  "plane",
-  "sphere",
-  "portal",
-  "cylinder",
-  "torus",
-  "box",
-  "lathe",
-  "knot",
-  "twist",
-  "polyhedron",
-  "dodecahedron",
-];
-
-export const MAPPINGS: Mapping[] = [
-  "uv",
-  "triplanar",
-  "spherical",
-  "cylindrical",
-  "reflection",
-];
-
-export const FLAT_SURFACES: ObjectSurface[] = ["silhouette", "wireframe", "faceted"];
+export const FLAT_SURFACES = OBJECT_SURFACES.filter((s) => s !== "image") as ObjectSurface[];
 
 export interface TasteProfile {
   shapes: Partial<Record<PrimitiveModel, number>>;
@@ -87,7 +63,7 @@ export const EDIT_WEIGHT = 1;
 
 // Weighted pick: weight = GROWTH^score, so a score-0 option always has weight
 // 1 and is never excluded. Drop-in replacement for lucky.ts's uniform pick().
-export function pickWeighted<T>(arr: T[], scoreOf: (x: T) => number): T {
+export function pickWeighted<T>(arr: readonly T[], scoreOf: (x: T) => number): T {
   const weights = arr.map((x) => Math.pow(GROWTH, scoreOf(x)));
   const total = weights.reduce((s, w) => s + w, 0);
   let r = Math.random() * total;
@@ -103,7 +79,7 @@ export function pickWeighted<T>(arr: T[], scoreOf: (x: T) => number): T {
 // remaining pool's scores. Drop-in replacement for lucky.ts's uniform
 // pickDistinct().
 export function pickDistinctWeighted<T>(
-  arr: T[],
+  arr: readonly T[],
   n: number,
   scoreOf: (x: T) => number,
 ): T[] {

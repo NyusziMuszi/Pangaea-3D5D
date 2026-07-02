@@ -59,6 +59,20 @@ function persist(s: Preferences): void {
   void window.api?.writePreferences(snapshot(s));
 }
 
+// Mirrors state/defaults.ts's defaultProject() — the blueprint state prefs
+// resets to, both on initial store creation and on an explicit reset.
+function defaultPrefsState(): Pick<
+  PrefsState,
+  "project" | "secondObject" | "customFont" | "tasteProfile"
+> {
+  return {
+    project: structuredClone(BASE_PROJECT),
+    secondObject: structuredClone(BASE_SECOND_OBJECT),
+    customFont: null,
+    tasteProfile: EMPTY_TASTE_PROFILE,
+  };
+}
+
 export const usePrefs = create<PrefsState>((set, get) => {
   // Shared by every like/dislike/save/export signal: credit whatever's
   // currently on screen, bump the profile, persist.
@@ -76,10 +90,7 @@ export const usePrefs = create<PrefsState>((set, get) => {
 
   return {
     // Seed from the hard-coded base so the store is valid before the boot hydrate.
-    project: structuredClone(BASE_PROJECT),
-    secondObject: structuredClone(BASE_SECOND_OBJECT),
-    customFont: null,
-    tasteProfile: EMPTY_TASTE_PROFILE,
+    ...defaultPrefsState(),
 
     hydrate: (p) => {
       if (p)
@@ -144,12 +155,7 @@ export const usePrefs = create<PrefsState>((set, get) => {
       persist(get());
     },
     resetAll: () => {
-      set({
-        project: structuredClone(BASE_PROJECT),
-        secondObject: structuredClone(BASE_SECOND_OBJECT),
-        customFont: null,
-        tasteProfile: EMPTY_TASTE_PROFILE,
-      });
+      set(defaultPrefsState());
       persist(get());
     },
   };

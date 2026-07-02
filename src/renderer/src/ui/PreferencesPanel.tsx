@@ -5,6 +5,10 @@ import { engine } from "../engine/engineSingleton";
 import { uid } from "../state/defaults";
 import {
   constant,
+  CAMERA_TYPES,
+  MAPPINGS,
+  OBJECT_SURFACES,
+  PRIMITIVE_MODELS,
   type CameraType,
   type Mapping,
   type ObjectState,
@@ -23,34 +27,6 @@ import { setCustomTextCardFont, revertTextCardFont } from "../engine/fonts";
 import { bytesToDataUrl } from "./files";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 
-const PRIMITIVES: readonly PrimitiveModel[] = [
-  "plane",
-  "sphere",
-  "portal",
-  "cylinder",
-  "capsule",
-  "torus",
-  "box",
-  "lathe",
-  "knot",
-  "twist",
-  "polyhedron",
-  "dodecahedron",
-];
-const MAPPINGS: readonly Mapping[] = [
-  "uv",
-  "triplanar",
-  "spherical",
-  "cylindrical",
-  "reflection",
-];
-const SURFACES: readonly ObjectSurface[] = [
-  "image",
-  "silhouette",
-  "wireframe",
-  "faceted",
-];
-const CAMERAS: readonly CameraType[] = ["perspective", "isometric"];
 const SCHEMES = ["byType", "byPair", "random"] as const;
 type ColorScheme = (typeof SCHEMES)[number];
 
@@ -140,7 +116,7 @@ function ObjectFields({
       <SelectField
         label="Shape"
         value={obj.primitive}
-        options={PRIMITIVES}
+        options={PRIMITIVE_MODELS}
         onChange={(v) =>
           onChange((o) => {
             o.primitive = v;
@@ -160,7 +136,7 @@ function ObjectFields({
       <SelectField
         label="Surface"
         value={obj.surface}
-        options={SURFACES}
+        options={OBJECT_SURFACES}
         onChange={(v) =>
           onChange((o) => {
             o.surface = v;
@@ -533,7 +509,7 @@ export function PreferencesPanel({
           <SelectField
             label="Camera"
             value={draft.project.scene.cameraType}
-            options={CAMERAS}
+            options={CAMERA_TYPES}
             onChange={(v) =>
               mutate((d) => {
                 d.project.scene.cameraType = v;

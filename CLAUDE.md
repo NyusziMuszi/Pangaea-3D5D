@@ -110,7 +110,13 @@ Start with [types.ts](src/renderer/src/types.ts) (the `Project` data model), the
    ([state/store.ts](src/renderer/src/state/store.ts)). Mutate only via `store.update(mutator)`
    (structuredClone + mutate + set) — never mutate `project` in place.
    [App.tsx](src/renderer/src/App.tsx) calls `engine.setProject(project)` on every change. The
-   `Project` is the entire serializable `.pangaea` file; assets are embedded as data URLs.
+   `Project` is the entire serializable `.pangaea` file; image assets live in the asset registry
+   (`state/assets.ts`), referenced by id, and are re-embedded as data URLs on save. A model is
+   still embedded inline as a data URL.
+
+6. **Preferences/taste layer.** Persisted preferences (editable base defaults, custom card font,
+   learned "Feeling lucky" taste profile) live in `state/prefs.ts`, `state/taste.ts`,
+   `state/lucky.ts`, `state/defaultsBase.ts`, `state/assets.ts` — see README for detail.
 
 ### Known unresolved issue
 
