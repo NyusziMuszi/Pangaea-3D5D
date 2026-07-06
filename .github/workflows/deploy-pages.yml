@@ -22,12 +22,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Provisions/repairs the Pages site before deploy (fixes first-deploy races).
+      - uses: actions/configure-pages@v5
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
+      # base must match the repo subpath: served at /Pangaea-3D5D/, not /pangaea/.
       - run: npm run build:web
+        env:
+          PANGAEA_BASE: /Pangaea-3D5D/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist-web
