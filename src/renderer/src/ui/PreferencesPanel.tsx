@@ -23,7 +23,11 @@ import {
 } from "../types";
 import { Section, Field, ColorSwatch } from "./controls";
 import { Modal } from "./Modal";
-import { setCustomTextCardFont, revertTextCardFont } from "../engine/fonts";
+import {
+  setCustomTextCardFont,
+  revertTextCardFont,
+  TEXT_CARD_FONT_FAMILY,
+} from "../engine/fonts";
 import { bytesToDataUrl } from "./files";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 
@@ -301,7 +305,7 @@ export function PreferencesPanel({
     revertTextCardFont();
     usePrefs.getState().setCustomFont(null);
     rerenderCards();
-    setToast("Reverted to Space Mono Bold");
+    setToast(`Reverted to ${TEXT_CARD_FONT_FAMILY}`);
   }
 
   // Pull explore settings, camera, and segment structure from the live project
@@ -519,7 +523,7 @@ export function PreferencesPanel({
 
           <Field label="Current font">
             <span className="prefs-font-current">
-              {customFont ? customFont.name : "Space Mono Bold (bundled)"}
+              {customFont ? customFont.name : `${TEXT_CARD_FONT_FAMILY} (bundled)`}
             </span>
           </Field>
           <div className="prefs-row-add">
@@ -531,7 +535,7 @@ export function PreferencesPanel({
               onClick={revertFont}
               disabled={!customFont}
             >
-              Revert to Space Mono Bold
+              Revert to {TEXT_CARD_FONT_FAMILY}
             </button>
           </div>
         </Section>

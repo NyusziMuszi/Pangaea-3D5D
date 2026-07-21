@@ -24,7 +24,9 @@ export default defineConfig({
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src/renderer/src'),
-        '@assets': resolve(__dirname, 'assets')
+        '@assets': resolve(__dirname, 'assets'),
+        // Per-target brand (font + factory defaults): Electron gets the Parabole variant.
+        '@branding': resolve(__dirname, 'src/renderer/src/branding/electron')
       }
     },
     // Allow the dev server to serve the shared assets/ dir that lives above the renderer root.

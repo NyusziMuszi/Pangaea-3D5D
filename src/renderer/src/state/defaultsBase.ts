@@ -4,6 +4,10 @@
 // these constants; defaults.ts reads stored prefs at call time). Keeping the
 // base here — rather than in defaults.ts — avoids a temporal-dead-zone crash if
 // defaults.ts happens to evaluate first in the import graph.
+//
+// The colours and text-card messages that differ between the Electron and web
+// builds come from `@branding` (a per-target module selected by a vite alias;
+// see src/renderer/src/branding). Everything else here is shared by both builds.
 
 import type {
   EffectDef,
@@ -14,6 +18,7 @@ import type {
   Scalar,
 } from "../types";
 import { constant } from "../types";
+import { branding } from "@branding";
 
 export function uid(prefix = "id"): string {
   return `${prefix}${Math.random().toString(36).slice(2, 9)}`;
@@ -43,7 +48,7 @@ export const BASE_SECOND_OBJECT: ObjectState = {
   modelDataUrl: null,
   mapping: "uv",
   surface: "image",
-  surfaceColor: "#878787",
+  surfaceColor: branding.objectSurfaceColor,
   surfaceWireWidth: 1,
   image: defaultObjectImage(),
   effects: [],
@@ -71,7 +76,7 @@ export const BASE_PROJECT: Project = {
       modelDataUrl: null,
       mapping: "uv",
       surface: "image",
-      surfaceColor: "#878787",
+      surfaceColor: branding.objectSurfaceColor,
       surfaceWireWidth: 1,
       image: defaultObjectImage(),
       effects: [],
@@ -90,7 +95,7 @@ export const BASE_PROJECT: Project = {
       kind: "animation",
       label: "Intro",
       durationSec: 2.5,
-      backgroundColor: "#281b6c",
+      backgroundColor: branding.animBackgrounds[0],
     },
     {
       id: uid("seg"),
@@ -98,14 +103,14 @@ export const BASE_PROJECT: Project = {
       label: "Unique message",
       durationSec: 2.5,
       text: {
-        content: "Making ideas visible.\n\nGiving thinking form.",
+        content: branding.textCards[0].content,
         fontSize: 150,
         align: "center",
-        textColor: "#000000",
-        backgroundColor: "#A3D6DC",
+        textColor: branding.textCards[0].textColor,
+        backgroundColor: branding.textCards[0].backgroundColor,
         reveal: "fade",
         textBackdrop: "silhouette",
-        textBackdropColor: "#64e36e",
+        textBackdropColor: branding.textCards[0].textBackdropColor,
         textBackdropWireWidth: 1,
       },
     },
@@ -114,7 +119,7 @@ export const BASE_PROJECT: Project = {
       kind: "animation",
       label: "Continue",
       durationSec: 2.5,
-      backgroundColor: "#1b6c4f",
+      backgroundColor: branding.animBackgrounds[1],
     },
     {
       id: uid("seg"),
@@ -122,14 +127,14 @@ export const BASE_PROJECT: Project = {
       label: "Sculpture as a Tool",
       durationSec: 2.5,
       text: {
-        content: "Sculpture \nas a Tool for Wider Learning",
+        content: branding.textCards[1].content,
         fontSize: 150,
         align: "center",
-        textColor: "#000000",
-        backgroundColor: "#A3D6DC",
+        textColor: branding.textCards[1].textColor,
+        backgroundColor: branding.textCards[1].backgroundColor,
         reveal: "fade",
         textBackdrop: "silhouette",
-        textBackdropColor: "#6473e3",
+        textBackdropColor: branding.textCards[1].textBackdropColor,
         textBackdropWireWidth: 1,
       },
     },
@@ -138,7 +143,7 @@ export const BASE_PROJECT: Project = {
       kind: "animation",
       label: "Conclude",
       durationSec: 2.5,
-      backgroundColor: "#6c2b1b",
+      backgroundColor: branding.animBackgrounds[2],
     },
     {
       id: uid("seg"),
@@ -146,30 +151,22 @@ export const BASE_PROJECT: Project = {
       label: "3D–5D Learning Revolution",
       durationSec: 2.5,
       text: {
-        content: "3D–5D Learning Revolution",
+        content: branding.textCards[2].content,
         fontSize: 200,
         align: "center",
-        textColor: "#000000",
-        backgroundColor: "#A3D6DC",
+        textColor: branding.textCards[2].textColor,
+        backgroundColor: branding.textCards[2].backgroundColor,
         reveal: "fade",
         textBackdrop: "silhouette",
-        textBackdropColor: "#64e36e",
+        textBackdropColor: branding.textCards[2].textBackdropColor,
         textBackdropWireWidth: 1,
       },
     },
   ],
   customEffects: [],
   lucky: {
-    typeColors: ["#ffffff", "#000000"],
-    surfaceColors: [
-      "#878787",
-      "#a3d6dc",
-      "#6fec79",
-      "#291b6f",
-      "#d9f066",
-      "#eeb720",
-      "#816575",
-    ],
+    typeColors: [...branding.lucky.typeColors],
+    surfaceColors: [...branding.lucky.surfaceColors],
     images: [],
     objectCounts: [1, 2],
     colorSchemes: ["byPair", "byType", "random"],

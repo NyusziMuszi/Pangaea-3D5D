@@ -12,7 +12,10 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/renderer/src/*"] },
+    "paths": {
+      "@/*": ["src/renderer/src/*"],
+      "@branding": ["src/renderer/src/branding/web"]
+    },
     "types": ["node", "vite/client", "dom-webcodecs"]
   },
   "include": [

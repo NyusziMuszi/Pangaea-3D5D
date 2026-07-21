@@ -17,7 +17,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src/renderer/src'),
-      '@assets': resolve(__dirname, 'assets')
+      '@assets': resolve(__dirname, 'assets'),
+      // Per-target brand (font + factory defaults): the web build gets the Space Mono variant.
+      '@branding': resolve(__dirname, 'src/renderer/src/branding/web')
     }
   },
   // The shared assets/ dir lives above the renderer root; allow dev-server access.

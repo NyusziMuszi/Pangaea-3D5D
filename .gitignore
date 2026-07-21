@@ -6,3 +6,8 @@ dist-web/
 *.log
 .vite/
 *.tsbuildinfo
+
+# Parabole is the local-only Electron text-card font — never committed or published.
+# The Electron build reads it from here; the web build never imports it (see
+# src/renderer/src/branding). Keep a local copy at assets/parabole-mediumdisplay.otf.
+assets/parabole-mediumdisplay.otf

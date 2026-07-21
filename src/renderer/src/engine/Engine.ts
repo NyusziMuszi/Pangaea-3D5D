@@ -788,8 +788,8 @@ export class Engine {
     );
     this.placeholder.needsUpdate = true;
 
-    // Load the custom text-card font, then refresh any cards already drawn with
-    // the system fallback so they pick up Space Mono Bold.
+    // Load the bundled text-card font, then refresh any cards already drawn with
+    // the system fallback so they pick up the branded face.
     loadTextCardFont()
       .then(() => {
         this.clearTextCache();

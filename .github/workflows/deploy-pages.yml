@@ -22,8 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Provisions/repairs the Pages site before deploy (fixes first-deploy races).
+      # enablement:true turns Pages on via the API (needs pages:write, granted
+      # above) so the deploy has a site to publish to. Without this the build +
+      # artifact upload succeed but deploy-pages fails with a generic
+      # "Deployment failed, try again later." because no Pages site exists.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
