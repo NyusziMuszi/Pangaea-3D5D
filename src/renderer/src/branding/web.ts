@@ -16,19 +16,22 @@ export const branding: Branding = {
   animBackgrounds: ["#810933", "#9BFBD0", "#FBF09B"],
   textCards: [
     {
-      content: "Where ideas take shape.\n\nWhere thinking takes form.",
+      content: "Start with a bold statement.\n\nThen a supporting line.",
+      fontSize: 128,
       textColor: "#003548",
       backgroundColor: "#FBF09B",
       textBackdropColor: "#810933",
     },
     {
-      content: "Sculpture \nas a Language for Learning",
+      content: "Add your\nmain message here",
+      fontSize: 150,
       textColor: "#003548",
       backgroundColor: "#9BFBD0",
       textBackdropColor: "#810933",
     },
     {
-      content: "Learning in New Dimensions",
+      content: "End with a memorable line",
+      fontSize: 150,
       textColor: "#D9D9D9",
       backgroundColor: "#810933",
       textBackdropColor: "#FBF09B",

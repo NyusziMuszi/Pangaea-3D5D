@@ -104,7 +104,7 @@ export const BASE_PROJECT: Project = {
       durationSec: 2.5,
       text: {
         content: branding.textCards[0].content,
-        fontSize: 150,
+        fontSize: branding.textCards[0].fontSize,
         align: "center",
         textColor: branding.textCards[0].textColor,
         backgroundColor: branding.textCards[0].backgroundColor,
@@ -128,7 +128,7 @@ export const BASE_PROJECT: Project = {
       durationSec: 2.5,
       text: {
         content: branding.textCards[1].content,
-        fontSize: 150,
+        fontSize: branding.textCards[1].fontSize,
         align: "center",
         textColor: branding.textCards[1].textColor,
         backgroundColor: branding.textCards[1].backgroundColor,
@@ -152,7 +152,7 @@ export const BASE_PROJECT: Project = {
       durationSec: 2.5,
       text: {
         content: branding.textCards[2].content,
-        fontSize: 200,
+        fontSize: branding.textCards[2].fontSize,
         align: "center",
         textColor: branding.textCards[2].textColor,
         backgroundColor: branding.textCards[2].backgroundColor,

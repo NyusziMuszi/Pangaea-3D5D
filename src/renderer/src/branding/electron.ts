@@ -19,18 +19,21 @@ export const branding: Branding = {
   textCards: [
     {
       content: "Making ideas visible.\n\nGiving thinking form.",
+      fontSize: 150,
       textColor: "#000000",
       backgroundColor: "#A3D6DC",
       textBackdropColor: "#64e36e",
     },
     {
       content: "Sculpture \nas a Tool for Wider Learning",
+      fontSize: 150,
       textColor: "#000000",
       backgroundColor: "#A3D6DC",
       textBackdropColor: "#6473e3",
     },
     {
       content: "3D–5D Learning Revolution",
+      fontSize: 200,
       textColor: "#000000",
       backgroundColor: "#A3D6DC",
       textBackdropColor: "#64e36e",

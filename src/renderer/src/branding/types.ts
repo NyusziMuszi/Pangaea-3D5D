@@ -8,6 +8,7 @@
 
 export interface BrandTextCard {
   content: string;
+  fontSize: number;
   textColor: string;
   backgroundColor: string;
   textBackdropColor: string;
