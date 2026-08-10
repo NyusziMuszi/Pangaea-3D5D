@@ -539,6 +539,40 @@ export function InspectorPanel({
                       />
                     </Field>
                   )}
+                  {activeObject.surface === "depth" && (
+                    <>
+                      <ColorRow
+                        label="Low colour"
+                        value={activeObject.surfaceColorLow ?? "#2a2a2a"}
+                        onChange={(v) =>
+                          updateObject((o) => {
+                            o.surfaceColorLow = v;
+                          })
+                        }
+                      />
+                      <Field label="Depth range">
+                        <input
+                          className="scalar-slider"
+                          type="range"
+                          min={0.05}
+                          max={2}
+                          step={0.05}
+                          value={activeObject.depthRange ?? 0.5}
+                          style={
+                            {
+                              "--slider-pct": `${(((activeObject.depthRange ?? 0.5) - 0.05) / (2 - 0.05)) * 100}%`,
+                              "--tick-gradient": tickGradient(0.05, 2, 0.05),
+                            } as CSSProperties
+                          }
+                          onChange={(e) =>
+                            updateObject((o) => {
+                              o.depthRange = Number(e.target.value);
+                            })
+                          }
+                        />
+                      </Field>
+                    </>
+                  )}
                   {activeObject.surface === "image" && (
                     <Field label="Mapping">
                       <select

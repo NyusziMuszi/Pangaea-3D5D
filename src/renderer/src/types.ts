@@ -91,10 +91,12 @@ export type TextBackdrop = "none" | "silhouette" | "wireframe";
 
 // How an object's surface is rendered: textured ("image", today's default —
 // shows the loaded image or the grey placeholder), as a flat "silhouette"
-// or "wireframe" drawn in surfaceColor, or as a "faceted" solid coloured in
-// surfaceColor and flat-shaded by a fixed light so its planes are visible.
-export type ObjectSurface = "image" | "silhouette" | "wireframe" | "faceted";
-export const OBJECT_SURFACES = ["image", "silhouette", "wireframe", "faceted"] as const satisfies readonly ObjectSurface[];
+// or "wireframe" drawn in surfaceColor, as a "faceted" solid coloured in
+// surfaceColor and flat-shaded by a fixed light so its planes are visible, or
+// as "depth" — a two-colour ramp between surfaceColor and surfaceColorLow
+// driven by object-space height, with no directional light.
+export type ObjectSurface = "image" | "silhouette" | "wireframe" | "faceted" | "depth";
+export const OBJECT_SURFACES = ["image", "silhouette", "wireframe", "faceted", "depth"] as const satisfies readonly ObjectSurface[];
 
 // How the glyphs combine with whatever is beneath them (only applies when
 // textBackdrop is "silhouette"). "normal" is today's flat textColor fill;
@@ -161,6 +163,10 @@ export interface ObjectState {
   surface: ObjectSurface;
   surfaceColor: string;
   surfaceWireWidth: number;
+  // Depth-surface ramp: surfaceColor is the raised end, surfaceColorLow the
+  // recessed end, depthRange the ± object-space height mapped across the ramp.
+  surfaceColorLow?: string;
+  depthRange?: number;
   // This object's own texture and the effect stack applied to it. Both objects
   // are independent peers — neither shares the other's material.
   image: ObjectImage;

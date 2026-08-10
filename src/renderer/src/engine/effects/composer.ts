@@ -122,6 +122,9 @@ uniform float uOpacity;
 uniform float uWireframe;
 uniform float uWireWidth;
 uniform float uFaceted;
+uniform float uDepth;
+uniform vec3 uDepthLow;
+uniform float uDepthRange;
 ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
@@ -178,6 +181,15 @@ ${shadeCalls.join('\n')}
     float ndl = max(dot(N, L), 0.0);
     float shade = mix(0.35, 1.0, ndl); // 0.35 = ambient floor
     color = vec4(uFlatColor * shade, 1.0);
+  }
+  if (uDepth > 0.5) {
+    // Height ramp, no directional light: vObjPos is written after the deform
+    // chain, so on a plane (base z = 0) vObjPos.z IS the signed displacement
+    // that displace/relief produced. Map ±uDepthRange onto 0..1 and ramp from
+    // the recessed colour to uFlatColor, so a relief map reads as depth rather
+    // than as lit facets.
+    float h = clamp(vObjPos.z / max(uDepthRange, 1e-4) * 0.5 + 0.5, 0.0, 1.0);
+    color = vec4(mix(uDepthLow, uFlatColor, h), 1.0);
   }
   if (uWireframe > 0.5) {
     vec3 d = fwidth(vBary);
