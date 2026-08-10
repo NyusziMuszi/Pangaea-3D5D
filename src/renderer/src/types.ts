@@ -93,8 +93,9 @@ export type TextBackdrop = "none" | "silhouette" | "wireframe";
 // shows the loaded image or the grey placeholder), as a flat "silhouette"
 // or "wireframe" drawn in surfaceColor, as a "faceted" solid coloured in
 // surfaceColor and flat-shaded by a fixed light so its planes are visible, or
-// as "depth" — a two-colour ramp between surfaceColor and surfaceColorLow
-// driven by object-space height, with no directional light.
+// as "depth" — a two-colour ramp between surfaceColor (nearest the camera) and
+// surfaceColorLow (furthest), driven by distance to the camera relative to the
+// object's centre, with no directional light.
 export type ObjectSurface = "image" | "silhouette" | "wireframe" | "faceted" | "depth";
 export const OBJECT_SURFACES = ["image", "silhouette", "wireframe", "faceted", "depth"] as const satisfies readonly ObjectSurface[];
 
@@ -163,8 +164,8 @@ export interface ObjectState {
   surface: ObjectSurface;
   surfaceColor: string;
   surfaceWireWidth: number;
-  // Depth-surface ramp: surfaceColor is the raised end, surfaceColorLow the
-  // recessed end, depthRange the ± object-space height mapped across the ramp.
+  // Depth-surface ramp: surfaceColor is the near end, surfaceColorLow the far
+  // end, depthRange the ± world units of camera distance spanned by the ramp.
   surfaceColorLow?: string;
   depthRange?: number;
   // This object's own texture and the effect stack applied to it. Both objects

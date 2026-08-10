@@ -437,8 +437,8 @@ class ObjectSlot {
       uWireWidth: { value: 1.5 },
       uFaceted: { value: 0 },
       uDepth: { value: 0 },
-      // Recessed end of the depth ramp (uFlatColor is the raised end), and the
-      // ± object-space height mapped across it.
+      // Far end of the depth ramp (uFlatColor is the near end), and the ± world
+      // units of camera distance mapped across it.
       uDepthLow: { value: new THREE.Vector3(0, 0, 0) },
       uDepthRange: { value: 0.5 },
     };
@@ -568,8 +568,8 @@ class ObjectSlot {
       });
       mat.uniforms.uWireWidth.value = object.surfaceWireWidth ?? 1.5;
       if (surface === "depth") {
-        // surfaceColor is the raised end of the ramp, so the recessed end
-        // defaults to near-black under the default mid grey.
+        // surfaceColor is the near end of the ramp, so the far end defaults to
+        // near-black under the default mid grey.
         hexToRgb01(
           object.surfaceColorLow ?? "#1a1a1a",
           mat.uniforms.uDepthLow.value as THREE.Vector3,

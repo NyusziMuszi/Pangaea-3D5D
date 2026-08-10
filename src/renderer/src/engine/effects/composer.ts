@@ -90,6 +90,7 @@ varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec3 vObjPos;
+varying float vViewDepth;
 attribute vec3 aBary;
 varying vec3 vBary;
 ${commonBlock}
@@ -101,10 +102,17 @@ void main() {
   vec3 nrm = normal;
 ${deformCalls.join('\n')}
   vObjPos = pos;
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  // Distance toward the camera, measured from the object's own origin (the
+  // translation column of modelViewMatrix is the origin in view space). View z
+  // grows toward the viewer, so +vViewDepth = nearer than the object's centre.
+  // Camera-relative rather than body-fixed, so the depth ramp stays glued to
+  // the viewer while the object rotates.
+  vViewDepth = mv.z - modelViewMatrix[3].z;
   vec4 wp = modelMatrix * vec4(pos, 1.0);
   vWorldPos = wp.xyz;
   vWorldNormal = normalize(mat3(modelMatrix) * nrm);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  gl_Position = projectionMatrix * mv;
 }`
 
   const fragmentShader = `
@@ -130,6 +138,7 @@ varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec3 vObjPos;
+varying float vViewDepth;
 varying vec3 vBary;
 ${commonBlock}
 const float PG_TAU = 6.28318530718;
@@ -183,12 +192,11 @@ ${shadeCalls.join('\n')}
     color = vec4(uFlatColor * shade, 1.0);
   }
   if (uDepth > 0.5) {
-    // Height ramp, no directional light: vObjPos is written after the deform
-    // chain, so on a plane (base z = 0) vObjPos.z IS the signed displacement
-    // that displace/relief produced. Map ±uDepthRange onto 0..1 and ramp from
-    // the recessed colour to uFlatColor, so a relief map reads as depth rather
-    // than as lit facets.
-    float h = clamp(vObjPos.z / max(uDepthRange, 1e-4) * 0.5 + 0.5, 0.0, 1.0);
+    // Depth ramp, no directional light: vViewDepth is the post-deform distance
+    // toward the camera relative to the object's centre, so near surfaces get
+    // uFlatColor and far ones uDepthLow whatever the object's rotation. Map
+    // ±uDepthRange (world units) onto 0..1.
+    float h = clamp(vViewDepth / max(uDepthRange, 1e-4) * 0.5 + 0.5, 0.0, 1.0);
     color = vec4(mix(uDepthLow, uFlatColor, h), 1.0);
   }
   if (uWireframe > 0.5) {
