@@ -13,6 +13,7 @@ export function PreviewPanel(): JSX.Element {
   const update = useStore((s) => s.update)
   const selectObject = useStore((s) => s.selectObject)
   const selectSegment = useStore((s) => s.selectSegment)
+  const output = useStore((s) => s.project.output)
   // The image being panned belongs to whichever object is selected.
   const activeObject = useActiveObject()
   const hasImage = !!activeObject?.image.assetId
@@ -96,6 +97,7 @@ export function PreviewPanel(): JSX.Element {
       <div className="preview-stage">
         <div
           className={`canvas-frame${hasImage ? ' draggable' : ''}`}
+          style={{ '--frame-ar': String(output.width / output.height) } as React.CSSProperties}
           ref={containerRef}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}

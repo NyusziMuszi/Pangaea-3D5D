@@ -731,11 +731,18 @@ button.collapse-btn:hover {
   justify-content: center;
   min-height: 0;
   padding: var(--space-6);
+  container-type: size;
 }
 .canvas-frame {
-  aspect-ratio: 1080 / 1350;
-  height: 100%;
+  --frame-ar: 0.8;
+  aspect-ratio: var(--frame-ar);
+  /* Contain-fit within the stage on both axes, so the box keeps its aspect
+     ratio at any window size or output resolution instead of distorting
+     when the width constraint binds. */
+  width: min(100cqw, 100cqh * var(--frame-ar));
+  height: auto;
   max-width: 100%;
+  max-height: 100%;
   background: var(--black);
   border-radius: var(--radius-md);
   overflow: hidden;

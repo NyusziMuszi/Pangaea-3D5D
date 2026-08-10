@@ -72,10 +72,24 @@ function withBarycentric(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   return g;
 }
 
+// World-space (width, height) of the plane-shaped primitives. Also drives the
+// aspect-correct "cover" image framing in ObjectSlot.applyFrame, which fits
+// the source image to the *plane's own* aspect rather than the output
+// canvas's — so "landscape" shows a full uncropped landscape photo
+// (letterboxed against the segment background) instead of the portrait crop
+// "plane" applies.
+const PLANE_DIMENSIONS: Partial<Record<string, [number, number]>> = {
+  plane: [1.6, 2.0], // matches the 1080x1350 output aspect, edge-to-edge
+  landscape: [1.6, 1.6 / 1.5], // 3:2 landscape photo aspect
+};
+
 function primitiveGeometry(primitive: string): THREE.BufferGeometry {
   switch (primitive) {
     case "plane":
-      return new THREE.PlaneGeometry(1.6, 2.0, 96, 96);
+    case "landscape": {
+      const [w, h] = PLANE_DIMENSIONS[primitive]!;
+      return new THREE.PlaneGeometry(w, h, 96, 96);
+    }
     case "sphere":
       return new THREE.SphereGeometry(1.0, 96, 96);
     case "portal":
@@ -479,7 +493,8 @@ class ObjectSlot {
   }
 
   // Per-frame: drive this object's transform, time, effect uniforms, and the
-  // aspect-correct "cover" framing of its source image (plane object only).
+  // aspect-correct "cover" framing of its source image (plane-shaped
+  // primitives only — see PLANE_DIMENSIONS).
   applyFrame(
     object: ObjectState,
     t: number,
@@ -491,6 +506,7 @@ class ObjectSlot {
     const mat = this.material;
     if (!mat) return;
     mat.uniforms.uTime.value = tl.sceneTime;
+    (mat.uniforms.uResolution.value as THREE.Vector2).set(output.width, output.height);
     for (const b of this.activeBindings) {
       const u = mat.uniforms[b.uniformKey];
       if (u)
@@ -502,12 +518,11 @@ class ObjectSlot {
 
     const scaleU = mat.uniforms.uImageScale.value as THREE.Vector2;
     const offU = mat.uniforms.uImageOffset.value as THREE.Vector2;
-    if (
-      object.primitive === "plane" &&
-      !object.modelDataUrl &&
-      this.imageTexture
-    ) {
-      const frameAspect = output.width / output.height;
+    const planeDims = object.modelDataUrl
+      ? undefined
+      : PLANE_DIMENSIONS[object.primitive];
+    if (planeDims && this.imageTexture) {
+      const frameAspect = planeDims[0] / planeDims[1];
       let sx = 1;
       let sy = 1;
       if (this.imageAspect > frameAspect) sx = frameAspect / this.imageAspect;
@@ -668,6 +683,11 @@ export class Engine {
   private logicalHeight = 1350;
   private renderScale = 1;
 
+  // When true, renderFrame skips the clear-color fill, the text card, and
+  // the text-card backdrop fill so only the shaded subject renders — used by
+  // captureStill() for the no-background PNG export.
+  private transparentStill = false;
+
   // playback
   private playing = false;
   private playhead = 0;
@@ -742,7 +762,10 @@ export class Engine {
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       preserveDrawingBuffer: true,
-      alpha: false,
+      // Alpha channel is only used for the transparent-background still
+      // export (captureStill); every normal render clears with alpha 1, so
+      // the preview and video export composite exactly as before.
+      alpha: true,
     });
     this.renderer.setPixelRatio(1);
     this.renderer.autoClear = false;
@@ -757,7 +780,7 @@ export class Engine {
 
     this.perspectiveCamera = new THREE.PerspectiveCamera(
       45,
-      1080 / 1350,
+      this.logicalWidth / this.logicalHeight,
       0.01,
       100,
     );
@@ -767,8 +790,8 @@ export class Engine {
     // framing at its default distance (2 * 2.45 * tan(22.5deg) / 2).
     const isoHalfHeight = 1.0148;
     this.isometricCamera = new THREE.OrthographicCamera(
-      -isoHalfHeight * (1080 / 1350),
-      isoHalfHeight * (1080 / 1350),
+      -isoHalfHeight * (this.logicalWidth / this.logicalHeight),
+      isoHalfHeight * (this.logicalWidth / this.logicalHeight),
       isoHalfHeight,
       -isoHalfHeight,
       0.01,
@@ -806,10 +829,12 @@ export class Engine {
     canvas.style.height = "100%";
     canvas.style.display = "block";
     container.appendChild(canvas);
-    this.setOutputSize(1080, 1350);
+    const out = this.project?.output;
+    this.setOutputSize(out?.width ?? this.logicalWidth, out?.height ?? this.logicalHeight);
   }
 
   setOutputSize(w: number, h: number): void {
+    const changed = w !== this.logicalWidth || h !== this.logicalHeight;
     // Camera framing comes from the *logical* size, so aspect/framing stay
     // identical regardless of the render-buffer scale.
     this.logicalWidth = w;
@@ -822,6 +847,9 @@ export class Engine {
     this.isometricCamera.right = isoHalfHeight * aspect;
     this.isometricCamera.updateProjectionMatrix();
     this.applyRenderSize();
+    // Text-card textures are baked at output pixel dimensions; a resolution
+    // change invalidates any cached card even though its style is unchanged.
+    if (changed) this.clearTextCache();
   }
 
   // Size the actual drawing buffer to logical size × renderScale. CSS keeps the
@@ -861,6 +889,32 @@ export class Engine {
 
   getCanvas(): HTMLCanvasElement {
     return this.renderer.domElement;
+  }
+
+  // Render the current playhead frame at `width`×`height` with no
+  // background — clear alpha 0, no text card, no text-card backdrop fill —
+  // and return PNG bytes. Used by the still-image export; the interactive
+  // preview is fully restored afterward regardless of success or failure.
+  async captureStill(width: number, height: number): Promise<Uint8Array> {
+    const origWidth = this.logicalWidth;
+    const origHeight = this.logicalHeight;
+    const origScale = this.renderScale;
+    try {
+      this.renderScale = 1;
+      this.setOutputSize(width, height);
+      this.transparentStill = true;
+      this.renderFrame(this.playhead);
+      const blob = await new Promise<Blob | null>((res) =>
+        this.renderer.domElement.toBlob(res, "image/png"),
+      );
+      if (!blob) throw new Error("Still capture failed");
+      return new Uint8Array(await blob.arrayBuffer());
+    } finally {
+      this.transparentStill = false;
+      this.renderScale = origScale;
+      this.setOutputSize(origWidth, origHeight);
+      this.renderFrame(this.playhead);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -918,7 +972,9 @@ export class Engine {
     }
 
     // Text-card backdrop: render each object as a flat silhouette or wireframe
-    // under the text, over the card's background color.
+    // under the text, over the card's background color. Left active during a
+    // transparent still capture — it's part of the object's own on-screen
+    // appearance (e.g. a wireframe look), not the text card being stripped.
     const backdropActive =
       !!tl.textCard &&
       !tl.textCard.behind &&
@@ -958,7 +1014,7 @@ export class Engine {
     // The glyphs fade in over the whole tail, but the colour shift is biased
     // toward the end (cubic) so the break holds its colour until close to the
     // cut rather than drifting from the start.
-    if (backdropActive || tl.textCard?.behind) {
+    if (!this.transparentStill && (backdropActive || tl.textCard?.behind)) {
       const o = tl.textCard!.opacity;
       const mix = tl.textCard!.behind ? o * o * o : o;
       clearColor.lerp(
@@ -967,7 +1023,9 @@ export class Engine {
       );
     }
     const overlayVisible =
-      this.overlay.opacity > 0.001 && this.overlay.hasTexture;
+      !this.transparentStill &&
+      this.overlay.opacity > 0.001 &&
+      this.overlay.hasTexture;
     // Shape-reactive blend (invert/exclusion/multiply/screen): only with a
     // silhouette backdrop actually drawn (backdropActive) and once the glyphs
     // are visible. The silhouette is a single flat fill (textBackdropColor),
@@ -996,7 +1054,7 @@ export class Engine {
     } else {
       this.overlay.setBlend("normal");
     }
-    this.renderer.setClearColor(clearColor, 1);
+    this.renderer.setClearColor(clearColor, this.transparentStill ? 0 : 1);
     this.renderer.clear();
     // Fade-in tail ("behind"): keep the scene's depth and depth-test the text
     // against it so *every* object — including transparent ones like the second

@@ -67,6 +67,7 @@ export const MAPPINGS = ["uv", "triplanar", "spherical", "cylindrical", "reflect
 export type ColorScheme = "byType" | "byPair" | "random";
 export type PrimitiveModel =
   | "plane"
+  | "landscape"
   | "sphere"
   | "portal"
   | "cylinder"
@@ -79,7 +80,7 @@ export type PrimitiveModel =
   | "polyhedron"
   | "dodecahedron";
 export const PRIMITIVE_MODELS = [
-  "plane", "sphere", "portal", "cylinder", "capsule", "torus",
+  "plane", "landscape", "sphere", "portal", "cylinder", "capsule", "torus",
   "box", "lathe", "knot", "twist", "polyhedron", "dodecahedron",
 ] as const satisfies readonly PrimitiveModel[];
 
