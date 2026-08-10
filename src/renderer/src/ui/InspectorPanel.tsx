@@ -10,6 +10,13 @@ import deleteIcon from "../assets/cancel.svg";
 import { findEffectDef } from "../engine/effects/catalog";
 import {
   constant,
+  isStill,
+  HINGE_EDGES,
+  STILL_IMAGE_LAYER,
+  STILL_MESH_LAYER,
+  STILL_MESH_SURFACES,
+  STILL_SHAPE_LAYER,
+  type HingeEdge,
   type Mapping,
   type ObjectState,
   type ObjectSurface,
@@ -26,7 +33,7 @@ import {
   ColorRow,
   DurationField,
 } from "./controls";
-import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS } from "./objectOptions";
+import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS, cap } from "./objectOptions";
 import { accentVars, objectAccentColor } from "./accent";
 import { defaultProject } from "../state/defaults";
 import { assetUrl, registerAsset } from "../state/assets";
@@ -106,6 +113,16 @@ export function InspectorPanel({
   const activeObjectIndex = resolveActiveIndex(project, selectedObjectIndex);
   const activeObject: ObjectState | undefined =
     project.objects[activeObjectIndex];
+
+  // In a still, layers 0/1 are fixed roles, not free-form peers: layer 0 is
+  // the flat image, layer 1 the deformed mesh (see state/stillMode.ts). Layer
+  // 2 is the optional 3D shape — an ordinary free object except that its
+  // image is mirrored from layer 0 (normalizeStill), so it wears the same
+  // photo without inheriting the flat layer's primitive/mapping/surface.
+  const stillMode = isStill(project);
+  const isImageLayer = stillMode && activeObjectIndex === STILL_IMAGE_LAYER;
+  const isMeshLayer = stillMode && activeObjectIndex === STILL_MESH_LAYER;
+  const isShapeLayer = stillMode && activeObjectIndex === STILL_SHAPE_LAYER;
 
   // Identity marker for the currently-edited object, applied to the whole
   // panel so it carries that object's --obj-highlight tint — matching the
@@ -470,41 +487,110 @@ export function InspectorPanel({
 
             {!segment && activeObject && (
               <>
-                <Section title="Shape" className="accented" style={accentStyle}>
-                  <Field label="Type">
-                    <select
-                      value={
-                        activeObject.modelDataUrl
-                          ? "bespoke"
-                          : activeObject.primitive
-                      }
-                      onChange={(e) => setObjectType(e.target.value)}
-                    >
-                      <option value="none">None</option>
-                      {PRIMITIVE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                      <option value="bespoke">Bespoke</option>
-                    </select>
-                  </Field>
-                  <Field label="Surface">
-                    <select
-                      value={activeObject.surface ?? "image"}
-                      onChange={(e) =>
-                        updateObject((o) => {
-                          o.surface = e.target.value as ObjectSurface;
-                        })
-                      }
-                    >
-                      {SURFACE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
+                {stillMode && (
+                  <Section title="Canvas">
+                    <Field label="Width">
+                      <input
+                        type="number"
+                        min={100}
+                        max={20000}
+                        step={10}
+                        value={project.output.width}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!Number.isFinite(v) || v <= 0) return;
+                          update((p) => {
+                            p.output.width = v;
+                          });
+                        }}
+                      />
+                    </Field>
+                    <Field label="Height">
+                      <input
+                        type="number"
+                        min={100}
+                        max={20000}
+                        step={10}
+                        value={project.output.height}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!Number.isFinite(v) || v <= 0) return;
+                          update((p) => {
+                            p.output.height = v;
+                          });
+                        }}
+                      />
+                    </Field>
+                  </Section>
+                )}
+
+                <Section
+                  title={
+                    stillMode
+                      ? isImageLayer
+                        ? "Image"
+                        : isMeshLayer
+                          ? "Mesh"
+                          : "Shape"
+                      : "Shape"
+                  }
+                  className="accented"
+                  style={accentStyle}
+                >
+                  {!isMeshLayer && (
+                    <Field label="Type">
+                      <select
+                        value={
+                          activeObject.modelDataUrl
+                            ? "bespoke"
+                            : activeObject.primitive
+                        }
+                        onChange={(e) => setObjectType(e.target.value)}
+                      >
+                        {/* Layers 0/1 are fixed roles in a still — removing
+                            either would renumber the layers and silently
+                            destroy the card, so None is only offered on the
+                            optional shape layer or in video mode. */}
+                        {!isImageLayer && <option value="none">None</option>}
+                        {PRIMITIVE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                        <option value="bespoke">Bespoke</option>
+                      </select>
+                    </Field>
+                  )}
+                  {!isImageLayer && (
+                    <Field label="Surface">
+                      <select
+                        value={activeObject.surface ?? "image"}
+                        onChange={(e) =>
+                          updateObject((o) => {
+                            o.surface = e.target.value as ObjectSurface;
+                          })
+                        }
+                      >
+                        {(isMeshLayer
+                          ? SURFACE_OPTIONS.filter((o) =>
+                              (STILL_MESH_SURFACES as readonly string[]).includes(
+                                o.value,
+                              ),
+                            )
+                          : SURFACE_OPTIONS
+                        ).map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
+                  {isMeshLayer && (
+                    <p className="hint">
+                      Shape and image follow the Image layer.
+                    </p>
+                  )}
                   {activeObject.surface !== "image" && (
                     <ColorRow
                       label="Surface colour"
@@ -539,6 +625,40 @@ export function InspectorPanel({
                       />
                     </Field>
                   )}
+                  {activeObject.surface === "depth" && (
+                    <>
+                      <ColorRow
+                        label="Low colour"
+                        value={activeObject.surfaceColorLow ?? "#2a2a2a"}
+                        onChange={(v) =>
+                          updateObject((o) => {
+                            o.surfaceColorLow = v;
+                          })
+                        }
+                      />
+                      <Field label="Depth range">
+                        <input
+                          className="scalar-slider"
+                          type="range"
+                          min={0.05}
+                          max={2}
+                          step={0.05}
+                          value={activeObject.depthRange ?? 0.5}
+                          style={
+                            {
+                              "--slider-pct": `${(((activeObject.depthRange ?? 0.5) - 0.05) / (2 - 0.05)) * 100}%`,
+                              "--tick-gradient": tickGradient(0.05, 2, 0.05),
+                            } as CSSProperties
+                          }
+                          onChange={(e) =>
+                            updateObject((o) => {
+                              o.depthRange = Number(e.target.value);
+                            })
+                          }
+                        />
+                      </Field>
+                    </>
+                  )}
                   {activeObject.surface === "image" && (
                     <Field label="Mapping">
                       <select
@@ -557,7 +677,14 @@ export function InspectorPanel({
                       </select>
                     </Field>
                   )}
-                  {activeObject.surface === "image" &&
+                  {/* The shape layer's image is mirrored from the Image layer
+                      (normalizeStill), so loading one here would be silently
+                      discarded on the next edit — show a hint instead. */}
+                  {isShapeLayer && activeObject.surface === "image" && (
+                    <p className="hint">Image follows the Image layer.</p>
+                  )}
+                  {!isShapeLayer &&
+                    activeObject.surface === "image" &&
                     (activeObject.image.assetId ? (
                       <div className="lucky-img-cell">
                         <button
@@ -587,89 +714,151 @@ export function InspectorPanel({
                     ))}
                 </Section>
 
-                <Section
-                  title="Transform"
-                  className="accented"
-                  style={accentStyle}
-                >
-                  <ScalarControl
-                    label="Rotate X"
-                    scalar={activeObject.rotX}
-                    min={-TAU}
-                    max={TAU}
-                    onChange={(s) =>
-                      updateObject((o) => {
-                        o.rotX = s;
-                      })
-                    }
-                  />
-                  <ScalarControl
-                    label="Rotate Y"
-                    scalar={activeObject.rotY}
-                    min={-TAU}
-                    max={TAU}
-                    onChange={(s) =>
-                      updateObject((o) => {
-                        o.rotY = s;
-                      })
-                    }
-                  />
-                  <ScalarControl
-                    label="Rotate Z"
-                    scalar={activeObject.rotZ}
-                    min={-TAU}
-                    max={TAU}
-                    onChange={(s) =>
-                      updateObject((o) => {
-                        o.rotZ = s;
-                      })
-                    }
-                  />
-                  <ScalarControl
-                    label="Scale"
-                    scalar={activeObject.scale}
-                    min={0.1}
-                    max={4}
-                    onChange={(s) =>
-                      updateObject((o) => {
-                        o.scale = s;
-                      })
-                    }
-                  />
-                  <ScalarControl
-                    label="Position X"
-                    scalar={activeObject.posX ?? constant(0)}
-                    min={-3}
-                    max={3}
-                    onChange={(s) =>
-                      updateObject((o) => {
-                        o.posX = s;
-                      })
-                    }
-                  />
-                  <ScalarControl
-                    label="Position Y"
-                    scalar={activeObject.posY ?? constant(0)}
-                    min={-3}
-                    max={3}
-                    onChange={(s) =>
-                      updateObject((o) => {
-                        o.posY = s;
-                      })
-                    }
-                  />
-                  <ScalarControl
-                    label="Position Z"
-                    scalar={activeObject.posZ ?? constant(0)}
-                    min={-3}
-                    max={3}
-                    onChange={(s) =>
-                      updateObject((o) => {
-                        o.posZ = s;
-                      })
-                    }
-                  />
-                </Section>
+                {stillMode && isMeshLayer && (
+                  <Section title="Fold" className="accented" style={accentStyle}>
+                    <Field label="Enabled">
+                      <input
+                        type="checkbox"
+                        checked={project.fold?.enabled ?? false}
+                        onChange={(e) =>
+                          update((p) => {
+                            if (!p.fold) {
+                              p.fold = {
+                                enabled: e.target.checked,
+                                edge: "right",
+                                angle: constant(1.0),
+                              };
+                            } else {
+                              p.fold.enabled = e.target.checked;
+                            }
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Hinge">
+                      <select
+                        value={project.fold?.edge ?? "right"}
+                        onChange={(e) =>
+                          update((p) => {
+                            const edge = e.target.value as HingeEdge;
+                            if (!p.fold) {
+                              p.fold = { enabled: true, edge, angle: constant(1.0) };
+                            } else {
+                              p.fold.edge = edge;
+                            }
+                          })
+                        }
+                      >
+                        {HINGE_EDGES.map((edge) => (
+                          <option key={edge} value={edge}>
+                            {cap(edge)}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <ScalarControl
+                      label="Fold angle"
+                      scalar={project.fold?.angle ?? constant(1.0)}
+                      min={-Math.PI}
+                      max={Math.PI}
+                      onChange={(s) =>
+                        update((p) => {
+                          if (!p.fold) {
+                            p.fold = { enabled: true, edge: "right", angle: s };
+                          } else {
+                            p.fold.angle = s;
+                          }
+                        })
+                      }
+                    />
+                  </Section>
+                )}
+
+                {!(isMeshLayer && (project.fold?.enabled ?? false)) && (
+                  <Section
+                    title="Transform"
+                    className="accented"
+                    style={accentStyle}
+                  >
+                    <ScalarControl
+                      label="Rotate X"
+                      scalar={activeObject.rotX}
+                      min={-TAU}
+                      max={TAU}
+                      onChange={(s) =>
+                        updateObject((o) => {
+                          o.rotX = s;
+                        })
+                      }
+                    />
+                    <ScalarControl
+                      label="Rotate Y"
+                      scalar={activeObject.rotY}
+                      min={-TAU}
+                      max={TAU}
+                      onChange={(s) =>
+                        updateObject((o) => {
+                          o.rotY = s;
+                        })
+                      }
+                    />
+                    <ScalarControl
+                      label="Rotate Z"
+                      scalar={activeObject.rotZ}
+                      min={-TAU}
+                      max={TAU}
+                      onChange={(s) =>
+                        updateObject((o) => {
+                          o.rotZ = s;
+                        })
+                      }
+                    />
+                    <ScalarControl
+                      label="Scale"
+                      scalar={activeObject.scale}
+                      min={0.1}
+                      max={4}
+                      onChange={(s) =>
+                        updateObject((o) => {
+                          o.scale = s;
+                        })
+                      }
+                    />
+                    <ScalarControl
+                      label="Position X"
+                      scalar={activeObject.posX ?? constant(0)}
+                      min={-3}
+                      max={3}
+                      onChange={(s) =>
+                        updateObject((o) => {
+                          o.posX = s;
+                        })
+                      }
+                    />
+                    <ScalarControl
+                      label="Position Y"
+                      scalar={activeObject.posY ?? constant(0)}
+                      min={-3}
+                      max={3}
+                      onChange={(s) =>
+                        updateObject((o) => {
+                          o.posY = s;
+                        })
+                      }
+                    />
+                    <ScalarControl
+                      label="Position Z"
+                      scalar={activeObject.posZ ?? constant(0)}
+                      min={-3}
+                      max={3}
+                      onChange={(s) =>
+                        updateObject((o) => {
+                          o.posZ = s;
+                        })
+                      }
+                    />
+                  </Section>
+                )}
 
                 {activeObject.effects.map((inst, i) => {
                   const def = findEffectDef(inst.defId, project.customEffects);

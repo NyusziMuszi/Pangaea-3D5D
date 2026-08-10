@@ -1,0 +1,52 @@
+// The still-mode invariant: in a still, objects[0] (image) and objects[1]
+// (mesh) are two views of the SAME picture on the SAME plane, so displace/
+// relief deform exactly what layer 0 shows. Layer 0 is the source of truth;
+// layer 1 mirrors its shape and image. Transforms and effects stay
+// independent — that's the whole point of layer 1 existing.
+//
+// normalizeStill runs from the store after every edit (see store.ts), so no
+// panel needs to remember to keep the two layers in sync — image import, the
+// preview drag-pan, and any future editor all funnel through it for free.
+import {
+  isStill,
+  STILL_IMAGE_LAYER,
+  STILL_MESH_LAYER,
+  STILL_MESH_SURFACES,
+  STILL_SHAPE_LAYER,
+  type ObjectState,
+  type Project,
+} from "../types";
+
+export function normalizeStill(p: Project): void {
+  if (!isStill(p)) return;
+  const img = p.objects[STILL_IMAGE_LAYER];
+  const mesh = p.objects[STILL_MESH_LAYER];
+  if (!img || !mesh) return;
+  img.surface = "image";
+  mesh.primitive = img.primitive;
+  mesh.modelName = img.modelName;
+  mesh.modelDataUrl = img.modelDataUrl;
+  mesh.mapping = img.mapping;
+  mesh.image = structuredClone(img.image); // asset id + keyframeable pan
+  if (!(STILL_MESH_SURFACES as readonly string[]).includes(mesh.surface)) {
+    mesh.surface = "wireframe";
+  }
+
+  // The optional 3D shape layer is a free peer in every respect — its own
+  // primitive, mapping, surface, effects and transform — except which
+  // picture it wears. Only the image mirrors, so it reads as carved from
+  // the same photo without inheriting the flat layer's shape.
+  const shape = p.objects[STILL_SHAPE_LAYER];
+  if (shape) shape.image = structuredClone(img.image);
+}
+
+// Whose image a pan gesture (or "Load image" click) edits. In a still, always
+// the image layer — panning the mesh layer would be immediately overwritten
+// by normalizeStill on the next edit.
+export function imageOwner(
+  p: Project,
+  selected: number,
+): ObjectState | undefined {
+  if (isStill(p)) return p.objects[STILL_IMAGE_LAYER];
+  return p.objects[selected] ?? p.objects[0];
+}

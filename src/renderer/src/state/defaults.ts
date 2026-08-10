@@ -2,6 +2,8 @@ import type { ObjectState, Project } from "../types";
 import {
   BASE_PROJECT,
   BASE_SECOND_OBJECT,
+  BASE_STILL_PROJECT,
+  BASE_STILL_SHAPE,
   uid,
 } from "./defaultsBase";
 import { getPrefs } from "./prefs";
@@ -36,6 +38,23 @@ export function defaultSecondObject(): ObjectState {
   const next = structuredClone(
     getPrefs().secondObject ?? BASE_SECOND_OBJECT,
   ) as ObjectState;
+  regenerateEffectIds(next);
+  return next;
+}
+
+// A fresh still: two landscape layers of one image. Not seeded from stored
+// prefs — the prefs blueprint is the video blueprint.
+export function defaultStillProject(): Project {
+  const next = structuredClone(BASE_STILL_PROJECT) as Project;
+  for (const seg of next.segments) seg.id = uid("seg");
+  for (const o of next.objects) regenerateEffectIds(o);
+  return next;
+}
+
+// A fresh optional third layer for a still: a 3D shape piercing the photo,
+// seeded from BASE_STILL_SHAPE with regenerated effect ids.
+export function defaultStillShape(): ObjectState {
+  const next = structuredClone(BASE_STILL_SHAPE) as ObjectState;
   regenerateEffectIds(next);
   return next;
 }

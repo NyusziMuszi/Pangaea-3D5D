@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { ColorScheme, ObjectState, Project } from '../types'
 import { defaultProject } from './defaults'
 import { getPrefs } from './prefs'
+import { normalizeStill } from './stillMode'
 
 interface AppState {
   project: Project
@@ -46,11 +47,15 @@ export const useStore = create<AppState>((set) => ({
   hasGenerated: false,
   lastLuckyColorScheme: null,
 
-  setProject: (p) => set({ project: p }),
+  setProject: (p) => {
+    normalizeStill(p)
+    set({ project: p })
+  },
   update: (mutator) =>
     set((s) => {
       const next = structuredClone(s.project) as Project
       mutator(next)
+      normalizeStill(next)
       // Rolls go through setProject, not update(), so this never mistakes a
       // fresh roll for a hand-edit; recordEdit no-ops cheaply when nothing
       // taste-relevant changed (see state/taste.ts).

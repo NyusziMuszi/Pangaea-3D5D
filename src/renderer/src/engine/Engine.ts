@@ -6,7 +6,13 @@ import type {
   Project,
   Scalar,
 } from "../types";
-import { totalDuration, constant } from "../types";
+import {
+  totalDuration,
+  constant,
+  isStill,
+  STILL_IMAGE_LAYER,
+  STILL_MESH_LAYER,
+} from "../types";
 import { evalScalar } from "./animatable";
 import { computeTimeline, buildTimelineIndex } from "./timeline";
 import type { TimelineIndex } from "./timeline";
@@ -82,6 +88,12 @@ const PLANE_DIMENSIONS: Partial<Record<string, [number, number]>> = {
   plane: [1.6, 2.0], // matches the 1080x1350 output aspect, edge-to-edge
   landscape: [1.6, 1.6 / 1.5], // 3:2 landscape photo aspect
 };
+
+// Shared immutable constants for the still-mode fold composition (below).
+// ZERO doubles as "no mesh offset"; UNIT_SCALE keeps the composed hinge matrix
+// scale-free so the card's scale is inherited from the flat layer alone.
+const VEC3_ZERO = new THREE.Vector3(0, 0, 0);
+const VEC3_UNIT_SCALE = new THREE.Vector3(1, 1, 1);
 
 function primitiveGeometry(primitive: string): THREE.BufferGeometry {
   switch (primitive) {
@@ -430,12 +442,19 @@ class ObjectSlot {
       uResolution: { value: new THREE.Vector2(output.width, output.height) },
       uImageScale: { value: new THREE.Vector2(1, 1) },
       uImageOffset: { value: new THREE.Vector2(0, 0) },
+      uMirrorU: { value: 0 },
+      uMirrorV: { value: 0 },
       uSilhouette: { value: 0 },
       uFlatColor: { value: new THREE.Vector3(0, 0, 0) },
       uOpacity: { value: 1 },
       uWireframe: { value: 0 },
       uWireWidth: { value: 1.5 },
       uFaceted: { value: 0 },
+      uDepth: { value: 0 },
+      // Recessed end of the depth ramp (uFlatColor is the raised end), and the
+      // ± object-space height mapped across it.
+      uDepthLow: { value: new THREE.Vector3(0, 0, 0) },
+      uDepthRange: { value: 0.5 },
     };
     for (const b of composed.bindings) uniforms[b.uniformKey] = { value: 0 };
     this.bindActive(composed.bindings, effects);
@@ -481,6 +500,23 @@ class ObjectSlot {
         defaultScalar: constant(ud?.default ?? 0),
       };
     });
+  }
+
+  // Offset the mesh inside its own group. The group origin then acts as an
+  // arbitrary pivot rather than the mesh's centre — which is exactly a hinge,
+  // and the only reason the group→mesh nesting exists. Engine.applyFold drives
+  // this; every other path leaves the mesh at the origin.
+  setMeshOffset(v: THREE.Vector3): void {
+    this.mesh?.position.copy(v);
+  }
+
+  // Flip the mesh-local uv before image sampling/deformation — see pg_imageUv
+  // in composer.ts. Used by the folded card so the hinged mesh layer reads as
+  // a reflection of the flat layer across the shared edge.
+  setMirror(u: boolean, v: boolean): void {
+    if (!this.material) return;
+    this.material.uniforms.uMirrorU.value = u ? 1 : 0;
+    this.material.uniforms.uMirrorV.value = v ? 1 : 0;
   }
 
   get currentTexture(): THREE.Texture | null {
@@ -551,30 +587,47 @@ class ObjectSlot {
       mat.uniforms.uSilhouette.value = 0;
       mat.uniforms.uWireframe.value = 0;
       mat.uniforms.uFaceted.value = 0;
+      mat.uniforms.uDepth.value = 0;
     } else {
-      // silhouette, wireframe and faceted all colour the surface with
+      // silhouette, wireframe, faceted and depth all colour the surface with
       // surfaceColor; each then sets exactly one flag for its shader branch.
       this.setSurfaceUniforms(mat, object.surfaceColor ?? "#878787", {
         silhouette: surface === "silhouette",
         wireframe: surface === "wireframe",
         faceted: surface === "faceted",
+        depth: surface === "depth",
       });
       mat.uniforms.uWireWidth.value = object.surfaceWireWidth ?? 1.5;
+      if (surface === "depth") {
+        // surfaceColor is the raised end of the ramp, so the recessed end
+        // defaults to near-black under the default mid grey.
+        hexToRgb01(
+          object.surfaceColorLow ?? "#1a1a1a",
+          mat.uniforms.uDepthLow.value as THREE.Vector3,
+        );
+        mat.uniforms.uDepthRange.value = object.depthRange ?? 0.5;
+      }
     }
     mat.uniforms.uOpacity.value = 1;
   }
 
   // Shared by applySurface and applyBackdrop: colours the flat-shading path
-  // (uFlatColor) and sets the three mutually-adjustable shader-branch flags.
+  // (uFlatColor) and sets the mutually-adjustable shader-branch flags.
   private setSurfaceUniforms(
     mat: THREE.ShaderMaterial,
     color: string,
-    flags: { silhouette: boolean; wireframe: boolean; faceted: boolean },
+    flags: {
+      silhouette: boolean;
+      wireframe: boolean;
+      faceted: boolean;
+      depth: boolean;
+    },
   ): void {
     hexToRgb01(color, mat.uniforms.uFlatColor.value as THREE.Vector3);
     mat.uniforms.uSilhouette.value = flags.silhouette ? 1 : 0;
     mat.uniforms.uWireframe.value = flags.wireframe ? 1 : 0;
     mat.uniforms.uFaceted.value = flags.faceted ? 1 : 0;
+    mat.uniforms.uDepth.value = flags.depth ? 1 : 0;
   }
 
   // Text-card backdrop: draw the object as a flat silhouette or wireframe
@@ -586,12 +639,13 @@ class ObjectSlot {
     if (!mat) return;
     if (active && tl.textCard) {
       const isWire = tl.textCard.style.textBackdrop === "wireframe";
-      // Clear any faceted flag left by the object's own surface, else its shader
-      // branch would override the flat backdrop fill.
+      // Clear any faceted/depth flag left by the object's own surface, else its
+      // shader branch would override the flat backdrop fill.
       this.setSurfaceUniforms(mat, tl.textCard.style.textBackdropColor, {
         silhouette: true,
         wireframe: isWire,
         faceted: false,
+        depth: false,
       });
       // The backdrop cuts in/out at full strength — only the card's background
       // colour and text fade, so the silhouette/wireframe stays fully opaque.
@@ -662,6 +716,19 @@ export class Engine {
   private clearColorScratch = new THREE.Color();
   private cardColorScratch = new THREE.Color();
   private raycaster = new THREE.Raycaster();
+  // Scratch for the still-mode fold, evaluated every frame in applyFold().
+  private foldPivot = new THREE.Vector3();
+  private foldEuler = new THREE.Euler();
+  private foldQuat = new THREE.Quaternion();
+  private foldLocal = new THREE.Matrix4();
+  private foldWorld = new THREE.Matrix4();
+  // Whether applyFold actually applied a hinge this frame — the single source
+  // of truth for whether renderFrame takes the two-pass path, so the render
+  // and the transform can never disagree about the guard conditions.
+  private foldActive = false;
+  // Saved slot visibility across the two fold passes; reused to avoid
+  // allocating in the render path.
+  private passVisibility: boolean[] = [];
 
   // The text card currently drawn this frame (for click-to-select). Tracks the
   // segment whose card is on screen plus its source 2D canvas, so pickTextAt can
@@ -961,6 +1028,11 @@ export class Engine {
       if (obj) slot.applyFrame(obj, t, tl, p.output);
     }
 
+    // Still-mode fold: overrides the mesh layer's own transform (just applied
+    // above) with a hinge on the flat layer's edge, and sets the depth flags
+    // that keep the photo on top. Also the reset path when the fold is off.
+    this.applyFold(p, t);
+
     // Cross-wire each slot's "other" texture every frame so blend effects
     // survive material rebuilds (e.g. toggling an effect re-creates the
     // material). Object 0 samples object 1; every later object samples object
@@ -1044,6 +1116,9 @@ export class Engine {
       this.renderer.setRenderTarget(rt);
       this.renderer.setClearColor(0x000000, 0);
       this.renderer.clear();
+      // Single pass, deliberately: blendActive needs a text card, and a still
+      // (the only mode with a fold) has no text segments — so this can never
+      // coincide with the two-pass fold path below.
       this.renderer.render(this.scene, this.camera);
       this.renderer.setRenderTarget(null);
       this.overlay.setBlend(
@@ -1062,11 +1137,157 @@ export class Engine {
     // the text always wins.
     const behind = !!tl.textCard?.behind;
     this.overlay.setBehind(behind);
-    this.renderer.render(this.scene, this.camera);
+    if (this.foldActive) this.renderFoldPasses(this.camera);
+    else this.renderer.render(this.scene, this.camera);
     if (overlayVisible) {
       if (!behind) this.renderer.clearDepth();
       this.renderer.render(this.overlay.scene, this.overlay.camera);
     }
+  }
+
+  // Draw a folded still in two depth passes.
+  //
+  // Three requirements collide here. The folded mesh panel must (a) never draw
+  // over the photo, even where displace/relief push its vertices through it,
+  // (b) still self-occlude correctly at the fold angle, and (c) not interfere
+  // with the photo and the 3D shape layer intersecting each other for real.
+  // A single pass can satisfy any two: depthTest:false on the photo buys (a)
+  // but kills (c), and depthWrite:false on the panel buys (a) but kills (b).
+  //
+  // Clearing the depth buffer between passes satisfies all three. The panel is
+  // painted first with a real depth buffer — so it self-occludes — and the
+  // clear then demotes it to a flat backdrop that nothing in pass two can lose
+  // a depth test against. Pass two draws the photo and any shape with ordinary
+  // depth, so a shape genuinely pierces the photo plane.
+  //
+  // Visibility toggling rather than Object3D.layers: layers read better, but
+  // Raycaster.layers defaults to layer 0 only, so moving the panel to layer 1
+  // would silently break pickObjectAt.
+  private renderFoldPasses(camera: THREE.Camera): void {
+    const slots = this.slots;
+    const vis = this.passVisibility;
+    vis.length = slots.length;
+    for (let i = 0; i < slots.length; i++) vis[i] = slots[i].group.visible;
+
+    for (let i = 0; i < slots.length; i++) {
+      slots[i].group.visible = vis[i] && i === STILL_MESH_LAYER;
+    }
+    this.renderer.render(this.scene, camera);
+
+    // Depth only — autoClear is false, so the colour buffer survives.
+    this.renderer.clearDepth();
+
+    for (let i = 0; i < slots.length; i++) {
+      slots[i].group.visible = vis[i] && i !== STILL_MESH_LAYER;
+    }
+    this.renderer.render(this.scene, camera);
+
+    for (let i = 0; i < slots.length; i++) slots[i].group.visible = vis[i];
+  }
+
+  // Still-mode fold: join the two still layers into a folded card. The flat
+  // photo layer (STILL_IMAGE_LAYER) keeps its own transform and carries the
+  // whole card; the mesh layer (STILL_MESH_LAYER) is hinged on one edge of it,
+  // so its own rotate/scale/position are replaced by this derived placement.
+  //
+  // The hinge is built by composing off the flat layer's matrixWorld rather
+  // than re-parenting the mesh group under it: re-parenting would couple the
+  // per-slot `group.visible` handling, double-traverse in pickObjectAt, and
+  // have to be unwound on toggle. Pivot goes into the composed matrix *and*
+  // into the folded slot's mesh offset, which puts the folded panel's hinge
+  // edge on its group origin — so at angle 0 the two panels lie edge-to-edge
+  // (a flat open card) instead of overlapping.
+  //
+  // Signs are chosen so a positive angle always folds away from the camera
+  // (toward -z): a rotY of +a sends a local +x point to z = -x·sin(a), and a
+  // rotX of +a sends a local +y point to z = +y·sin(a).
+  //
+  // Deterministic: the only time-dependent input is evalScalar(fold.angle, t).
+  private applyFold(p: Project, t: number): void {
+    const flat = this.slots[STILL_IMAGE_LAYER];
+    const folded = this.slots[STILL_MESH_LAYER];
+    if (!folded) {
+      this.foldActive = false;
+      return;
+    }
+
+    const flatObject = p.objects[STILL_IMAGE_LAYER];
+    // A fold only means anything on a flat panel — a sphere has no edge to
+    // hinge on, and an imported model's bounds aren't PLANE_DIMENSIONS'.
+    const dims =
+      flatObject && !flatObject.modelDataUrl
+        ? PLANE_DIMENSIONS[flatObject.primitive]
+        : undefined;
+    const fold = p.fold;
+
+    if (
+      !isStill(p) ||
+      !fold?.enabled ||
+      !dims ||
+      !flat?.hasMesh ||
+      !folded.hasMesh
+    ) {
+      // Fold off (or not a still): restore exactly today's behaviour — one
+      // render pass, ordinary depth. The mesh offset in particular must be
+      // cleared, or a stale hinge offset would survive toggling the fold off.
+      this.foldActive = false;
+      folded.setMeshOffset(VEC3_ZERO);
+      folded.setMirror(false, false);
+      return;
+    }
+
+    const angle = evalScalar(fold.angle, t);
+    const [w, h] = dims;
+    const pivot = this.foldPivot;
+    const euler = this.foldEuler;
+    switch (fold.edge) {
+      case "left":
+        pivot.set(-w / 2, 0, 0);
+        euler.set(0, -angle, 0);
+        break;
+      case "top":
+        pivot.set(0, h / 2, 0);
+        euler.set(-angle, 0, 0);
+        break;
+      case "bottom":
+        pivot.set(0, -h / 2, 0);
+        euler.set(angle, 0, 0);
+        break;
+      case "right":
+      default:
+        pivot.set(w / 2, 0, 0);
+        euler.set(0, angle, 0);
+        break;
+    }
+    this.foldQuat.setFromEuler(euler);
+    // Reflect the mesh layer across the fold: a left/right hinge rotates about
+    // Y (the panels swing apart horizontally), so it's the U axis of the
+    // picture that should mirror; a top/bottom hinge mirrors V the same way.
+    const horizontalHinge = fold.edge === "left" || fold.edge === "right";
+    folded.setMirror(horizontalHinge, !horizontalHinge);
+
+    flat.group.updateMatrixWorld(true);
+    // Unit scale: the card's scale is inherited through flat.matrixWorld, so
+    // baking it in again here would square it.
+    this.foldLocal.compose(pivot, this.foldQuat, VEC3_UNIT_SCALE);
+    this.foldWorld.multiplyMatrices(flat.group.matrixWorld, this.foldLocal);
+    this.foldWorld.decompose(
+      folded.group.position,
+      folded.group.quaternion,
+      folded.group.scale,
+    );
+    // foldLocal rotates-then-translates-by-pivot, so the mesh-local point that
+    // stays put across every angle is v = -pivot, not +pivot: offsetting the
+    // mesh by +pivot (the naive reading) pivots around the panel's *far* edge
+    // instead of the shared one, leaving a gap that grows/shrinks with angle
+    // instead of a seam that stays shut. compose() copies pivot's components
+    // into the matrix, so negating it afterward is safe.
+    folded.setMeshOffset(pivot.negate());
+
+    // Keeping the photo clear of the folded panel is a *render-order* problem,
+    // not a per-material one — renderFoldPasses handles it by drawing the panel
+    // into its own depth pass. See there for why.
+    this.foldActive = true;
   }
 
   private textTexture(

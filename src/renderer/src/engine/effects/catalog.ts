@@ -32,7 +32,7 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       { name: "uSpeed", label: "Speed", min: 0, max: 4, default: 1 },
     ],
     glslDeform: `
-  vec3 tx = texture2D(uTexture, uv).rgb;
+  vec3 tx = texture2D(uTexture, pg_imageUv(uv)).rgb;
   float lum = dot(tx, vec3(0.299, 0.587, 0.114));
   float pulse = 1.0 - uPulse + uPulse * (0.5 + 0.5 * sin(t * uSpeed));
   pos.z += (lum - 0.5) * uAmplitude * pulse;
@@ -56,7 +56,7 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       },
     ],
     glslDeform: `
-  vec3 tx = texture2D(uTexture, uv).rgb;
+  vec3 tx = texture2D(uTexture, pg_imageUv(uv)).rgb;
   float lum = dot(tx, vec3(0.299, 0.587, 0.114));
   pos += normal * (lum - 0.5) * uAmount;
   return pos;`,

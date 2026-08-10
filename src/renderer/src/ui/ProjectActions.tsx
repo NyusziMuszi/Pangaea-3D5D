@@ -1,7 +1,7 @@
 import { useStore } from "../state/store";
-import { defaultProject } from "../state/defaults";
+import { defaultProject, defaultStillProject } from "../state/defaults";
 import { getPrefs } from "../state/prefs";
-import type { Project } from "../types";
+import { isStill, type Project } from "../types";
 import { defaultFilename } from "../state/filename";
 import {
   assetBytes,
@@ -45,6 +45,13 @@ export function ProjectActions({
     setToast("New project");
   }
 
+  function newStill(): void {
+    setProject(defaultStillProject());
+    selectEffect(null);
+    selectSegment(null);
+    setToast("New still");
+  }
+
   async function save(): Promise<void> {
     const path = await window.api.saveFileDialog({
       defaultName: defaultFilename("pangaea"),
@@ -61,7 +68,10 @@ export function ProjectActions({
     const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
     await window.api.writeFile(path, bytes);
     setToast("Project saved");
-    getPrefs().recordSave(project, useStore.getState().lastLuckyColorScheme);
+    // The taste profile models video scenes; a still would pollute it.
+    if (!isStill(project)) {
+      getPrefs().recordSave(project, useStore.getState().lastLuckyColorScheme);
+    }
   }
 
   async function open(): Promise<void> {
@@ -88,6 +98,9 @@ export function ProjectActions({
     <div className="project-actions">
       <button className="important" onClick={newProject}>
         New
+      </button>
+      <button className="important" onClick={newStill}>
+        New still
       </button>
       <button className="important" onClick={open}>
         Open

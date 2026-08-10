@@ -61,6 +61,31 @@ export interface EffectInstance {
 
 export type CameraType = "perspective" | "isometric";
 export const CAMERA_TYPES = ["perspective", "isometric"] as const satisfies readonly CameraType[];
+
+// A project is either a "video" (the 3 animation + 3 text-card reel) or a
+// "still": a single printed frame built from exactly two stacked layers of the
+// same image — objects[0] flat and clean, objects[1] as wireframe/faceted mesh.
+export type ProjectMode = "video" | "still";
+export const PROJECT_MODES = ["video", "still"] as const satisfies readonly ProjectMode[];
+
+// The fixed layers of a still. The first two are always present; the shape
+// layer is optional — a real 3D object piercing the photo, added on demand.
+export const STILL_IMAGE_LAYER = 0;
+export const STILL_MESH_LAYER = 1;
+export const STILL_SHAPE_LAYER = 2;
+
+// Which edge of the flat panel the folded panel hinges on.
+export type HingeEdge = "right" | "left" | "top" | "bottom";
+export const HINGE_EDGES = ["right", "left", "top", "bottom"] as const satisfies readonly HingeEdge[];
+
+// Still-mode fold: the two layers joined along one edge as a folded card.
+// While enabled the mesh layer's own transform is ignored — its placement is
+// derived from the flat layer's transform plus this hinge.
+export interface StillFold {
+  enabled: boolean;
+  edge: HingeEdge;
+  angle: Scalar; // radians; positive folds away from the camera
+}
 export type Mapping = "uv" | "triplanar" | "spherical" | "cylindrical" | "reflection";
 export const MAPPINGS = ["uv", "triplanar", "spherical", "cylindrical", "reflection"] as const satisfies readonly Mapping[];
 // How colour trios are dealt across segments by "Feeling lucky" — see lucky.ts.
@@ -91,10 +116,15 @@ export type TextBackdrop = "none" | "silhouette" | "wireframe";
 
 // How an object's surface is rendered: textured ("image", today's default —
 // shows the loaded image or the grey placeholder), as a flat "silhouette"
-// or "wireframe" drawn in surfaceColor, or as a "faceted" solid coloured in
-// surfaceColor and flat-shaded by a fixed light so its planes are visible.
-export type ObjectSurface = "image" | "silhouette" | "wireframe" | "faceted";
-export const OBJECT_SURFACES = ["image", "silhouette", "wireframe", "faceted"] as const satisfies readonly ObjectSurface[];
+// or "wireframe" drawn in surfaceColor, as a "faceted" solid coloured in
+// surfaceColor and flat-shaded by a fixed light so its planes are visible, or
+// as "depth" — a two-colour ramp between surfaceColor and surfaceColorLow
+// driven by object-space height, with no directional light.
+export type ObjectSurface = "image" | "silhouette" | "wireframe" | "faceted" | "depth";
+export const OBJECT_SURFACES = ["image", "silhouette", "wireframe", "faceted", "depth"] as const satisfies readonly ObjectSurface[];
+
+// In a still, layer 2 (the mesh) is only ever drawn as geometry, never textured.
+export const STILL_MESH_SURFACES = ["wireframe", "faceted", "depth"] as const satisfies readonly ObjectSurface[];
 
 // How the glyphs combine with whatever is beneath them (only applies when
 // textBackdrop is "silhouette"). "normal" is today's flat textColor fill;
@@ -161,6 +191,10 @@ export interface ObjectState {
   surface: ObjectSurface;
   surfaceColor: string;
   surfaceWireWidth: number;
+  // Depth-surface ramp: surfaceColor is the raised end, surfaceColorLow the
+  // recessed end, depthRange the ± object-space height mapped across the ramp.
+  surfaceColorLow?: string;
+  depthRange?: number;
   // This object's own texture and the effect stack applied to it. Both objects
   // are independent peers — neither shares the other's material.
   image: ObjectImage;
@@ -178,6 +212,10 @@ export interface ObjectState {
 
 export interface Project {
   version: number;
+  // Absent = "video" (all projects saved before still mode existed).
+  mode?: ProjectMode;
+  // Still-mode fold state. Absent = not folded (today's stacked layers).
+  fold?: StillFold;
   output: { width: number; height: number; fps: number };
   scene: {
     cameraType: CameraType;
@@ -230,6 +268,8 @@ export const ALL_UNLOCKED: LuckLocks = {
 export function totalDuration(p: Project): number {
   return p.segments.reduce((s, seg) => s + seg.durationSec, 0);
 }
+
+export const isStill = (p: Project): boolean => p.mode === "still";
 
 // Human-readable name for an object, shown on the timeline ("Sphere", "Plane",
 // or the imported model's file name). Used so each object is labelled with what

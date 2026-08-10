@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { getActiveObject, useActiveObject, useStore } from '../state/store'
+import { useActiveObject, useStore } from '../state/store'
+import { imageOwner } from '../state/stillMode'
 import { engine } from '../engine/engineSingleton'
 import { constant, type ObjectState, type Project } from '../types'
 import { evalScalar, setValueAt } from './scalarUtils'
@@ -18,18 +19,19 @@ export function PreviewPanel(): JSX.Element {
   const activeObject = useActiveObject()
   const hasImage = !!activeObject?.image.assetId
 
-  // Resolve the active object from the live store (drag handlers run outside the
-  // render closure, so read the current selection each time). Undefined when the
-  // scene has no objects.
-  function liveActiveObject(p: Project): ObjectState | undefined {
-    return getActiveObject(p, useStore.getState().selectedObjectIndex)
+  // Resolve the object a pan gesture edits (drag handlers run outside the
+  // render closure, so read the current selection each time). In a still,
+  // this is always the image layer — see state/stillMode.ts — otherwise the
+  // selected object. Undefined when the scene has no objects.
+  function panTarget(p: Project): ObjectState | undefined {
+    return imageOwner(p, useStore.getState().selectedObjectIndex)
   }
 
   // Drag over the preview to reposition the image's cover-fit window. Only the
   // overflowing axis responds (the fitted axis ignores its offset in-shader).
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>): void {
     downRef.current = { x: e.clientX, y: e.clientY }
-    if (!liveActiveObject(useStore.getState().project)?.image.assetId) return
+    if (!panTarget(useStore.getState().project)?.image.assetId) return
     dragRef.current = { x: e.clientX, y: e.clientY }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
@@ -42,7 +44,7 @@ export function PreviewPanel(): JSX.Element {
     const dy = (e.clientY - start.y) / rect.height
     dragRef.current = { x: e.clientX, y: e.clientY }
     const ph = useStore.getState().playhead
-    const active = liveActiveObject(useStore.getState().project)
+    const active = panTarget(useStore.getState().project)
     if (!active) return
     const img = active.image
     // Grab-and-drag: image content follows the cursor.
@@ -51,7 +53,7 @@ export function PreviewPanel(): JSX.Element {
     const nextX = Math.min(1, Math.max(0, curX - dx))
     const nextY = Math.min(1, Math.max(0, curY + dy))
     update((p) => {
-      const o = liveActiveObject(p)
+      const o = panTarget(p)
       if (!o) return
       o.image.offsetX = setValueAt(o.image.offsetX ?? constant(0.5), ph, nextX)
       o.image.offsetY = setValueAt(o.image.offsetY ?? constant(0.5), ph, nextY)

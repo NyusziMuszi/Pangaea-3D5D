@@ -1,6 +1,6 @@
 import { PRIMITIVE_MODELS, OBJECT_SURFACES, type ObjectSurface, type PrimitiveModel } from "../types";
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // Primitive shapes offered in an object's Type dropdown. Shared by the inspector
 // and the timeline object head so both stay in sync.

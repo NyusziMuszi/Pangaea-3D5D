@@ -2,7 +2,7 @@ import { type CSSProperties, useEffect, useState } from "react";
 import playIcon from "../assets/play_arrow_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import pauseIcon from "../assets/pause_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 import { useStore } from "../state/store";
-import { defaultSecondObject } from "../state/defaults";
+import { defaultSecondObject, defaultStillShape } from "../state/defaults";
 import { engine } from "../engine/engineSingleton";
 import { KeyframeTrack, DurationField, ColorSwatch } from "./controls";
 import { accentVars, objectAccentColor } from "./accent";
@@ -11,6 +11,8 @@ import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS } from "./objectOptions";
 import { bytesToDataUrl, mimeForName } from "./files";
 import { isAnimated } from "./scalarUtils";
 import {
+  isStill,
+  STILL_SHAPE_LAYER,
   totalDuration,
   type ObjectState,
   type ObjectSurface,
@@ -136,6 +138,18 @@ export function TimelinePanel(): JSX.Element {
     const at = project.objects.length;
     update((p) => {
       p.objects.push(defaultSecondObject());
+    });
+    selectObject(at);
+    selectSegment(null);
+  }
+
+  // Append the optional third layer of a still: a 3D shape piercing the
+  // photo. Only meaningful in still mode, where objects[0]/[1] are the fixed
+  // photo/mesh layers — this always lands at STILL_SHAPE_LAYER (index 2).
+  function addShape(): void {
+    const at = project.objects.length;
+    update((p) => {
+      p.objects.push(defaultStillShape());
     });
     selectObject(at);
     selectSegment(null);
@@ -559,7 +573,13 @@ export function TimelinePanel(): JSX.Element {
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => setObjectType(index, e.target.value)}
                     >
-                      <option value="none">None</option>
+                      {/* A still's photo/mesh layers (0/1) are fixed roles —
+                          removing either would renumber the layers and
+                          silently destroy the card, so None is only offered
+                          on the optional shape layer (2) or in video mode. */}
+                      {(!isStill(project) || index >= STILL_SHAPE_LAYER) && (
+                        <option value="none">None</option>
+                      )}
                       {PRIMITIVE_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
@@ -606,14 +626,26 @@ export function TimelinePanel(): JSX.Element {
                   {renderKeyframes(obj, index)}
                 </div>
               ))}
-              {project.objects.length < 2 && (
-                <button
-                  className="segment object tl-add-object"
-                  onClick={addObject}
-                  title="Add a second object"
-                >
-                  + Add object
-                </button>
+              {isStill(project) ? (
+                project.objects.length < 3 && (
+                  <button
+                    className="segment object tl-add-object"
+                    onClick={addShape}
+                    title="Add a 3D shape piercing the photo"
+                  >
+                    + Add shape
+                  </button>
+                )
+              ) : (
+                project.objects.length < 2 && (
+                  <button
+                    className="segment object tl-add-object"
+                    onClick={addObject}
+                    title="Add a second object"
+                  >
+                    + Add object
+                  </button>
+                )
               )}
               <div
                 className="tl-playhead"

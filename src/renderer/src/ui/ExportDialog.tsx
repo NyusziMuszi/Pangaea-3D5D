@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
-import { totalDuration } from "../types";
+import { isStill, totalDuration } from "../types";
 import { defaultFilename } from "../state/filename";
 import { exportVideo, type ExportProgress } from "../engine/export/exporter";
 import { setPngDpi } from "../engine/export/pngDpi";
@@ -22,7 +22,8 @@ export function ExportDialog({
   onClose: () => void;
 }): JSX.Element {
   const project = useStore((s) => s.project);
-  const [format, setFormat] = useState<Format>("mp4");
+  const stillMode = isStill(project);
+  const [format, setFormat] = useState<Format>(stillMode ? "png" : "mp4");
   const [fps, setFps] = useState(project.output.fps);
   const [duration, setDuration] = useState(
     Number(totalDuration(project).toFixed(2)),
@@ -134,16 +135,18 @@ export function ExportDialog({
       }
     >
       <div className="export-body">
-        <label className="field">
-          <span className="field-label">Format</span>
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value as Format)}
-          >
-            <option value="mp4">MP4 video</option>
-            <option value="png">Still frame (PNG, transparent)</option>
-          </select>
-        </label>
+        {!stillMode && (
+          <label className="field">
+            <span className="field-label">Format</span>
+            <select
+              value={format}
+              onChange={(e) => setFormat(e.target.value as Format)}
+            >
+              <option value="mp4">MP4 video</option>
+              <option value="png">Still frame (PNG, transparent)</option>
+            </select>
+          </label>
+        )}
 
         {format === "mp4" ? (
           <>

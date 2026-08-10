@@ -71,6 +71,26 @@ export function composeObjectShader(
   })
 
   const commonBlock = [...commons].join('\n')
+
+  // Aspect-correct "cover" framing of the source image: the engine supplies a
+  // scale (<=1 on the overflowing axis) and an offset (the pan). Declared in
+  // BOTH stages, so a deformer can sample the image with exactly the framing
+  // the fragment shader draws. Without it the vertex chain displaces to a
+  // *stretched* copy of the picture and the bumps drift away from what you see
+  // whenever the image aspect differs from the plane's.
+  //
+  // uMirrorU/uMirrorV flip the mesh-local uv before that framing is applied —
+  // used by the still-mode folded card so the hinged mesh layer reads as a
+  // reflection of the flat layer across the fold, rather than a repeat of it.
+  // Flipping here (not just in the fragment shader) means the vertex deform
+  // chain samples the mirrored image too, so a mirrored surface's bumps sit
+  // where the mirrored picture would put them, not where the original does.
+  const imageUvFn = `vec2 pg_imageUv(vec2 uv) {
+  if (uMirrorU > 0.5) uv.x = 1.0 - uv.x;
+  if (uMirrorV > 0.5) uv.y = 1.0 - uv.y;
+  return uv * uImageScale + uImageOffset;
+}`
+
   const mappingDefine =
     ({
       triplanar: '#define USE_TRIPLANAR',
@@ -85,6 +105,10 @@ precision highp float;
 uniform float uTime;
 uniform sampler2D uTexture;
 uniform vec2 uResolution;
+uniform vec2 uImageScale;
+uniform vec2 uImageOffset;
+uniform float uMirrorU;
+uniform float uMirrorV;
 ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
@@ -92,6 +116,7 @@ varying vec3 vWorldNormal;
 varying vec3 vObjPos;
 attribute vec3 aBary;
 varying vec3 vBary;
+${imageUvFn}
 ${commonBlock}
 ${deformFns.join('\n')}
 void main() {
@@ -116,18 +141,24 @@ uniform sampler2D uTextureB;
 uniform vec2 uResolution;
 uniform vec2 uImageScale;
 uniform vec2 uImageOffset;
+uniform float uMirrorU;
+uniform float uMirrorV;
 uniform float uSilhouette;
 uniform vec3 uFlatColor;
 uniform float uOpacity;
 uniform float uWireframe;
 uniform float uWireWidth;
 uniform float uFaceted;
+uniform float uDepth;
+uniform vec3 uDepthLow;
+uniform float uDepthRange;
 ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec3 vObjPos;
 varying vec3 vBary;
+${imageUvFn}
 ${commonBlock}
 const float PG_TAU = 6.28318530718;
 const float PG_PI  = 3.14159265359;
@@ -156,10 +187,9 @@ vec4 pg_sampleObject(vec2 uv) {
   vec3 r = reflect(viewDir, normalize(vWorldNormal));
   return texture2D(uTexture, pg_equirect(r));
 #else
-  // Aspect-correct cover fit: window the image so it fills the frame without
-  // squeezing. Engine supplies scale (<=1 on the overflowing axis) and offset.
-  vec2 t = uv * uImageScale + uImageOffset;
-  return texture2D(uTexture, t);
+  // Aspect-correct cover fit — the same framing pg_imageUv gives the deform
+  // chain, so vertex displacement and visible pixels agree.
+  return texture2D(uTexture, pg_imageUv(uv));
 #endif
 }
 vec4 pg_sampleOther(vec2 uv) { return texture2D(uTextureB, uv); }
@@ -178,6 +208,15 @@ ${shadeCalls.join('\n')}
     float ndl = max(dot(N, L), 0.0);
     float shade = mix(0.35, 1.0, ndl); // 0.35 = ambient floor
     color = vec4(uFlatColor * shade, 1.0);
+  }
+  if (uDepth > 0.5) {
+    // Height ramp, no directional light: vObjPos is written after the deform
+    // chain, so on a plane (base z = 0) vObjPos.z IS the signed displacement
+    // that displace/relief produced. Map ±uDepthRange onto 0..1 and ramp from
+    // the recessed colour to uFlatColor, so a relief map reads as depth rather
+    // than as lit facets.
+    float h = clamp(vObjPos.z / max(uDepthRange, 1e-4) * 0.5 + 0.5, 0.0, 1.0);
+    color = vec4(mix(uDepthLow, uFlatColor, h), 1.0);
   }
   if (uWireframe > 0.5) {
     vec3 d = fwidth(vBary);

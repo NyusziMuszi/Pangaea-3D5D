@@ -9,7 +9,15 @@ import { activeObjectIndex, useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import { instanceFromDef, uid } from "../state/defaults";
 import { getPrefs } from "../state/prefs";
-import { MAPPINGS, type EffectDef, type ObjectState, type CameraType } from "../types";
+import {
+  isStill,
+  STILL_MESH_LAYER,
+  STILL_SHAPE_LAYER,
+  MAPPINGS,
+  type EffectDef,
+  type ObjectState,
+  type CameraType,
+} from "../types";
 import { makeThumbnailUrl, mimeForName } from "./files";
 import { registerAsset } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
@@ -52,6 +60,7 @@ export function LibraryPanel({
   const setLastLuckyColorScheme = useStore((s) => s.setLastLuckyColorScheme);
 
   const lucky = project.lucky;
+  const stillMode = isStill(project);
   const [generating, setGenerating] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
 
@@ -194,14 +203,24 @@ export function LibraryPanel({
     });
   }
 
-  // Add an effect to the currently active object. With no second object it
-  // always targets object 1. With two objects it targets whichever object is
-  // the active context; if a segment is selected instead, there is no object
-  // to attach to, so prompt the user to pick one.
+  // Add an effect to the currently active object. In a still, the image layer
+  // is effect-free by design (see state/stillMode.ts) — effects belong to
+  // whichever of the mesh/shape layers is selected, falling back to the mesh
+  // layer when the image layer or a segment is selected. Otherwise: with no
+  // second object it always targets object 1; with two objects it targets
+  // whichever is the active context — unless a segment is selected instead,
+  // in which case there is no object to attach to, so prompt the user to
+  // pick one.
   function addEffect(def: EffectDef): void {
     const { selectedSegmentId, selectedObjectIndex } = useStore.getState();
     let target = 0;
-    if (project.objects.length > 1) {
+    if (isStill(project)) {
+      target =
+        selectedObjectIndex === STILL_MESH_LAYER ||
+        selectedObjectIndex === STILL_SHAPE_LAYER
+          ? selectedObjectIndex
+          : STILL_MESH_LAYER;
+    } else if (project.objects.length > 1) {
       if (selectedSegmentId) {
         setToast("Select an object first");
         return;
@@ -276,6 +295,7 @@ export function LibraryPanel({
       >
         {!collapsed && (
           <>
+            {!stillMode && (
             <Section
               title="Explore"
               className="lucky"
@@ -665,6 +685,7 @@ export function LibraryPanel({
                 </button>
               </div>
             </Section>
+            )}
             <Section title="Scene" defaultOpen={false}>
               <Field label="Camera">
                 <select
