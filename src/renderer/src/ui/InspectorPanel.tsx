@@ -17,6 +17,8 @@ import {
   STILL_MESH_SURFACES,
   STILL_SHAPE_LAYER,
   type HingeEdge,
+  SURFACE_COLOR_LIGHT_DEFAULT,
+  SURFACE_COLOR_LOW_DEFAULT,
   type Mapping,
   type ObjectState,
   type ObjectSurface,
@@ -593,11 +595,29 @@ export function InspectorPanel({
                   )}
                   {activeObject.surface !== "image" && (
                     <ColorRow
-                      label="Surface colour"
+                      label={
+                        activeObject.surface === "faceted"
+                          ? "Body colour"
+                          : "Surface colour"
+                      }
                       value={activeObject.surfaceColor ?? "#878787"}
                       onChange={(v) =>
                         updateObject((o) => {
                           o.surfaceColor = v;
+                        })
+                      }
+                    />
+                  )}
+                  {activeObject.surface === "faceted" && (
+                    <ColorRow
+                      label="Light colour"
+                      value={
+                        activeObject.surfaceColorLight ??
+                        SURFACE_COLOR_LIGHT_DEFAULT
+                      }
+                      onChange={(v) =>
+                        updateObject((o) => {
+                          o.surfaceColorLight = v;
                         })
                       }
                     />
@@ -629,7 +649,10 @@ export function InspectorPanel({
                     <>
                       <ColorRow
                         label="Low colour"
-                        value={activeObject.surfaceColorLow ?? "#2a2a2a"}
+                        value={
+                          activeObject.surfaceColorLow ??
+                          SURFACE_COLOR_LOW_DEFAULT
+                        }
                         onChange={(v) =>
                           updateObject((o) => {
                             o.surfaceColorLow = v;

@@ -91,6 +91,12 @@ const api: PangaeaApi = {
   // real "where does it go" choice happens in the browser's download UI.
   saveFileDialog: async (opts) => opts.defaultName ?? 'project.pangaea',
 
+  // No folder-access API on the web build. The image-sequence export needs
+  // batch disk writes, which only the desktop app can grant via a real
+  // directory-scoped dialog; fail fast with an actionable message.
+  openDirectoryDialog: () =>
+    Promise.reject(new Error('Image-sequence export needs the desktop app (folder access).')),
+
   // Trigger a browser download of the bytes. `path` is the synthetic name from
   // saveFileDialog; the file downloads under its basename.
   writeFile: async (path, data) => {

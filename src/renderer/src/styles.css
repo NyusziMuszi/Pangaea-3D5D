@@ -1369,15 +1369,27 @@ textarea.code {
 /* ---------- Export ---------- */
 .export-dialog {
   width: 460px;
+  max-height: 88vh;
 }
 .export-body {
   padding: var(--space-6); /* snap 14→16 */
   display: flex;
   flex-direction: column;
   gap: var(--space-5); /* snap 10→12 */
+  overflow-y: auto;
 }
 .export-summary {
   color: var(--text-dim);
+}
+.export-surfaces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.export-surfaces .checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
 }
 .progress {
   display: flex;

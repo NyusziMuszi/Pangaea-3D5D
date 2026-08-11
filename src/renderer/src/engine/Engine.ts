@@ -3,6 +3,7 @@ import type {
   EffectDef,
   EffectInstance,
   ObjectState,
+  ObjectSurface,
   Project,
   Scalar,
 } from "../types";
@@ -12,6 +13,8 @@ import {
   isStill,
   STILL_IMAGE_LAYER,
   STILL_MESH_LAYER,
+  SURFACE_COLOR_LIGHT_DEFAULT,
+  SURFACE_COLOR_LOW_DEFAULT,
 } from "../types";
 import { evalScalar } from "./animatable";
 import { computeTimeline, buildTimelineIndex } from "./timeline";
@@ -94,6 +97,11 @@ const PLANE_DIMENSIONS: Partial<Record<string, [number, number]>> = {
 // scale-free so the card's scale is inherited from the flat layer alone.
 const VEC3_ZERO = new THREE.Vector3(0, 0, 0);
 const VEC3_UNIT_SCALE = new THREE.Vector3(1, 1, 1);
+
+// The only primitives whose uv is a single seamless 0..1 chart. Everything else
+// wraps somewhere (and imported models carry arbitrary atlased uv), so uv-space
+// deform fields crease along the wrap — see pg_radial() in composer.ts.
+const OPEN_UV_PRIMITIVES = new Set(["plane", "landscape"]);
 
 function primitiveGeometry(primitive: string): THREE.BufferGeometry {
   switch (primitive) {
@@ -422,7 +430,9 @@ class ObjectSlot {
     output: OutputSize,
   ): void {
     const effects = resolvedEffects(object, customEffects);
-    const composed = composeObjectShader(effects, object.mapping);
+    const wrappedUv =
+      !!object.modelDataUrl || !OPEN_UV_PRIMITIVES.has(object.primitive);
+    const composed = composeObjectShader(effects, object.mapping, wrappedUv);
     // The shader signature ignores scalar values, so a value-only edit reuses
     // the material. But `setProject` hands us freshly cloned EffectInstances,
     // so we must re-resolve the cached binding refs even on this fast path —
@@ -450,9 +460,10 @@ class ObjectSlot {
       uWireframe: { value: 0 },
       uWireWidth: { value: 1.5 },
       uFaceted: { value: 0 },
+      uFacetLight: { value: new THREE.Vector3(1, 1, 1) },
       uDepth: { value: 0 },
-      // Recessed end of the depth ramp (uFlatColor is the raised end), and the
-      // ± object-space height mapped across it.
+      // Far end of the depth ramp (uFlatColor is the near end), and the ± world
+      // units of camera distance mapped across it.
       uDepthLow: { value: new THREE.Vector3(0, 0, 0) },
       uDepthRange: { value: 0.5 },
     };
@@ -599,13 +610,21 @@ class ObjectSlot {
       });
       mat.uniforms.uWireWidth.value = object.surfaceWireWidth ?? 1.5;
       if (surface === "depth") {
-        // surfaceColor is the raised end of the ramp, so the recessed end
-        // defaults to near-black under the default mid grey.
+        // surfaceColor is the near end of the ramp, so the far end defaults to
+        // near-black under the default mid grey.
         hexToRgb01(
-          object.surfaceColorLow ?? "#1a1a1a",
+          object.surfaceColorLow ?? SURFACE_COLOR_LOW_DEFAULT,
           mat.uniforms.uDepthLow.value as THREE.Vector3,
         );
         mat.uniforms.uDepthRange.value = object.depthRange ?? 0.5;
+      }
+      if (surface === "faceted") {
+        // surfaceColor is the unlit (body) end of the ramp, so the lit end
+        // defaults to white — pure ambient-vs-lit contrast on the default grey.
+        hexToRgb01(
+          object.surfaceColorLight ?? SURFACE_COLOR_LIGHT_DEFAULT,
+          mat.uniforms.uFacetLight.value as THREE.Vector3,
+        );
       }
     }
     mat.uniforms.uOpacity.value = 1;
@@ -963,20 +982,44 @@ export class Engine {
   // and return PNG bytes. Used by the still-image export; the interactive
   // preview is fully restored afterward regardless of success or failure.
   async captureStill(width: number, height: number): Promise<Uint8Array> {
+    return this.captureStillAt(this.playhead, width, height);
+  }
+
+  // Like captureStill, but at an arbitrary time `t` and with an optional
+  // per-object surface override — used by the PNG-sequence export to grab
+  // the same moment rendered as faceted/wireframe/silhouette/depth without
+  // touching the UI playhead or the stored project. The override is applied
+  // to a shallow clone of the project (never pushed through setProject, so
+  // no reconciliation runs and the store/UI never see it); surface isn't part
+  // of either rebuild signature, so this is just a uniform change per object.
+  async captureStillAt(
+    t: number,
+    width: number,
+    height: number,
+    surface?: ObjectSurface,
+  ): Promise<Uint8Array> {
     const origWidth = this.logicalWidth;
     const origHeight = this.logicalHeight;
     const origScale = this.renderScale;
+    const origProject = this.project;
     try {
       this.renderScale = 1;
       this.setOutputSize(width, height);
       this.transparentStill = true;
-      this.renderFrame(this.playhead);
+      if (surface && origProject) {
+        this.project = {
+          ...origProject,
+          objects: origProject.objects.map((o) => ({ ...o, surface })),
+        };
+      }
+      this.renderFrame(t);
       const blob = await new Promise<Blob | null>((res) =>
         this.renderer.domElement.toBlob(res, "image/png"),
       );
       if (!blob) throw new Error("Still capture failed");
       return new Uint8Array(await blob.arrayBuffer());
     } finally {
+      this.project = origProject;
       this.transparentStill = false;
       this.renderScale = origScale;
       this.setOutputSize(origWidth, origHeight);

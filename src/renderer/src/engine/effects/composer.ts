@@ -28,7 +28,11 @@ function aliasLines(prefix: string, def: EffectDef): string {
 
 export function composeObjectShader(
   effects: ResolvedEffect[],
-  mapping: Mapping
+  mapping: Mapping,
+  // False for plane-like geometry whose uv is a single seamless 0..1 chart;
+  // true for every primitive that wraps its uv somewhere. Selects which space
+  // pg_radial() builds its field from — see the comment on that function.
+  wrappedUv = false
 ): ComposedShader {
   const deformers = effects.filter((e) => e.def.kind === 'deform')
   const shaders = effects.filter((e) => e.def.kind === 'shade')
@@ -102,6 +106,7 @@ export function composeObjectShader(
 
   const vertexShader = `
 precision highp float;
+${wrappedUv ? '#define PG_WRAPPED_UV' : ''}
 uniform float uTime;
 uniform sampler2D uTexture;
 uniform vec2 uResolution;
@@ -114,10 +119,31 @@ varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec3 vObjPos;
+varying float vViewDepth;
 attribute vec3 aBary;
 varying vec3 vBary;
 ${imageUvFn}
 ${commonBlock}
+// Radial "distance from the centre" field for deform effects (ripple, bulge).
+//
+// On plane-like geometry uv is one seamless 0..1 chart, so uv-space is exactly
+// what those effects were authored against — keep it. Every other primitive
+// wraps its uv somewhere, and a field built from uv creases hard along that
+// wrap: crossing it, uv.y runs 0.99 -> 1 -> 0 -> 0.01, so length(uv - 0.5)
+// peaks at the seam and reverses gradient. The value stays continuous (the
+// mesh never tears) but the slope flips, welding a sharp fold onto the seam
+// ring. On a three.js torus that ring is the outer perimeter, because v=0 and
+// v=2*PI both land on the outermost vertices.
+//
+// Object-space xy has no such discontinuity, and on a plane it measures the
+// same thing uv did, so closed primitives use it instead and the crease goes.
+float pg_radial(vec3 pos, vec2 uv) {
+#ifdef PG_WRAPPED_UV
+  return length(pos.xy);
+#else
+  return length(uv - 0.5);
+#endif
+}
 ${deformFns.join('\n')}
 void main() {
   vUv = uv;
@@ -126,10 +152,17 @@ void main() {
   vec3 nrm = normal;
 ${deformCalls.join('\n')}
   vObjPos = pos;
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  // Distance toward the camera, measured from the object's own origin (the
+  // translation column of modelViewMatrix is the origin in view space). View z
+  // grows toward the viewer, so +vViewDepth = nearer than the object's centre.
+  // Camera-relative rather than body-fixed, so the depth ramp stays glued to
+  // the viewer while the object rotates.
+  vViewDepth = mv.z - modelViewMatrix[3].z;
   vec4 wp = modelMatrix * vec4(pos, 1.0);
   vWorldPos = wp.xyz;
   vWorldNormal = normalize(mat3(modelMatrix) * nrm);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  gl_Position = projectionMatrix * mv;
 }`
 
   const fragmentShader = `
@@ -149,6 +182,7 @@ uniform float uOpacity;
 uniform float uWireframe;
 uniform float uWireWidth;
 uniform float uFaceted;
+uniform vec3 uFacetLight;
 uniform float uDepth;
 uniform vec3 uDepthLow;
 uniform float uDepthRange;
@@ -157,6 +191,7 @@ varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 varying vec3 vObjPos;
+varying float vViewDepth;
 varying vec3 vBary;
 ${imageUvFn}
 ${commonBlock}
@@ -201,13 +236,21 @@ ${shadeCalls.join('\n')}
   if (uFaceted > 0.5) {
     // Flat per-face normal from screen-space derivatives, so facets read even
     // on smooth-normalled geometry. Face it toward the camera so DoubleSide
-    // back-faces shade consistently.
+    // back-faces shade consistently. Two-colour ramp: uFlatColor is the unlit
+    // (body) end, uFacetLight the lit end — same mix() shape as the depth branch.
     vec3 N = normalize(cross(dFdx(vWorldPos), dFdy(vWorldPos)));
     if (dot(N, cameraPosition - vWorldPos) < 0.0) N = -N;
     vec3 L = normalize(vec3(0.4, 0.7, 0.6));
     float ndl = max(dot(N, L), 0.0);
-    float shade = mix(0.35, 1.0, ndl); // 0.35 = ambient floor
-    color = vec4(uFlatColor * shade, 1.0);
+    color = vec4(mix(uFlatColor, uFacetLight, ndl), 1.0);
+  }
+  if (uDepth > 0.5) {
+    // Depth ramp, no directional light: vViewDepth is the post-deform distance
+    // toward the camera relative to the object's centre, so near surfaces get
+    // uFlatColor and far ones uDepthLow whatever the object's rotation. Map
+    // ±uDepthRange (world units) onto 0..1.
+    float h = clamp(vViewDepth / max(uDepthRange, 1e-4) * 0.5 + 0.5, 0.0, 1.0);
+    color = vec4(mix(uDepthLow, uFlatColor, h), 1.0);
   }
   if (uDepth > 0.5) {
     // Height ramp, no directional light: vObjPos is written after the deform
@@ -230,6 +273,7 @@ ${shadeCalls.join('\n')}
 
   const signature = JSON.stringify({
     mapping,
+    wrappedUv,
     stack: effects.map((e) => `${e.instance.instanceId}:${e.def.id}:${e.def.kind}`),
     // include glsl bodies so live-edited shaders trigger a recompile
     bodies: effects.map((e) => `${e.def.glslDeform ?? ''}|${e.def.glslShade ?? ''}|${e.def.glslCommon ?? ''}`)
