@@ -91,13 +91,20 @@ export type TextBackdrop = "none" | "silhouette" | "wireframe";
 
 // How an object's surface is rendered: textured ("image", today's default —
 // shows the loaded image or the grey placeholder), as a flat "silhouette"
-// or "wireframe" drawn in surfaceColor, as a "faceted" solid coloured in
-// surfaceColor and flat-shaded by a fixed light so its planes are visible, or
-// as "depth" — a two-colour ramp between surfaceColor (nearest the camera) and
+// or "wireframe" drawn in surfaceColor, as a "faceted" solid — a two-colour
+// ramp between surfaceColor (unlit facets) and surfaceColorLight (lit facets)
+// driven by a fixed light so its planes are visible, or as "depth" — a
+// two-colour ramp between surfaceColor (nearest the camera) and
 // surfaceColorLow (furthest), driven by distance to the camera relative to the
 // object's centre, with no directional light.
 export type ObjectSurface = "image" | "silhouette" | "wireframe" | "faceted" | "depth";
 export const OBJECT_SURFACES = ["image", "silhouette", "wireframe", "faceted", "depth"] as const satisfies readonly ObjectSurface[];
+
+// Shared defaults for the two-colour "faceted"/"depth" surface ramps, used at
+// every read site so old .pangaea files (where these fields are undefined)
+// and the UI/engine agree on the fallback.
+export const SURFACE_COLOR_LIGHT_DEFAULT = "#ffffff"; // faceted lit-facet end
+export const SURFACE_COLOR_LOW_DEFAULT = "#1a1a1a"; // depth far end
 
 // How the glyphs combine with whatever is beneath them (only applies when
 // textBackdrop is "silhouette"). "normal" is today's flat textColor fill;
@@ -168,6 +175,9 @@ export interface ObjectState {
   // end, depthRange the ± world units of camera distance spanned by the ramp.
   surfaceColorLow?: string;
   depthRange?: number;
+  // Faceted-surface ramp: surfaceColor is the unlit (body) end, surfaceColorLight
+  // the lit end.
+  surfaceColorLight?: string;
   // This object's own texture and the effect stack applied to it. Both objects
   // are independent peers — neither shares the other's material.
   image: ObjectImage;

@@ -80,7 +80,7 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       { name: "uSpeed", label: "Speed", min: 0, max: 6, default: 2 },
     ],
     glslDeform: `
-  float d = length(uv - 0.5);
+  float d = pg_radial(pos, uv);
   pos.z += sin(d * uFrequency - t * uSpeed) * uAmplitude;
   return pos;`,
   },
@@ -149,7 +149,7 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       { name: "uRadius", label: "Radius", min: 0.1, max: 1.2, default: 0.6 },
     ],
     glslDeform: `
-  float d = length(uv - 0.5);
+  float d = pg_radial(pos, uv);
   float f = smoothstep(uRadius, 0.0, d);
   pos.z += uStrength * f * 0.8;
   pos.xy *= 1.0 + uStrength * f * 0.15;

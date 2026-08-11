@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
-import { join, basename, resolve } from 'path'
+import { join, basename, dirname, resolve } from 'path'
 import { readFile, writeFile, mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import ffmpegPath from 'ffmpeg-static'
@@ -9,6 +9,12 @@ import ffmpeg from 'fluent-ffmpeg'
 // session. file:read / file:write / ffmpeg:encodeFrames are gated to this set
 // so a compromised renderer can't read/write arbitrary disk locations.
 const approvedPaths = new Set<string>()
+
+// Directories the user has explicitly chosen via the folder-picker dialog this
+// session (e.g. for a PNG-sequence export). file:write also accepts any path
+// whose immediate parent is one of these — widened just enough to let a batch
+// export write many files after a single directory pick, still dialog-gated.
+const approvedDirs = new Set<string>()
 
 // Image extension -> mime allowlist for image:readPath. The renderer's
 // mimeForName isn't importable from main, so we mirror the picker's filters.
@@ -25,8 +31,9 @@ const IMAGE_MIME: Record<string, string> = {
 function assertApproved(p: string): string {
   const resolved = resolve(p)
   if (resolved.includes('..')) throw new Error('Rejected path (traversal): ' + p)
-  if (!approvedPaths.has(resolved)) throw new Error('Rejected unapproved path: ' + p)
-  return resolved
+  if (approvedPaths.has(resolved)) return resolved
+  if (approvedDirs.has(dirname(resolved))) return resolved
+  throw new Error('Rejected unapproved path: ' + p)
 }
 
 // ffmpeg-static resolves inside app.asar in production, but the binary is
@@ -182,6 +189,18 @@ function registerIpc(): void {
       return res.filePath
     }
   )
+
+  // Folder-picker for batch exports (e.g. PNG sequence). Approves the chosen
+  // directory so file:write can accept any filename written directly inside it.
+  ipcMain.handle('dialog:openDirectory', async () => {
+    const res = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (res.canceled || res.filePaths.length === 0) return null
+    const path = res.filePaths[0]
+    approvedDirs.add(resolve(path))
+    return path
+  })
 
   // Write bytes to a path — only if it was dialog-approved this session.
   ipcMain.handle('file:write', async (_e, args: { path: string; data: Uint8Array }) => {

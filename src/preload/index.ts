@@ -36,6 +36,7 @@ const api = {
     defaultName?: string
     filters?: { name: string; extensions: string[] }[]
   }): Promise<string | null> => ipcRenderer.invoke('dialog:saveFile', opts),
+  openDirectoryDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openDirectory'),
   writeFile: (path: string, data: Uint8Array): Promise<{ ok: boolean; path: string }> =>
     ipcRenderer.invoke('file:write', { path, data }),
   encodeFrames: (opts: {

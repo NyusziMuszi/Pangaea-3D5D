@@ -234,7 +234,11 @@ function applyLocks(base: Project, next: Project, locks: LuckLocks): void {
     });
     next.objects.forEach((o, i) => {
       const b = base.objects[i];
-      if (b) o.surfaceColor = b.surfaceColor;
+      if (b) {
+        o.surfaceColor = b.surfaceColor;
+        o.surfaceColorLight = b.surfaceColorLight;
+        o.surfaceColorLow = b.surfaceColorLow;
+      }
     });
   }
 }
@@ -351,6 +355,8 @@ export function generateLuckyScene(
     } else {
       o.surface = flatSurfaces[i % flatSurfaces.length];
       o.surfaceColor = pickSurfaceColor();
+      if (o.surface === "faceted") o.surfaceColorLight = pickRampColor(o.surfaceColor);
+      else if (o.surface === "depth") o.surfaceColorLow = pickRampColor(o.surfaceColor);
       o.image = defaultObjectImage();
     }
   };
@@ -455,6 +461,30 @@ export function generateLuckyScene(
     const chosen = pickWeighted(pool.length ? pool : realSurfacePalette, surfScore);
     usedSurfaceColors.add(chosen);
     return chosen;
+  };
+
+  // Second colour for a faceted/depth ramp: contrasts with `primary` so the
+  // ramp actually reads, drawn from the palette so it stays on-theme. Doesn't
+  // touch usedSurfaceColors — that set stops two objects sharing a body
+  // colour, and a ramp's second colour isn't a body colour.
+  const pickRampColor = (primary: string): string => {
+    const primaryLightness = lightness(primary);
+    const candidates = realSurfacePalette.filter(
+      (c) => c.toLowerCase() !== primary.toLowerCase() && !animBackgrounds.has(c),
+    );
+    const contrasting = candidates.filter(
+      (c) => Math.abs(lightness(c) - primaryLightness) >= 0.25,
+    );
+    if (contrasting.length) return pickWeighted(contrasting, surfScore);
+    if (candidates.length) {
+      return candidates.reduce((best, c) =>
+        Math.abs(lightness(c) - primaryLightness) >
+        Math.abs(lightness(best) - primaryLightness)
+          ? c
+          : best,
+      );
+    }
+    return primaryLightness >= 0.5 ? "#000000" : "#ffffff";
   };
 
   // Look up an effect's keyframeable intensity uniform and its [min,max].
