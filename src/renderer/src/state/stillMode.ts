@@ -8,14 +8,17 @@
 // panel needs to remember to keep the two layers in sync — image import, the
 // preview drag-pan, and any future editor all funnel through it for free.
 import {
+  constant,
   isStill,
   STILL_IMAGE_LAYER,
   STILL_MESH_LAYER,
   STILL_MESH_SURFACES,
   STILL_SHAPE_LAYER,
+  type HingeEdge,
   type ObjectState,
   type Project,
 } from "../types";
+import { STILL_HINGE_LAYOUTS } from "./defaultsBase";
 
 export function normalizeStill(p: Project): void {
   if (!isStill(p)) return;
@@ -38,6 +41,31 @@ export function normalizeStill(p: Project): void {
   // the same photo without inheriting the flat layer's shape.
   const shape = p.objects[STILL_SHAPE_LAYER];
   if (shape) shape.image = structuredClone(img.image);
+}
+
+// Switching the hinge re-lays-out the card from the blueprint for that edge,
+// rather than mirroring whatever transform is currently there: the tilt has
+// to move between the X and Y axis when the hinge goes from a vertical to a
+// horizontal edge, and there is no meaningful mirror of an arbitrary
+// (possibly keyframed) tilt across that swap. Both still layers are reset —
+// the mesh layer's transform is only a fallback for when the fold is off,
+// but it should still match the photo if that happens.
+export function applyHingeEdge(p: Project, edge: HingeEdge): void {
+  if (!isStill(p)) return;
+  const layout = STILL_HINGE_LAYOUTS[edge];
+  p.fold = {
+    enabled: p.fold?.enabled ?? true,
+    edge,
+    angle: constant(layout.angle),
+  };
+  for (const i of [STILL_IMAGE_LAYER, STILL_MESH_LAYER]) {
+    const o = p.objects[i];
+    if (!o) continue;
+    o.rotX = constant(layout.rotX);
+    o.rotY = constant(layout.rotY);
+    o.posX = constant(layout.posX);
+    o.posY = constant(layout.posY);
+  }
 }
 
 // Whose image a pan gesture (or "Load image" click) edits. In a still, always

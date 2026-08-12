@@ -30,12 +30,18 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       },
       { name: "uPulse", label: "Pulse", min: 0, max: 1, default: 0.3 },
       { name: "uSpeed", label: "Speed", min: 0, max: 4, default: 1 },
+      // 0 = symmetric about mid-grey (the original behaviour); +1 shifts the
+      // zero point so every vertex displaces backward only (into -z), -1 for
+      // forward only. Still mode's mesh panel uses +1 so the undeformed plane
+      // stays its front-most extent and its edge meets the photo's edge.
+      { name: "uBias", label: "Bias", min: -1, max: 1, default: 0 },
     ],
     glslDeform: `
   vec3 tx = texture2D(uTexture, pg_imageUv(uv)).rgb;
   float lum = dot(tx, vec3(0.299, 0.587, 0.114));
   float pulse = 1.0 - uPulse + uPulse * (0.5 + 0.5 * sin(t * uSpeed));
-  pos.z += (lum - 0.5) * uAmplitude * pulse;
+  float ref = 0.5 + 0.5 * uBias;
+  pos.z += (lum - ref) * uAmplitude * pulse;
   return pos;`,
   },
   {
@@ -54,11 +60,13 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
         default: 0.35,
         isIntensity: true,
       },
+      { name: "uBias", label: "Bias", min: -1, max: 1, default: 0 },
     ],
     glslDeform: `
   vec3 tx = texture2D(uTexture, pg_imageUv(uv)).rgb;
   float lum = dot(tx, vec3(0.299, 0.587, 0.114));
-  pos += normal * (lum - 0.5) * uAmount;
+  float ref = 0.5 + 0.5 * uBias;
+  pos += normal * (lum - ref) * uAmount;
   return pos;`,
   },
   {

@@ -82,16 +82,7 @@ export function composeObjectShader(
   // the fragment shader draws. Without it the vertex chain displaces to a
   // *stretched* copy of the picture and the bumps drift away from what you see
   // whenever the image aspect differs from the plane's.
-  //
-  // uMirrorU/uMirrorV flip the mesh-local uv before that framing is applied —
-  // used by the still-mode folded card so the hinged mesh layer reads as a
-  // reflection of the flat layer across the fold, rather than a repeat of it.
-  // Flipping here (not just in the fragment shader) means the vertex deform
-  // chain samples the mirrored image too, so a mirrored surface's bumps sit
-  // where the mirrored picture would put them, not where the original does.
   const imageUvFn = `vec2 pg_imageUv(vec2 uv) {
-  if (uMirrorU > 0.5) uv.x = 1.0 - uv.x;
-  if (uMirrorV > 0.5) uv.y = 1.0 - uv.y;
   return uv * uImageScale + uImageOffset;
 }`
 
@@ -112,8 +103,6 @@ uniform sampler2D uTexture;
 uniform vec2 uResolution;
 uniform vec2 uImageScale;
 uniform vec2 uImageOffset;
-uniform float uMirrorU;
-uniform float uMirrorV;
 ${uniformDecls.join('\n')}
 varying vec2 vUv;
 varying vec3 vWorldPos;
@@ -174,8 +163,6 @@ uniform sampler2D uTextureB;
 uniform vec2 uResolution;
 uniform vec2 uImageScale;
 uniform vec2 uImageOffset;
-uniform float uMirrorU;
-uniform float uMirrorV;
 uniform float uSilhouette;
 uniform vec3 uFlatColor;
 uniform float uOpacity;

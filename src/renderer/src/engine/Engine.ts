@@ -452,8 +452,6 @@ class ObjectSlot {
       uResolution: { value: new THREE.Vector2(output.width, output.height) },
       uImageScale: { value: new THREE.Vector2(1, 1) },
       uImageOffset: { value: new THREE.Vector2(0, 0) },
-      uMirrorU: { value: 0 },
-      uMirrorV: { value: 0 },
       uSilhouette: { value: 0 },
       uFlatColor: { value: new THREE.Vector3(0, 0, 0) },
       uOpacity: { value: 1 },
@@ -519,15 +517,6 @@ class ObjectSlot {
   // this; every other path leaves the mesh at the origin.
   setMeshOffset(v: THREE.Vector3): void {
     this.mesh?.position.copy(v);
-  }
-
-  // Flip the mesh-local uv before image sampling/deformation — see pg_imageUv
-  // in composer.ts. Used by the folded card so the hinged mesh layer reads as
-  // a reflection of the flat layer across the shared edge.
-  setMirror(u: boolean, v: boolean): void {
-    if (!this.material) return;
-    this.material.uniforms.uMirrorU.value = u ? 1 : 0;
-    this.material.uniforms.uMirrorV.value = v ? 1 : 0;
   }
 
   get currentTexture(): THREE.Texture | null {
@@ -1238,12 +1227,15 @@ export class Engine {
   // per-slot `group.visible` handling, double-traverse in pickObjectAt, and
   // have to be unwound on toggle. Pivot goes into the composed matrix *and*
   // into the folded slot's mesh offset, which puts the folded panel's hinge
-  // edge on its group origin — so at angle 0 the two panels lie edge-to-edge
-  // (a flat open card) instead of overlapping.
+  // edge on its group origin — so at angle 0 the panel maps onto the exact
+  // same points as the flat layer (a closed, overlapping card); the panels
+  // only separate into an open card as |angle| grows.
   //
-  // Signs are chosen so a positive angle always folds away from the camera
-  // (toward -z): a rotY of +a sends a local +x point to z = -x·sin(a), and a
-  // rotX of +a sends a local +y point to z = +y·sin(a).
+  // For every edge, a positive angle folds the panel toward the camera
+  // (+z): e.g. on the right edge the panel body sits at local x < pivot.x,
+  // so a rotY of +a sends that to z = -(x-pivot.x)·sin(a) >= 0. A negative
+  // angle folds it away from the camera (-z) — see STILL_FOLD_ANGLE in
+  // defaultsBase.ts, which relies on this to make the panel recede.
   //
   // Deterministic: the only time-dependent input is evalScalar(fold.angle, t).
   private applyFold(p: Project, t: number): void {
@@ -1275,7 +1267,6 @@ export class Engine {
       // cleared, or a stale hinge offset would survive toggling the fold off.
       this.foldActive = false;
       folded.setMeshOffset(VEC3_ZERO);
-      folded.setMirror(false, false);
       return;
     }
 
@@ -1303,11 +1294,6 @@ export class Engine {
         break;
     }
     this.foldQuat.setFromEuler(euler);
-    // Reflect the mesh layer across the fold: a left/right hinge rotates about
-    // Y (the panels swing apart horizontally), so it's the U axis of the
-    // picture that should mirror; a top/bottom hinge mirrors V the same way.
-    const horizontalHinge = fold.edge === "left" || fold.edge === "right";
-    folded.setMirror(horizontalHinge, !horizontalHinge);
 
     flat.group.updateMatrixWorld(true);
     // Unit scale: the card's scale is inherited through flat.matrixWorld, so

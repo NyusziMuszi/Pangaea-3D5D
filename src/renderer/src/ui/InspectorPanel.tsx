@@ -38,6 +38,8 @@ import {
 import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS, cap } from "./objectOptions";
 import { accentVars, objectAccentColor } from "./accent";
 import { defaultProject } from "../state/defaults";
+import { applyHingeEdge } from "../state/stillMode";
+import { STILL_FOLD_ANGLE } from "../state/defaultsBase";
 import { assetUrl, registerAsset } from "../state/assets";
 import { bytesToDataUrl, mimeForName } from "./files";
 import type { CSSProperties } from "react";
@@ -749,7 +751,7 @@ export function InspectorPanel({
                               p.fold = {
                                 enabled: e.target.checked,
                                 edge: "right",
-                                angle: constant(1.0),
+                                angle: constant(STILL_FOLD_ANGLE),
                               };
                             } else {
                               p.fold.enabled = e.target.checked;
@@ -763,12 +765,7 @@ export function InspectorPanel({
                         value={project.fold?.edge ?? "right"}
                         onChange={(e) =>
                           update((p) => {
-                            const edge = e.target.value as HingeEdge;
-                            if (!p.fold) {
-                              p.fold = { enabled: true, edge, angle: constant(1.0) };
-                            } else {
-                              p.fold.edge = edge;
-                            }
+                            applyHingeEdge(p, e.target.value as HingeEdge);
                           })
                         }
                       >
@@ -781,7 +778,7 @@ export function InspectorPanel({
                     </Field>
                     <ScalarControl
                       label="Fold angle"
-                      scalar={project.fold?.angle ?? constant(1.0)}
+                      scalar={project.fold?.angle ?? constant(STILL_FOLD_ANGLE)}
                       min={-Math.PI}
                       max={Math.PI}
                       onChange={(s) =>

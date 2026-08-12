@@ -12,6 +12,7 @@
 import type {
   EffectDef,
   EffectInstance,
+  HingeEdge,
   ObjectImage,
   ObjectState,
   Project,
@@ -178,11 +179,40 @@ export const BASE_PROJECT: Project = {
   },
 };
 
-function builtinEffectInstance(id: string): EffectInstance {
+function builtinEffectInstance(
+  id: string,
+  overrides?: Record<string, Scalar>,
+): EffectInstance {
   const def = BUILTIN_EFFECTS.find((e) => e.id === id);
   if (!def) throw new Error(`Missing built-in effect: ${id}`);
-  return instanceFromDef(def);
+  const inst = instanceFromDef(def);
+  if (overrides) Object.assign(inst.values, overrides);
+  return inst;
 }
+
+// Folds a bit past perpendicular — the panel body sits at local -x from the
+// pivot, so a positive Y-rotation sends it to z = -x*sin(angle) >= 0: angle 0
+// is a *closed* card (the two panels coincident), and this value opens it up
+// to receding-and-turned-away from camera, matching the reference layout.
+export const STILL_FOLD_ANGLE = -1.2;
+
+// The card's layout for each hinge edge — four mirror images of one design.
+// Engine.applyFold already mirrors the *fold* rotation per edge (left negates
+// the Y euler, bottom negates X); this table mirrors the *photo* layer to
+// match, so the hinge edge is always the one nearest the camera and the photo
+// tilts away from the panel. Position stays centred (0, 0) on both axes —
+// the photo is meant to sit in the middle of the frame regardless of edge.
+export const STILL_HINGE_LAYOUTS: Record<
+  HingeEdge,
+  { rotX: number; rotY: number; posX: number; posY: number; angle: number }
+> = {
+  right: { rotX: 0, rotY: -0.35, posX: 0, posY: 0, angle: STILL_FOLD_ANGLE },
+  left: { rotX: 0, rotY: 0.35, posX: 0, posY: 0, angle: STILL_FOLD_ANGLE },
+  top: { rotX: 0.35, rotY: 0, posX: 0, posY: 0, angle: STILL_FOLD_ANGLE },
+  bottom: { rotX: -0.35, rotY: 0, posX: 0, posY: 0, angle: STILL_FOLD_ANGLE },
+};
+
+const STILL_DEFAULT_LAYOUT = STILL_HINGE_LAYOUTS.right;
 
 // The hard-coded blueprint a new still starts from: two stacked landscape
 // planes sharing one image — layer 0 flat and clean, layer 1 a wireframe mesh
@@ -196,12 +226,11 @@ export const BASE_STILL_PROJECT: Project = {
   scene: {
     cameraType: "perspective",
   },
-  // The mesh panel's world rotation is imageRotY + foldAngle (the fold
-  // composes off the flat layer's own transform — see Engine.applyFold), so
-  // the two are tuned together: the photo takes a slight turn and the fold
-  // angle is set to nearly cancel it, landing the mesh panel close to square
-  // to camera. -0.35 + 0.30 = -0.05 rad, ~3° off square.
-  fold: { enabled: true, edge: "right", angle: constant(0.3) },
+  fold: {
+    enabled: true,
+    edge: "right",
+    angle: constant(STILL_DEFAULT_LAYOUT.angle),
+  },
   objects: [
     {
       primitive: "landscape",
@@ -213,19 +242,12 @@ export const BASE_STILL_PROJECT: Project = {
       surfaceWireWidth: 1,
       image: defaultObjectImage(),
       effects: [],
-      rotX: constant(0),
-      // ~20° turn — the photo reads as slightly angled while the mesh panel
-      // (rotY + fold.angle, see above) lands nearly square to camera.
-      rotY: constant(-0.35),
+      rotX: constant(STILL_DEFAULT_LAYOUT.rotX),
+      rotY: constant(STILL_DEFAULT_LAYOUT.rotY),
       rotZ: constant(0),
-      // Re-tuned for the tilted card (was 1.9, sized for a single full-bleed
-      // panel square to camera): turning the photo widens its projected
-      // footprint (0.8·cos(20°) + 0.8 + 1.6 ≈ 3.15 local units), so scale
-      // comes down and posX shifts left to re-centre it. Eyeball values —
-      // tune in-app.
       scale: constant(0.9),
-      posX: constant(-0.75),
-      posY: constant(0),
+      posX: constant(STILL_DEFAULT_LAYOUT.posX),
+      posY: constant(STILL_DEFAULT_LAYOUT.posY),
       posZ: constant(0),
     },
     {
@@ -241,7 +263,15 @@ export const BASE_STILL_PROJECT: Project = {
       surfaceWireWidth: 1,
       depthRange: 0.5,
       image: defaultObjectImage(),
-      effects: [builtinEffectInstance("displace"), builtinEffectInstance("relief")],
+      // Bias +1: the mesh panel only ever displaces *behind* its own plane,
+      // so the plane's hinge edge stays the panel's front-most extent and
+      // meets the photo's edge exactly, instead of the default symmetric
+      // displacement poking a bulge out past the seam. Flip to -1 if the
+      // running app shows the strip on the wrong side of the hinge.
+      effects: [
+        builtinEffectInstance("displace", { uBias: constant(1) }),
+        builtinEffectInstance("relief", { uBias: constant(1) }),
+      ],
       rotX: constant(0),
       rotY: constant(0),
       rotZ: constant(0),
@@ -249,8 +279,8 @@ export const BASE_STILL_PROJECT: Project = {
       // in Engine.applyFold) — mirrors the image layer so it takes over
       // seamlessly if the fold is switched off.
       scale: constant(0.9),
-      posX: constant(-0.75),
-      posY: constant(0),
+      posX: constant(STILL_DEFAULT_LAYOUT.posX),
+      posY: constant(STILL_DEFAULT_LAYOUT.posY),
       posZ: constant(0.01),
     },
   ],
@@ -300,9 +330,9 @@ export const BASE_STILL_SHAPE: ObjectState = {
   rotY: constant(0),
   rotZ: constant(0),
   scale: constant(0.4),
-  // Straddles the photo plane (posZ 0) so it visibly pierces it; posX roughly
-  // centres it under the photo layer's own -0.75 offset.
-  posX: constant(-0.5),
+  // Straddles the photo plane (posZ 0) so it visibly pierces it; centred
+  // under the photo layer, which itself sits at posX 0.
+  posX: constant(0),
   posY: constant(0),
   posZ: constant(0),
 };
