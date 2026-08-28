@@ -65,6 +65,7 @@ export type Mapping = "uv" | "triplanar" | "spherical" | "cylindrical" | "reflec
 export const MAPPINGS = ["uv", "triplanar", "spherical", "cylindrical", "reflection"] as const satisfies readonly Mapping[];
 // How colour trios are dealt across segments by "Feeling lucky" — see lucky.ts.
 export type ColorScheme = "byType" | "byPair" | "random";
+export const COLOR_SCHEMES = ["byType", "byPair", "random"] as const satisfies readonly ColorScheme[];
 export type PrimitiveModel =
   | "plane"
   | "landscape"
@@ -222,6 +223,10 @@ export interface Project {
     images: string[];
     objectCounts: (1 | 2)[];
     colorSchemes: ColorScheme[];
+    // Which surfaces Explore may roll: the flat ones a non-image object may be
+    // drawn from, plus "image" — with "image" unchecked, objects stay flat even
+    // when palette images are loaded.
+    surfaces: ObjectSurface[];
     blendModes: TextBlendMode[];
     textBackdrops: ("silhouette" | "wireframe")[];
     animation: number; // 0..1 overall animation amount
@@ -229,6 +234,8 @@ export interface Project {
     enabledEffectIds?: string[];
     // Which mapping modes Lucky is allowed to use for image surfaces. Undefined = all.
     mappings?: Mapping[];
+    // Which primitive shapes Lucky is allowed to pick from. Undefined = all.
+    shapes?: PrimitiveModel[];
     // Per-category locks: when true, that category's values are restored from
     // the pre-generation project after a "Feeling lucky" roll. Optional for
     // back-compat with projects saved before this field existed.

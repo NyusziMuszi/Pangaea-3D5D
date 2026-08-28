@@ -33,12 +33,14 @@ import type {
   LuckLocks,
   Mapping,
   ObjectState,
+  ObjectSurface,
+  PrimitiveModel,
   Project,
   Scalar,
   TextBlendMode,
   TextStyle,
 } from "../types";
-import { ALL_UNLOCKED, constant, MAPPINGS, PRIMITIVE_MODELS, totalDuration } from "../types";
+import { ALL_UNLOCKED, COLOR_SCHEMES, constant, MAPPINGS, PRIMITIVE_MODELS, totalDuration } from "../types";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import {
   defaultObjectImage,
@@ -168,6 +170,12 @@ export interface LuckyOptions {
   enabledEffectIds?: string[];
   // Which mapping modes to use for image surfaces; undefined = all.
   mappings?: Mapping[];
+  // Which surfaces Explore may roll: the flat ones a non-image object may be
+  // dressed in, plus "image" to allow an object to wear a palette image.
+  // Undefined or empty = all of OBJECT_SURFACES.
+  surfaces?: ObjectSurface[];
+  // Which primitive shapes Explore may roll; undefined or empty = all.
+  shapes?: PrimitiveModel[];
   // Learned bias toward the user's taste (see state/taste.ts). Absent (e.g.
   // older callers) is treated as no bias — rolls stay uniform.
   tasteProfile?: TasteProfile;
@@ -266,10 +274,14 @@ export function generateLuckyScene(
         opts.objectCounts.length ? opts.objectCounts : [1, 2],
         (n) => tasteProfile.objectCounts[String(n) as "1" | "2"] ?? 0,
       );
+  // Intersect against COLOR_SCHEMES so a stale entry from an older project
+  // file or preferences.json never gets rolled; an empty result (all-stale or
+  // genuinely empty) falls back to all.
+  const validColorSchemes = opts.colorSchemes.filter((cs) =>
+    COLOR_SCHEMES.includes(cs),
+  );
   const colorScheme = pickWeighted<ColorScheme>(
-    opts.colorSchemes.length
-      ? opts.colorSchemes
-      : ["byType", "byPair", "random"],
+    validColorSchemes.length ? validColorSchemes : COLOR_SCHEMES,
     (cs) => tasteProfile.colorSchemes[cs] ?? 0,
   );
   const blendMode = pick<TextBlendMode>(
@@ -328,11 +340,17 @@ export function generateLuckyScene(
   // and the other takes a flat surface, so the pair reads as image-against-
   // silhouette rather than two textured shapes. A single object (or none with
   // images) simply wears the image itself. The two flat surfaces are picked
-  // distinct so a fully-flat pair still reads differently.
-  const hasImages = imageAssetIds.length > 0;
+  // distinct (where opts.surfaces allows — a single-entry set gives both
+  // objects the same surface) so a fully-flat pair still reads differently.
+  // "image" in opts.surfaces gates whether an object may wear a palette image
+  // at all; an empty/absent set means everything is allowed, as elsewhere.
+  const exploredSurfaces = opts.surfaces?.length ? opts.surfaces : null;
+  const allowImage = !exploredSurfaces || exploredSurfaces.includes("image");
+  const flatPool = (exploredSurfaces ?? FLAT_SURFACES).filter((s) => s !== "image");
+  const hasImages = imageAssetIds.length > 0 && allowImage;
   const imageObject = !hasImages ? -1 : twoObjects && Math.random() < 0.5 ? 1 : 0;
   const flatSurfaces = pickDistinctWeighted(
-    FLAT_SURFACES,
+    flatPool.length ? flatPool : FLAT_SURFACES,
     2,
     (s) => tasteProfile.flatSurfaces[s] ?? 0,
   );
@@ -542,9 +560,11 @@ export function generateLuckyScene(
   // visually overlap far more often than they spread to the full 0.9 apart.
   const halfGap = 0.9 * Math.random() ** 2;
 
+  const shapePool = opts.shapes?.length ? opts.shapes : PRIMITIVE_MODELS;
+
   // ----- Object A -----
   const a = next.objects[0];
-  a.primitive = pickWeighted(PRIMITIVE_MODELS, (m) => tasteProfile.shapes[m] ?? 0);
+  a.primitive = pickWeighted(shapePool, (m) => tasteProfile.shapes[m] ?? 0);
   a.modelName = null;
   a.modelDataUrl = null;
   dressObject(a, 0);
@@ -558,7 +578,7 @@ export function generateLuckyScene(
   // ----- Object B -----
   if (twoObjects) {
     const b = defaultSecondObject();
-    b.primitive = pickWeighted(PRIMITIVE_MODELS, (m) => tasteProfile.shapes[m] ?? 0);
+    b.primitive = pickWeighted(shapePool, (m) => tasteProfile.shapes[m] ?? 0);
     dressObject(b, 1);
     b.posX = constant(halfGap);
     animateTransform(b, 0.3, 0.7, 0);

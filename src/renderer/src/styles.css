@@ -1612,6 +1612,22 @@ button.lucky-img-thumb {
   cursor: pointer;
   color: var(--text-dim);
 }
+/* A checkbox that can't apply yet (e.g. the "image" surface with no palette
+   images loaded) reads as greyed out rather than disappearing. */
+.lucky-radio:has(input:disabled),
+.checkbox-inline-label:has(input:disabled) {
+  opacity: 0.4;
+  cursor: default;
+}
+.prefs-explore-field {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.prefs-explore-field > .field {
+  flex: 1;
+  min-width: 0;
+}
 .lucky-actions {
   display: flex;
   gap: var(--space-2);

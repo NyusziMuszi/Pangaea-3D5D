@@ -12,7 +12,7 @@ import { exportVideo, type ExportProgress } from "../engine/export/exporter";
 import { setPngDpi } from "../engine/export/pngDpi";
 import { getPrefs } from "../state/prefs";
 import { FLAT_SURFACES } from "../state/taste";
-import { SURFACE_OPTIONS } from "./objectOptions";
+import { FLAT_SURFACE_OPTIONS } from "./objectOptions";
 import { Modal } from "./Modal";
 
 const QUALITY = {
@@ -20,11 +20,6 @@ const QUALITY = {
   High: 18_000_000,
   Max: 28_000_000,
 } as const;
-
-// Labels for the four non-"image" surfaces, in FLAT_SURFACES order.
-const SEQUENCE_SURFACE_OPTIONS = SURFACE_OPTIONS.filter((o) =>
-  FLAT_SURFACES.includes(o.value),
-);
 
 type Format = "mp4" | "png" | "sequence";
 
@@ -389,7 +384,7 @@ export function ExportDialog({
                 <div className="field">
                   <span className="field-label">Surfaces</span>
                   <div className="export-surfaces">
-                    {SEQUENCE_SURFACE_OPTIONS.map((o) => (
+                    {FLAT_SURFACE_OPTIONS.map((o) => (
                       <label key={o.value} className="checkbox-row">
                         <input
                           type="checkbox"

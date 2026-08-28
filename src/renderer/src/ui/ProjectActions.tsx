@@ -1,6 +1,6 @@
 import { useStore } from "../state/store";
 import { defaultProject } from "../state/defaults";
-import { getPrefs } from "../state/prefs";
+import { getPrefs, migrateLuckyConfig } from "../state/prefs";
 import type { Project } from "../types";
 import { defaultFilename } from "../state/filename";
 import {
@@ -75,7 +75,10 @@ export function ProjectActions({
       for (const [id, a] of Object.entries(parsed.assets ?? {})) {
         registerAssetWithId(id, base64ToBytes(a.base64), a.mime);
       }
-      setProject(parsed.project);
+      setProject({
+        ...parsed.project,
+        lucky: migrateLuckyConfig(parsed.project.lucky),
+      });
       selectEffect(null);
       selectSegment(null);
       setToast("Project loaded");

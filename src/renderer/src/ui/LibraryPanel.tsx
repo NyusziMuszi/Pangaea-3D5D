@@ -8,14 +8,16 @@ import {
 import { activeObjectIndex, useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import { instanceFromDef, uid } from "../state/defaults";
-import { getPrefs } from "../state/prefs";
-import { MAPPINGS, type EffectDef, type ObjectState, type CameraType } from "../types";
+import { getPrefs, usePrefs } from "../state/prefs";
+import { COLOR_SCHEMES, MAPPINGS, OBJECT_SURFACES, type EffectDef, type ObjectState, type CameraType } from "../types";
 import { makeThumbnailUrl, mimeForName } from "./files";
 import { registerAsset } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
 import { engine } from "../engine/engineSingleton";
 import { Section, Field, ColorSwatch, tickGradient } from "./controls";
 import { LockPanel } from "./LockPanel";
+import { EXPLORE_SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
+import type { ExploreSectionId } from "./exploreSections";
 import cancelIcon from "@assets/cancel.svg";
 import addIcon from "@assets/add_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 
@@ -54,6 +56,10 @@ export function LibraryPanel({
   const lucky = project.lucky;
   const [generating, setGenerating] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+
+  const exploreSections = usePrefs((s) => s.exploreSections);
+  const shows = (id: ExploreSectionId): boolean =>
+    exploreSections.includes(id);
 
   // The Animations slider has 7 discrete stops (step = 1/6). The browser snaps
   // the thumb to the nearest stop, so the CSS fill must snap the same way —
@@ -163,6 +169,8 @@ export function LibraryPanel({
         {
           objectCounts: lucky.objectCounts,
           colorSchemes: lucky.colorSchemes,
+          surfaces: lucky.surfaces,
+          shapes: lucky.shapes,
           blendModes: lucky.blendModes,
           textBackdrops: lucky.textBackdrops,
           animation: lucky.animation,
@@ -310,6 +318,15 @@ export function LibraryPanel({
                       one object is generated with an image.
                     </li>
                     <li>
+                      <strong>Object surface</strong> — how a non-image object
+                      is drawn; with two flat objects the surfaces are picked
+                      distinct where the set allows.
+                    </li>
+                    <li>
+                      <strong>Shapes</strong> — which primitive shapes an
+                      object may take.
+                    </li>
+                    <li>
                       <strong>Colour Rhythm</strong> <em>~ + ~ + ~ +</em>:
                       animation is treated as a continuous sequence with the
                       message cards interrupting it. <em>~ ~ + + x x</em>: each
@@ -317,12 +334,16 @@ export function LibraryPanel({
                       segment is coloured independently.
                     </li>
                     <li>
+                      <strong>Text background</strong> — whether text cards show
+                      the object as a silhouette, none or wireframe backdrop.
+                    </li>
+                    <li>
                       <strong>Blend</strong> — how text glyphs composite over
                       the object silhouette on text cards.
                     </li>
                     <li>
-                      <strong>Text background</strong> — whether text cards show
-                      the object as a silhouette, none or wireframe backdrop.
+                      <strong>Effects pool</strong> — which built-in effects
+                      Explore is allowed to use.
                     </li>
                     <li>
                       <strong>Animations</strong> (0–1) — drives effect count,
@@ -337,120 +358,132 @@ export function LibraryPanel({
                   </li>
                 </div>
               )}
-              <div className="subhead">Palette: Typography</div>
-              <div className="swatch-list">
-                {lucky.typeColors.map((c, i) => (
-                  <div className="swatch-row" key={i}>
-                    <ColorSwatch
-                      value={c}
-                      onChange={(v) =>
-                        update((p) => {
-                          p.lucky.typeColors[i] = v;
-                        })
-                      }
-                    />
-                    <button
-                      className="btn-icon"
-                      title="Remove colour"
-                      onClick={() =>
-                        update((p) => {
-                          p.lucky.typeColors.splice(i, 1);
-                        })
-                      }
-                    >
-                      <img src={cancelIcon} alt="remove" />
-                    </button>
-                  </div>
-                ))}
-                {lucky.typeColors.length < MAX_COLORS && (
-                  <button
-                    className="swatch-add-btn"
-                    title="Add colour"
-                    onClick={() =>
-                      update((p) => {
-                        p.lucky.typeColors.push("#a3d6dc");
-                      })
-                    }
-                  >
-                    <img src={addIcon} alt="add" />
-                  </button>
-                )}
-              </div>
-              <div className="subhead">Palette: Surface</div>
-              <div className="swatch-list">
-                {lucky.surfaceColors.map((c, i) => (
-                  <div className="swatch-row" key={i}>
-                    <ColorSwatch
-                      value={c}
-                      onChange={(v) =>
-                        update((p) => {
-                          p.lucky.surfaceColors[i] = v;
-                        })
-                      }
-                    />
-                    <button
-                      className="btn-icon"
-                      title="Remove colour"
-                      onClick={() =>
-                        update((p) => {
-                          p.lucky.surfaceColors.splice(i, 1);
-                        })
-                      }
-                    >
-                      <img src={cancelIcon} alt="remove" />
-                    </button>
-                  </div>
-                ))}
-                {lucky.surfaceColors.length < MAX_COLORS && (
-                  <button
-                    className="swatch-add-btn"
-                    title="Add colour"
-                    onClick={() =>
-                      update((p) => {
-                        p.lucky.surfaceColors.push("#a3d6dc");
-                      })
-                    }
-                  >
-                    <img src={addIcon} alt="add" />
-                  </button>
-                )}
-              </div>
-
-              <div className="subhead">Palette: Image</div>
-              {lucky.images.length > 0 && (
-                <div className="lucky-img-grid" data-resolved={thumbResolved}>
-                  {lucky.images.map((path, i) => {
-                    const thumbUrl = thumbUrlCache.current.get(path);
-                    return (
-                      <div className="lucky-img-cell" key={path + i}>
-                        <div className="lucky-img-thumb">
-                          {thumbUrl ? (
-                            <img src={thumbUrl} alt="" />
-                          ) : (
-                            <span className="lucky-img-missing" title={path}>
-                              {path.split(/[\\/]/).pop()}
-                            </span>
-                          )}
-                        </div>
+              {shows("typeColors") && (
+                <>
+                  <div className="subhead">Palette: Typography</div>
+                  <div className="swatch-list">
+                    {lucky.typeColors.map((c, i) => (
+                      <div className="swatch-row" key={i}>
+                        <ColorSwatch
+                          value={c}
+                          onChange={(v) =>
+                            update((p) => {
+                              p.lucky.typeColors[i] = v;
+                            })
+                          }
+                        />
                         <button
                           className="btn-icon"
-                          title="Remove image"
-                          onClick={() => removeLuckyImage(i, path)}
+                          title="Remove colour"
+                          onClick={() =>
+                            update((p) => {
+                              p.lucky.typeColors.splice(i, 1);
+                            })
+                          }
                         >
                           <img src={cancelIcon} alt="remove" />
                         </button>
                       </div>
-                    );
-                  })}
-                </div>
+                    ))}
+                    {lucky.typeColors.length < MAX_COLORS && (
+                      <button
+                        className="swatch-add-btn"
+                        title="Add colour"
+                        onClick={() =>
+                          update((p) => {
+                            p.lucky.typeColors.push("#a3d6dc");
+                          })
+                        }
+                      >
+                        <img src={addIcon} alt="add" />
+                      </button>
+                    )}
+                  </div>
+                </>
               )}
-              {lucky.images.length < MAX_IMAGES && (
-                <button className="full default" onClick={addLuckyImage}>
-                  Add images
-                </button>
+              {shows("surfaceColors") && (
+                <>
+                  <div className="subhead">Palette: Surface</div>
+                  <div className="swatch-list">
+                    {lucky.surfaceColors.map((c, i) => (
+                      <div className="swatch-row" key={i}>
+                        <ColorSwatch
+                          value={c}
+                          onChange={(v) =>
+                            update((p) => {
+                              p.lucky.surfaceColors[i] = v;
+                            })
+                          }
+                        />
+                        <button
+                          className="btn-icon"
+                          title="Remove colour"
+                          onClick={() =>
+                            update((p) => {
+                              p.lucky.surfaceColors.splice(i, 1);
+                            })
+                          }
+                        >
+                          <img src={cancelIcon} alt="remove" />
+                        </button>
+                      </div>
+                    ))}
+                    {lucky.surfaceColors.length < MAX_COLORS && (
+                      <button
+                        className="swatch-add-btn"
+                        title="Add colour"
+                        onClick={() =>
+                          update((p) => {
+                            p.lucky.surfaceColors.push("#a3d6dc");
+                          })
+                        }
+                      >
+                        <img src={addIcon} alt="add" />
+                      </button>
+                    )}
+                  </div>
+                </>
               )}
 
-              {lucky.images.length > 0 && (
+              {shows("images") && (
+                <>
+                  <div className="subhead">Palette: Image</div>
+                  {lucky.images.length > 0 && (
+                    <div className="lucky-img-grid" data-resolved={thumbResolved}>
+                      {lucky.images.map((path, i) => {
+                        const thumbUrl = thumbUrlCache.current.get(path);
+                        return (
+                          <div className="lucky-img-cell" key={path + i}>
+                            <div className="lucky-img-thumb">
+                              {thumbUrl ? (
+                                <img src={thumbUrl} alt="" />
+                              ) : (
+                                <span className="lucky-img-missing" title={path}>
+                                  {path.split(/[\\/]/).pop()}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              className="btn-icon"
+                              title="Remove image"
+                              onClick={() => removeLuckyImage(i, path)}
+                            >
+                              <img src={cancelIcon} alt="remove" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {lucky.images.length < MAX_IMAGES && (
+                    <button className="full default" onClick={addLuckyImage}>
+                      Add images
+                    </button>
+                  )}
+                </>
+              )}
+
+              {shows("mappings") && lucky.images.length > 0 && (
                 <>
                   <div className="subhead">Image mapping</div>
                   <div className="lucky-radio-group">
@@ -482,9 +515,11 @@ export function LibraryPanel({
                 </>
               )}
 
-              <div className="subhead">Objects</div>
-              <div className="lucky-radio-group">
-                {(
+              {shows("objectCounts") && (
+                <>
+                  <div className="subhead">Objects</div>
+                  <div className="lucky-radio-group">
+                    {(
                   [
                     [1, "Mono"],
                     [2, "Duo"],
@@ -507,127 +542,248 @@ export function LibraryPanel({
                     <span>{label}</span>
                   </label>
                 ))}
-              </div>
+                  </div>
+                </>
+              )}
 
-              <div className="subhead">Colour Rhythm</div>
-              <div className="lucky-radio-group">
-                {(
-                  [
-                    ["byType", "~ + ~ + ~ +"],
-                    ["byPair", "~ ~ + + x x"],
-                    ["random", "Random"],
-                  ] as const
-                ).map(([v, label]) => (
-                  <label className="lucky-radio" key={v}>
-                    <input
-                      type="checkbox"
-                      checked={lucky.colorSchemes.includes(v)}
-                      onChange={() =>
-                        update((p) => {
-                          p.lucky.colorSchemes = toggleExplore(
-                            p.lucky.colorSchemes,
-                            v,
-                            ["byType", "byPair", "random"],
-                          );
-                        })
-                      }
-                    />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
+              {shows("surfaces") && (
+                <>
+                  <div className="subhead">Object surface</div>
+                  <div className="lucky-radio-group">
+                    {EXPLORE_SURFACE_OPTIONS.map((o) => (
+                      <label
+                        className="lucky-radio"
+                        key={o.value}
+                        title={
+                          o.value === "image" && !lucky.images.length
+                            ? "Add images to the palette to explore image surfaces"
+                            : undefined
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={lucky.surfaces.includes(o.value)}
+                          disabled={o.value === "image" && !lucky.images.length}
+                          onChange={() =>
+                            update((p) => {
+                              p.lucky.surfaces = toggleExplore(
+                                p.lucky.surfaces,
+                                o.value,
+                                OBJECT_SURFACES,
+                              );
+                            })
+                          }
+                        />
+                        <span>{o.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
 
-              <div className="subhead">Text background</div>
-              <div className="lucky-radio-group">
-                {(
-                  [
-                    ["silhouette", "Silhouette"],
-                    ["wireframe", "Wireframe"],
-                  ] as const
-                ).map(([v, label]) => (
-                  <label className="lucky-radio" key={v}>
-                    <input
-                      type="checkbox"
-                      checked={lucky.textBackdrops.includes(v)}
-                      onChange={() =>
-                        update((p) => {
-                          p.lucky.textBackdrops = toggleExplore(
-                            p.lucky.textBackdrops,
-                            v,
-                            ["silhouette", "wireframe"],
-                          );
-                        })
-                      }
-                    />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
+              {shows("shapes") && (
+                <>
+                  <div className="subhead">Shapes</div>
+                  <div className="lucky-radio-group">
+                    {PRIMITIVE_OPTIONS.map((o) => (
+                      <label className="lucky-radio" key={o.value}>
+                        <input
+                          type="checkbox"
+                          checked={
+                            !lucky.shapes || lucky.shapes.includes(o.value)
+                          }
+                          onChange={() =>
+                            update((p) => {
+                              const all = PRIMITIVE_OPTIONS.map((x) => x.value);
+                              const current = p.lucky.shapes ?? all;
+                              const next = toggleExplore(current, o.value, all);
+                              p.lucky.shapes =
+                                next.length === all.length ? undefined : next;
+                            })
+                          }
+                        />
+                        <span>{o.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
 
-              <div className="subhead">Blend</div>
-              <div className="lucky-radio-group">
-                {(
-                  [
-                    ["normal", "Normal"],
-                    ["invert", "Invert"],
-                    ["exclusion", "Exclusion"],
-                    ["multiply", "Multiply"],
-                    ["screen", "Screen"],
-                  ] as const
-                ).map(([v, label]) => (
-                  <label className="lucky-radio" key={v}>
-                    <input
-                      type="checkbox"
-                      checked={lucky.blendModes.includes(v)}
-                      onChange={() =>
-                        update((p) => {
-                          p.lucky.blendModes = toggleExplore(
-                            p.lucky.blendModes,
-                            v,
-                            [
-                              "normal",
-                              "invert",
-                              "exclusion",
-                              "multiply",
-                              "screen",
-                            ],
-                          );
-                        })
-                      }
-                    />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
+              {shows("colorSchemes") && (
+                <>
+                  <div className="subhead">Colour Rhythm</div>
+                  <div className="lucky-radio-group">
+                    {(
+                      [
+                        ["byType", "~ + ~ + ~ +"],
+                        ["byPair", "~ ~ + + x x"],
+                        ["random", "Random"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <label className="lucky-radio" key={v}>
+                        <input
+                          type="checkbox"
+                          checked={lucky.colorSchemes.includes(v)}
+                          onChange={() =>
+                            update((p) => {
+                              p.lucky.colorSchemes = toggleExplore(
+                                p.lucky.colorSchemes,
+                                v,
+                                COLOR_SCHEMES,
+                              );
+                            })
+                          }
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
 
-              <div className="subhead">Animations</div>
-              <input
-                className="scalar-slider"
-                type="range"
-                min={0}
-                max={1}
-                step={ANIM_STEP}
-                value={lucky.animation}
-                style={
-                  {
-                    ["--slider-pct" as string]: `${animPct}%`,
-                    ["--tick-gradient" as string]: tickGradient(
-                      0,
-                      1,
-                      ANIM_STEP,
-                    ),
-                  } as CSSProperties
-                }
-                onChange={(e) =>
-                  update((p) => {
-                    p.lucky.animation = parseFloat(e.target.value);
-                  })
-                }
-              />
-              <div className="heat-labels">
-                <span>Few</span>
-                <span>Many</span>
-              </div>
+              {shows("textBackdrops") && (
+                <>
+                  <div className="subhead">Text background</div>
+                  <div className="lucky-radio-group">
+                    {(
+                      [
+                        ["silhouette", "Silhouette"],
+                        ["wireframe", "Wireframe"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <label className="lucky-radio" key={v}>
+                        <input
+                          type="checkbox"
+                          checked={lucky.textBackdrops.includes(v)}
+                          onChange={() =>
+                            update((p) => {
+                              p.lucky.textBackdrops = toggleExplore(
+                                p.lucky.textBackdrops,
+                                v,
+                                ["silhouette", "wireframe"],
+                              );
+                            })
+                          }
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {shows("blendModes") && (
+                <>
+                  <div className="subhead">Blend</div>
+                  <div className="lucky-radio-group">
+                    {(
+                      [
+                        ["normal", "Normal"],
+                        ["invert", "Invert"],
+                        ["exclusion", "Exclusion"],
+                        ["multiply", "Multiply"],
+                        ["screen", "Screen"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <label className="lucky-radio" key={v}>
+                        <input
+                          type="checkbox"
+                          checked={lucky.blendModes.includes(v)}
+                          onChange={() =>
+                            update((p) => {
+                              p.lucky.blendModes = toggleExplore(
+                                p.lucky.blendModes,
+                                v,
+                                [
+                                  "normal",
+                                  "invert",
+                                  "exclusion",
+                                  "multiply",
+                                  "screen",
+                                ],
+                              );
+                            })
+                          }
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {shows("effects") && (
+                <>
+                  <div className="subhead">Effects pool</div>
+                  <div className="lucky-radio-group">
+                    {[...BUILTIN_EFFECTS]
+                      .sort((a, b) => a.kind.localeCompare(b.kind))
+                      .map((e) => (
+                        <label className="lucky-radio" key={e.id}>
+                          <input
+                            type="checkbox"
+                            checked={
+                              !lucky.enabledEffectIds ||
+                              lucky.enabledEffectIds.includes(e.id)
+                            }
+                            onChange={() =>
+                              update((p) => {
+                                const all = BUILTIN_EFFECTS.map((x) => x.id);
+                                const current = p.lucky.enabledEffectIds ?? all;
+                                const idx = current.indexOf(e.id);
+                                if (idx >= 0) {
+                                  p.lucky.enabledEffectIds = current.filter(
+                                    (id) => id !== e.id,
+                                  );
+                                } else {
+                                  const next = [...current, e.id];
+                                  p.lucky.enabledEffectIds =
+                                    next.length === all.length
+                                      ? undefined
+                                      : next;
+                                }
+                              })
+                            }
+                          />
+                          <span>{e.name}</span>
+                        </label>
+                      ))}
+                  </div>
+                </>
+              )}
+
+              {shows("animation") && (
+                <>
+                  <div className="subhead">Animations</div>
+                  <input
+                    className="scalar-slider"
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={ANIM_STEP}
+                    value={lucky.animation}
+                    style={
+                      {
+                        ["--slider-pct" as string]: `${animPct}%`,
+                        ["--tick-gradient" as string]: tickGradient(
+                          0,
+                          1,
+                          ANIM_STEP,
+                        ),
+                      } as CSSProperties
+                    }
+                    onChange={(e) =>
+                      update((p) => {
+                        p.lucky.animation = parseFloat(e.target.value);
+                      })
+                    }
+                  />
+                  <div className="heat-labels">
+                    <span>Few</span>
+                    <span>Many</span>
+                  </div>
+                </>
+              )}
 
               <div className="lucky-actions">
                 <button

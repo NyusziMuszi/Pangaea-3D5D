@@ -1,6 +1,11 @@
 import { create } from "zustand";
-import type { ColorScheme, ObjectState, Project } from "../types";
+import { COLOR_SCHEMES, type ColorScheme, type ObjectState, type Project } from "../types";
 import { BASE_PROJECT, BASE_SECOND_OBJECT } from "./defaultsBase";
+import {
+  DEFAULT_EXPLORE_SECTIONS,
+  EXPLORE_SECTIONS,
+  type ExploreSectionId,
+} from "../ui/exploreSections";
 import {
   applyTasteSignal,
   diffEditFeatures,
@@ -14,15 +19,39 @@ import {
   type TasteProfile,
 } from "./taste";
 
+// Fills in lucky-config fields added after the initial explore config, and
+// drops any colorSchemes entries no longer recognised (types.ts's
+// COLOR_SCHEMES) — shared by prefs hydration (reading preferences.json) and
+// ProjectActions' file-open path (reading a saved .pangaea), which otherwise
+// has no migration at all and throws as soon as Explore renders a project
+// predating a field like `surfaces`.
+export function migrateLuckyConfig(lucky: Project["lucky"]): Project["lucky"] {
+  const colorSchemes = lucky.colorSchemes.filter((cs) =>
+    COLOR_SCHEMES.includes(cs),
+  );
+  return {
+    ...lucky,
+    colorSchemes: colorSchemes.length
+      ? colorSchemes
+      : BASE_PROJECT.lucky.colorSchemes,
+    surfaces: lucky.surfaces ?? BASE_PROJECT.lucky.surfaces,
+    blendModes: lucky.blendModes ?? BASE_PROJECT.lucky.blendModes,
+    textBackdrops: lucky.textBackdrops ?? BASE_PROJECT.lucky.textBackdrops,
+  };
+}
+
 // The persisted user preferences: the blueprints defaultProject() /
 // defaultSecondObject() clone from, one optional custom card font (embedded
 // as a data URL so it lives inside preferences.json — no separate file copy),
-// and the learned "Feeling lucky" taste profile (see state/taste.ts).
+// the learned "Feeling lucky" taste profile (see state/taste.ts), and which
+// Explore sections render in the panel (app-wide chrome, not project data —
+// kept off Project so it never ends up in a saved .pangaea file).
 export interface Preferences {
   project: Project; // blueprint for defaultProject(); objects[0] = default primary object
   secondObject: ObjectState; // blueprint for defaultSecondObject()
   customFont: { name: string; dataUrl: string } | null;
   tasteProfile: TasteProfile;
+  exploreSections: ExploreSectionId[];
 }
 
 interface PrefsState extends Preferences {
@@ -31,6 +60,7 @@ interface PrefsState extends Preferences {
   setProject: (p: Project) => void;
   setSecondObject: (o: ObjectState) => void;
   setCustomFont: (f: Preferences["customFont"]) => void;
+  setExploreSections: (s: ExploreSectionId[]) => void;
   // Explicit/implicit taste signals — see state/taste.ts for the weights and
   // what each one credits. colorScheme is whatever the last "Feeling lucky"
   // roll this session produced (store.lastLuckyColorScheme), or null if none.
@@ -50,6 +80,7 @@ function snapshot(s: Preferences): Preferences {
     secondObject: s.secondObject,
     customFont: s.customFont,
     tasteProfile: s.tasteProfile,
+    exploreSections: s.exploreSections,
   };
 }
 
@@ -63,13 +94,14 @@ function persist(s: Preferences): void {
 // resets to, both on initial store creation and on an explicit reset.
 function defaultPrefsState(): Pick<
   PrefsState,
-  "project" | "secondObject" | "customFont" | "tasteProfile"
+  "project" | "secondObject" | "customFont" | "tasteProfile" | "exploreSections"
 > {
   return {
     project: structuredClone(BASE_PROJECT),
     secondObject: structuredClone(BASE_SECOND_OBJECT),
     customFont: null,
     tasteProfile: EMPTY_TASTE_PROFILE,
+    exploreSections: [...DEFAULT_EXPLORE_SECTIONS],
   };
 }
 
@@ -93,27 +125,23 @@ export const usePrefs = create<PrefsState>((set, get) => {
     ...defaultPrefsState(),
 
     hydrate: (p) => {
-      if (p)
-        set({
-          project: {
-            ...p.project,
-            lucky: {
-              ...p.project.lucky,
-              // Back-compat: blendModes and textBackdrops were added after the
-              // initial explore config — fall back to BASE_PROJECT defaults when
-              // the stored file predates them.
-              blendModes:
-                p.project.lucky.blendModes ?? BASE_PROJECT.lucky.blendModes,
-              textBackdrops:
-                p.project.lucky.textBackdrops ??
-                BASE_PROJECT.lucky.textBackdrops,
-            },
-          },
-          secondObject: p.secondObject,
-          customFont: p.customFont,
-          // Back-compat: older preferences.json files predate new axes.
-          tasteProfile: { ...EMPTY_TASTE_PROFILE, ...p.tasteProfile },
-        });
+      if (!p) return;
+      // A removed section id from an old preferences.json can't leak in.
+      const knownSectionIds = new Set(EXPLORE_SECTIONS.map((s) => s.id));
+      const exploreSections = (p.exploreSections ?? DEFAULT_EXPLORE_SECTIONS).filter(
+        (id) => knownSectionIds.has(id),
+      );
+      set({
+        project: {
+          ...p.project,
+          lucky: migrateLuckyConfig(p.project.lucky),
+        },
+        secondObject: p.secondObject,
+        customFont: p.customFont,
+        // Back-compat: older preferences.json files predate new axes.
+        tasteProfile: { ...EMPTY_TASTE_PROFILE, ...p.tasteProfile },
+        exploreSections,
+      });
     },
     setProject: (project) => {
       set({ project });
@@ -125,6 +153,10 @@ export const usePrefs = create<PrefsState>((set, get) => {
     },
     setCustomFont: (customFont) => {
       set({ customFont });
+      persist(get());
+    },
+    setExploreSections: (exploreSections) => {
+      set({ exploreSections });
       persist(get());
     },
     recordLike: (project, colorScheme) =>
