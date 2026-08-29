@@ -273,6 +273,8 @@ export function LibraryPanel({
   }
 
   const allDefs = [...BUILTIN_EFFECTS, ...project.customEffects];
+  const hasAnyImage = project.objects.some((o) => o.image.assetId);
+  const IMAGE_DEPENDENT_EFFECT_IDS = new Set(["mask", "displace", "relief"]);
 
   return (
     <div className={`library-wrap ${collapsed ? "collapsed" : ""}`}>
@@ -718,10 +720,22 @@ export function LibraryPanel({
                   <div className="lucky-radio-group">
                     {[...BUILTIN_EFFECTS]
                       .sort((a, b) => a.kind.localeCompare(b.kind))
-                      .map((e) => (
-                        <label className="lucky-radio" key={e.id}>
+                      .map((e) => {
+                        const disabled =
+                          IMAGE_DEPENDENT_EFFECT_IDS.has(e.id) && !hasAnyImage;
+                        return (
+                        <label
+                          className="lucky-radio"
+                          key={e.id}
+                          title={
+                            disabled
+                              ? "Add an image to an object first"
+                              : undefined
+                          }
+                        >
                           <input
                             type="checkbox"
+                            disabled={disabled}
                             checked={
                               !lucky.enabledEffectIds ||
                               lucky.enabledEffectIds.includes(e.id)
@@ -747,7 +761,8 @@ export function LibraryPanel({
                           />
                           <span>{e.name}</span>
                         </label>
-                      ))}
+                        );
+                      })}
                   </div>
                 </>
               )}
@@ -839,10 +854,19 @@ export function LibraryPanel({
 
             <Section title="Effects" defaultOpen={false}>
               <div className="catalog">
-                {allDefs.map((def) => (
+                {allDefs.map((def) => {
+                  const needsImage = IMAGE_DEPENDENT_EFFECT_IDS.has(def.id);
+                  const disabled = needsImage && !hasAnyImage;
+                  return (
                   <Fragment key={def.id}>
                     <button
                       className="catalog-item"
+                      disabled={disabled}
+                      title={
+                        disabled
+                          ? "Add an image to an object first"
+                          : undefined
+                      }
                       onClick={() => addEffect(def)}
                     >
                       <span className="catalog-name">{def.name}</span>
@@ -851,7 +875,8 @@ export function LibraryPanel({
                       <ZigzagRule patId={`zigzag-${def.id}`} />
                     )}
                   </Fragment>
-                ))}
+                  );
+                })}
                 <ZigzagRule patId="zigzag-bespoke" />
                 <button
                   className="catalog-item"
