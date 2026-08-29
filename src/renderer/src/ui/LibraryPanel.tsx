@@ -9,7 +9,7 @@ import { activeObjectIndex, useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import { instanceFromDef, uid } from "../state/defaults";
 import { getPrefs, usePrefs } from "../state/prefs";
-import { COLOR_SCHEMES, MAPPINGS, OBJECT_SURFACES, type EffectDef, type ObjectState, type CameraType } from "../types";
+import { COLOR_SCHEMES, MAPPINGS, OBJECT_SURFACES, RAMP_COLOR_MODES, type EffectDef, type ObjectState, type CameraType, type RampColorMode } from "../types";
 import { makeThumbnailUrl, mimeForName } from "./files";
 import { registerAsset } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
@@ -171,6 +171,7 @@ export function LibraryPanel({
           colorSchemes: lucky.colorSchemes,
           surfaces: lucky.surfaces,
           shapes: lucky.shapes,
+          rampColors: lucky.rampColors,
           blendModes: lucky.blendModes,
           textBackdrops: lucky.textBackdrops,
           animation: lucky.animation,
@@ -323,6 +324,11 @@ export function LibraryPanel({
                       <strong>Object surface</strong> — how a non-image object
                       is drawn; with two flat objects the surfaces are picked
                       distinct where the set allows.
+                    </li>
+                    <li>
+                      <strong>Light colour</strong> — the second colour of a
+                      faceted or depth ramp: plain white, black, or a
+                      contrasting palette colour.
                     </li>
                     <li>
                       <strong>Shapes</strong> — which primitive shapes an
@@ -582,6 +588,44 @@ export function LibraryPanel({
                   </div>
                 </>
               )}
+
+              {shows("rampColors") &&
+                (!lucky.surfaces.length ||
+                  lucky.surfaces.some(
+                    (s) => s === "faceted" || s === "depth",
+                  )) && (
+                  <>
+                    <div className="subhead">Light colour</div>
+                    <div className="lucky-radio-group">
+                      {(
+                        [
+                          ["white", "White"],
+                          ["black", "Black"],
+                          ["coloured", "Coloured"],
+                        ] as const
+                      ).map(([v, label]) => (
+                        <label className="lucky-radio" key={v}>
+                          <input
+                            type="checkbox"
+                            checked={
+                              !lucky.rampColors || lucky.rampColors.includes(v)
+                            }
+                            onChange={() =>
+                              update((p) => {
+                                const all = RAMP_COLOR_MODES;
+                                const current = p.lucky.rampColors ?? all;
+                                const next = toggleExplore(current, v, all);
+                                p.lucky.rampColors =
+                                  next.length === all.length ? undefined : next;
+                              })
+                            }
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
 
               {shows("shapes") && (
                 <>

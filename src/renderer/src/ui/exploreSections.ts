@@ -10,6 +10,7 @@ export type ExploreSectionId =
   | "mappings"
   | "objectCounts"
   | "surfaces"
+  | "rampColors"
   | "shapes"
   | "colorSchemes"
   | "textBackdrops"
@@ -25,6 +26,7 @@ export const EXPLORE_SECTIONS: { id: ExploreSectionId; label: string }[] = [
   { id: "mappings", label: "Image mapping" },
   { id: "objectCounts", label: "Objects" },
   { id: "surfaces", label: "Object surface" },
+  { id: "rampColors", label: "Light colour" },
   { id: "shapes", label: "Shapes" },
   { id: "colorSchemes", label: "Colour Rhythm" },
   { id: "textBackdrops", label: "Text background" },
@@ -41,6 +43,7 @@ export const DEFAULT_EXPLORE_SECTIONS: ExploreSectionId[] = [
   "mappings",
   "objectCounts",
   "surfaces",
+  "rampColors",
   "colorSchemes",
   "animation",
 ];

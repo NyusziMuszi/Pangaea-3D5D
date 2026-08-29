@@ -9,6 +9,7 @@ import {
   MAPPINGS,
   OBJECT_SURFACES,
   PRIMITIVE_MODELS,
+  RAMP_COLOR_MODES,
   type CameraType,
   type Mapping,
   type ObjectState,
@@ -962,6 +963,44 @@ export function PreferencesPanel({
                       }
                     />{" "}
                     {o.label}
+                  </label>
+                ))}
+              </span>
+            </Field>
+          </ExploreField>
+          <hr className="prefs-hr" />
+          <ExploreField id="rampColors">
+            <Field label="Light colour" stacked>
+              <span className="field-control">
+                {(
+                  [
+                    ["white", "White"],
+                    ["black", "Black"],
+                    ["coloured", "Coloured"],
+                  ] as const
+                ).map(([v, label]) => (
+                  <label key={v} className="checkbox-inline-label">
+                    <input
+                      type="checkbox"
+                      checked={
+                        !draft.project.lucky.rampColors ||
+                        draft.project.lucky.rampColors.includes(v)
+                      }
+                      onChange={() =>
+                        mutateLucky((l) => {
+                          const all = RAMP_COLOR_MODES;
+                          const current = l.rampColors ?? all;
+                          const idx = current.indexOf(v);
+                          const next =
+                            idx >= 0
+                              ? current.filter((x) => x !== v)
+                              : [...current, v];
+                          l.rampColors =
+                            next.length === all.length ? undefined : next;
+                        })
+                      }
+                    />{" "}
+                    {label}
                   </label>
                 ))}
               </span>

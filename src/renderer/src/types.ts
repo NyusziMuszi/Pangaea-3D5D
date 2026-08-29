@@ -107,6 +107,10 @@ export const OBJECT_SURFACES = ["image", "silhouette", "wireframe", "faceted", "
 export const SURFACE_COLOR_LIGHT_DEFAULT = "#ffffff"; // faceted lit-facet end
 export const SURFACE_COLOR_LOW_DEFAULT = "#1a1a1a"; // depth far end
 
+// Which end-colour a faceted/depth ramp takes when Explore rolls one.
+export type RampColorMode = "white" | "black" | "coloured";
+export const RAMP_COLOR_MODES: RampColorMode[] = ["white", "black", "coloured"];
+
 // How the glyphs combine with whatever is beneath them (only applies when
 // textBackdrop is "silhouette"). "normal" is today's flat textColor fill;
 // the rest sample the rendered scene under each glyph and recombine it with
@@ -236,6 +240,8 @@ export interface Project {
     mappings?: Mapping[];
     // Which primitive shapes Lucky is allowed to pick from. Undefined = all.
     shapes?: PrimitiveModel[];
+    // Which ramp end-colours Lucky may give a faceted/depth surface. Undefined = all.
+    rampColors?: RampColorMode[];
     // Per-category locks: when true, that category's values are restored from
     // the pre-generation project after a "Feeling lucky" roll. Optional for
     // back-compat with projects saved before this field existed.

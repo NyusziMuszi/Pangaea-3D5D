@@ -36,11 +36,22 @@ import type {
   ObjectSurface,
   PrimitiveModel,
   Project,
+  RampColorMode,
   Scalar,
   TextBlendMode,
   TextStyle,
 } from "../types";
-import { ALL_UNLOCKED, COLOR_SCHEMES, constant, MAPPINGS, PRIMITIVE_MODELS, totalDuration } from "../types";
+import {
+  ALL_UNLOCKED,
+  COLOR_SCHEMES,
+  constant,
+  MAPPINGS,
+  PRIMITIVE_MODELS,
+  RAMP_COLOR_MODES,
+  SURFACE_COLOR_LIGHT_DEFAULT,
+  SURFACE_COLOR_LOW_DEFAULT,
+  totalDuration,
+} from "../types";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import {
   defaultObjectImage,
@@ -176,6 +187,9 @@ export interface LuckyOptions {
   surfaces?: ObjectSurface[];
   // Which primitive shapes Explore may roll; undefined or empty = all.
   shapes?: PrimitiveModel[];
+  // Which ramp end-colours Explore may give a faceted/depth surface; undefined
+  // or empty = all.
+  rampColors?: RampColorMode[];
   // Learned bias toward the user's taste (see state/taste.ts). Absent (e.g.
   // older callers) is treated as no bias — rolls stay uniform.
   tasteProfile?: TasteProfile;
@@ -373,8 +387,8 @@ export function generateLuckyScene(
     } else {
       o.surface = flatSurfaces[i % flatSurfaces.length];
       o.surfaceColor = pickSurfaceColor();
-      if (o.surface === "faceted") o.surfaceColorLight = pickRampColor(o.surfaceColor);
-      else if (o.surface === "depth") o.surfaceColorLow = pickRampColor(o.surfaceColor);
+      if (o.surface === "faceted") o.surfaceColorLight = pickRamp(o.surfaceColor);
+      else if (o.surface === "depth") o.surfaceColorLow = pickRamp(o.surfaceColor);
       o.image = defaultObjectImage();
     }
   };
@@ -503,6 +517,21 @@ export function generateLuckyScene(
       );
     }
     return primaryLightness >= 0.5 ? "#000000" : "#ffffff";
+  };
+
+  // Ramp end-colour honouring the explored modes. A neutral that barely
+  // contrasts with the body colour would flatten the ramp, so fall back to a
+  // palette pick — but only when "coloured" is actually one of the modes the
+  // user allowed. A locked white/black choice must stay that colour even at
+  // the cost of contrast, or the Explore setting would be silently ignored.
+  const rampPool = opts.rampColors?.length ? opts.rampColors : RAMP_COLOR_MODES;
+  const pickRamp = (primary: string): string => {
+    const mode = pick(rampPool);
+    if (mode === "coloured") return pickRampColor(primary);
+    const neutral =
+      mode === "white" ? SURFACE_COLOR_LIGHT_DEFAULT : SURFACE_COLOR_LOW_DEFAULT;
+    if (Math.abs(lightness(neutral) - lightness(primary)) >= 0.25) return neutral;
+    return rampPool.includes("coloured") ? pickRampColor(primary) : neutral;
   };
 
   // Look up an effect's keyframeable intensity uniform and its [min,max].
