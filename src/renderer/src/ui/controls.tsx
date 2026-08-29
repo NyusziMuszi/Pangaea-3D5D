@@ -65,6 +65,46 @@ export function Section({
   );
 }
 
+// Lightweight foldable header for a subsection nested inside a `Section`
+// (e.g. each Explore option group). Same collapse mechanic as `Section`,
+// smaller chrome.
+export function Subsection({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}): JSX.Element {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="subsection">
+      <button
+        className="subhead subhead-toggle"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <svg
+          className={`subsection-caret ${open ? "open" : ""}`}
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path d="M12 5.5L17 17.5H7L12 5.5Z" fill="currentColor" />
+        </svg>
+        {title}
+      </button>
+      <div className={`section-body-wrap ${open ? "open" : ""}`}>
+        <div className="section-body">
+          <div className="subsection-body-inner">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Field({
   label,
   children,

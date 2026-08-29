@@ -14,7 +14,7 @@ import { makeThumbnailUrl, mimeForName } from "./files";
 import { registerAsset } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
 import { engine } from "../engine/engineSingleton";
-import { Section, Field, ColorSwatch, tickGradient } from "./controls";
+import { Section, Subsection, Field, ColorSwatch, tickGradient } from "./controls";
 import { LockPanel } from "./LockPanel";
 import { EXPLORE_SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
 import type { ExploreSectionId } from "./exploreSections";
@@ -275,7 +275,13 @@ export function LibraryPanel({
 
   const allDefs = [...BUILTIN_EFFECTS, ...project.customEffects];
   const hasAnyImage = project.objects.some((o) => o.image.assetId);
-  const IMAGE_DEPENDENT_EFFECT_IDS = new Set(["mask", "displace", "relief"]);
+  const IMAGE_DEPENDENT_EFFECT_IDS = new Set([
+    "mask",
+    "displace",
+    "relief",
+    "fresnel",
+    "multiply",
+  ]);
 
   return (
     <div className={`library-wrap ${collapsed ? "collapsed" : ""}`}>
@@ -367,8 +373,7 @@ export function LibraryPanel({
                 </div>
               )}
               {shows("typeColors") && (
-                <>
-                  <div className="subhead">Palette: Typography</div>
+                <Subsection title="Palette: Typography">
                   <div className="swatch-list">
                     {lucky.typeColors.map((c, i) => (
                       <div className="swatch-row" key={i}>
@@ -407,11 +412,10 @@ export function LibraryPanel({
                       </button>
                     )}
                   </div>
-                </>
+                </Subsection>
               )}
               {shows("surfaceColors") && (
-                <>
-                  <div className="subhead">Palette: Surface</div>
+                <Subsection title="Palette: Surface">
                   <div className="swatch-list">
                     {lucky.surfaceColors.map((c, i) => (
                       <div className="swatch-row" key={i}>
@@ -450,12 +454,11 @@ export function LibraryPanel({
                       </button>
                     )}
                   </div>
-                </>
+                </Subsection>
               )}
 
               {shows("images") && (
-                <>
-                  <div className="subhead">Palette: Image</div>
+                <Subsection title="Palette: Image">
                   {lucky.images.length > 0 && (
                     <div className="lucky-img-grid" data-resolved={thumbResolved}>
                       {lucky.images.map((path, i) => {
@@ -488,12 +491,11 @@ export function LibraryPanel({
                       Add images
                     </button>
                   )}
-                </>
+                </Subsection>
               )}
 
               {shows("mappings") && lucky.images.length > 0 && (
-                <>
-                  <div className="subhead">Image mapping</div>
+                <Subsection title="Image mapping">
                   <div className="lucky-radio-group">
                     {MAPPINGS.map((v) => (
                       <label className="lucky-radio" key={v}>
@@ -520,12 +522,11 @@ export function LibraryPanel({
                       </label>
                     ))}
                   </div>
-                </>
+                </Subsection>
               )}
 
               {shows("objectCounts") && (
-                <>
-                  <div className="subhead">Objects</div>
+                <Subsection title="Object #">
                   <div className="lucky-radio-group">
                     {(
                   [
@@ -551,12 +552,11 @@ export function LibraryPanel({
                   </label>
                 ))}
                   </div>
-                </>
+                </Subsection>
               )}
 
               {shows("surfaces") && (
-                <>
-                  <div className="subhead">Object surface</div>
+                <Subsection title="Object surface">
                   <div className="lucky-radio-group">
                     {EXPLORE_SURFACE_OPTIONS.map((o) => (
                       <label
@@ -586,7 +586,7 @@ export function LibraryPanel({
                       </label>
                     ))}
                   </div>
-                </>
+                </Subsection>
               )}
 
               {shows("rampColors") &&
@@ -594,8 +594,7 @@ export function LibraryPanel({
                   lucky.surfaces.some(
                     (s) => s === "faceted" || s === "depth",
                   )) && (
-                  <>
-                    <div className="subhead">Light colour</div>
+                  <Subsection title="Light colour">
                     <div className="lucky-radio-group">
                       {(
                         [
@@ -624,12 +623,11 @@ export function LibraryPanel({
                         </label>
                       ))}
                     </div>
-                  </>
+                  </Subsection>
                 )}
 
               {shows("shapes") && (
-                <>
-                  <div className="subhead">Shapes</div>
+                <Subsection title="Shapes">
                   <div className="lucky-radio-group">
                     {PRIMITIVE_OPTIONS.map((o) => (
                       <label className="lucky-radio" key={o.value}>
@@ -652,12 +650,11 @@ export function LibraryPanel({
                       </label>
                     ))}
                   </div>
-                </>
+                </Subsection>
               )}
 
               {shows("colorSchemes") && (
-                <>
-                  <div className="subhead">Colour Rhythm</div>
+                <Subsection title="Colour Rhythm">
                   <div className="lucky-radio-group">
                     {(
                       [
@@ -684,12 +681,11 @@ export function LibraryPanel({
                       </label>
                     ))}
                   </div>
-                </>
+                </Subsection>
               )}
 
               {shows("textBackdrops") && (
-                <>
-                  <div className="subhead">Text background</div>
+                <Subsection title="Text background">
                   <div className="lucky-radio-group">
                     {(
                       [
@@ -715,12 +711,11 @@ export function LibraryPanel({
                       </label>
                     ))}
                   </div>
-                </>
+                </Subsection>
               )}
 
               {shows("blendModes") && (
-                <>
-                  <div className="subhead">Blend</div>
+                <Subsection title="Blend">
                   <div className="lucky-radio-group">
                     {(
                       [
@@ -755,12 +750,11 @@ export function LibraryPanel({
                       </label>
                     ))}
                   </div>
-                </>
+                </Subsection>
               )}
 
               {shows("effects") && (
-                <>
-                  <div className="subhead">Effects pool</div>
+                <Subsection title="Effects pool">
                   <div className="lucky-radio-group">
                     {[...BUILTIN_EFFECTS]
                       .sort((a, b) => a.kind.localeCompare(b.kind))
@@ -808,12 +802,11 @@ export function LibraryPanel({
                         );
                       })}
                   </div>
-                </>
+                </Subsection>
               )}
 
               {shows("animation") && (
-                <>
-                  <div className="subhead">Animations</div>
+                <Subsection title="Animations">
                   <input
                     className="scalar-slider"
                     type="range"
@@ -841,7 +834,7 @@ export function LibraryPanel({
                     <span>Few</span>
                     <span>Many</span>
                   </div>
-                </>
+                </Subsection>
               )}
 
               <div className="lucky-actions">
