@@ -1,5 +1,12 @@
 import { create } from "zustand";
-import { COLOR_SCHEMES, type ColorScheme, type ObjectState, type Project } from "../types";
+import {
+  COLOR_SCHEMES,
+  type ColorScheme,
+  type ObjectState,
+  type PaletteColor,
+  type PaletteRole,
+  type Project,
+} from "../types";
 import { BASE_PROJECT, BASE_SECOND_OBJECT } from "./defaultsBase";
 import {
   DEFAULT_EXPLORE_SECTIONS,
@@ -19,18 +26,63 @@ import {
   type TasteProfile,
 } from "./taste";
 
-// Fills in lucky-config fields added after the initial explore config, and
-// drops any colorSchemes entries no longer recognised (types.ts's
-// COLOR_SCHEMES) — shared by prefs hydration (reading preferences.json) and
-// ProjectActions' file-open path (reading a saved .pangaea), which otherwise
-// has no migration at all and throws as soon as Explore renders a project
-// predating a field like `surfaces`.
+// Pre-unification shape: two flat colour-string pools instead of one
+// PaletteColor list with role checkboxes.
+type LegacyLucky = Project["lucky"] & {
+  typeColors?: string[];
+  surfaceColors?: string[];
+};
+
+// Mirrors ui/PaletteColorList.tsx's MAX_COLORS — duplicated rather than
+// imported (state shouldn't depend on ui) as a defensive ceiling so a
+// hand-edited or merged preferences.json can't hand the UI an unbounded
+// palette.
+const MAX_COLORS = 16;
+
+// Fold the legacy typeColors/surfaceColors pools into one PaletteColor list,
+// keyed by lowercased hex so a colour present in both pools (e.g. #ffffff)
+// merges into a single entry with both roles rather than duplicating. First
+// occurrence wins for the stored hex casing; order is type colours first,
+// then any surface-only colours.
+function foldLegacyColors(legacy: LegacyLucky): PaletteColor[] {
+  const byHex = new Map<string, PaletteColor>();
+  const fold = (hexes: string[] | undefined, roles: PaletteRole[]): void => {
+    for (const hex of hexes ?? []) {
+      if (typeof hex !== "string") continue;
+      const key = hex.toLowerCase();
+      const existing = byHex.get(key);
+      if (existing) {
+        for (const r of roles) if (!existing.roles.includes(r)) existing.roles.push(r);
+      } else {
+        byHex.set(key, { hex, roles: [...roles] });
+      }
+    }
+  };
+  fold(legacy.typeColors, ["type"]);
+  fold(legacy.surfaceColors, ["background", "object"]);
+  return Array.from(byHex.values());
+}
+
+// Fills in lucky-config fields added after the initial explore config, drops
+// any colorSchemes entries no longer recognised (types.ts's COLOR_SCHEMES),
+// and folds the pre-unification typeColors/surfaceColors pools into `colors`
+// — shared by prefs hydration (reading preferences.json) and ProjectActions'
+// file-open path (reading a saved .pangaea), which otherwise has no migration
+// at all and throws as soon as Explore renders a project predating a field
+// like `surfaces`.
 export function migrateLuckyConfig(lucky: Project["lucky"]): Project["lucky"] {
+  const incoming = lucky as LegacyLucky;
   const colorSchemes = lucky.colorSchemes.filter((cs) =>
     COLOR_SCHEMES.includes(cs),
   );
-  return {
-    ...lucky,
+  const colors = (incoming.colors ?? foldLegacyColors(incoming))
+    .filter((c) => typeof c.hex === "string")
+    .map((c) => (c.weight === 1 || c.weight === 3 ? c : { ...c, weight: undefined }))
+    .slice(0, MAX_COLORS);
+
+  const migrated: LegacyLucky = {
+    ...incoming,
+    colors,
     colorSchemes: colorSchemes.length
       ? colorSchemes
       : BASE_PROJECT.lucky.colorSchemes,
@@ -38,6 +90,11 @@ export function migrateLuckyConfig(lucky: Project["lucky"]): Project["lucky"] {
     blendModes: lucky.blendModes ?? BASE_PROJECT.lucky.blendModes,
     textBackdrops: lucky.textBackdrops ?? BASE_PROJECT.lucky.textBackdrops,
   };
+  // The {...incoming} spread above would otherwise carry these stale legacy
+  // keys through into re-persisted prefs.
+  delete migrated.typeColors;
+  delete migrated.surfaceColors;
+  return migrated;
 }
 
 // The persisted user preferences: the blueprints defaultProject() /
@@ -126,10 +183,22 @@ export const usePrefs = create<PrefsState>((set, get) => {
 
     hydrate: (p) => {
       if (!p) return;
+      const stored: string[] = p.exploreSections ?? DEFAULT_EXPLORE_SECTIONS;
+      // Upgrade: the old typeColors/surfaceColors sections collapsed into one
+      // "colors" id — splice it in at the old position so a user who had
+      // reordered or hidden the palette sections doesn't lose the section
+      // outright under the knownSectionIds filter below.
+      const legacyIdx = stored.findIndex(
+        (id) => id === "typeColors" || id === "surfaceColors",
+      );
+      const upgraded =
+        legacyIdx >= 0 && !stored.includes("colors")
+          ? [...stored.slice(0, legacyIdx), "colors", ...stored.slice(legacyIdx)]
+          : stored;
       // A removed section id from an old preferences.json can't leak in.
-      const knownSectionIds = new Set(EXPLORE_SECTIONS.map((s) => s.id));
-      const exploreSections = (p.exploreSections ?? DEFAULT_EXPLORE_SECTIONS).filter(
-        (id) => knownSectionIds.has(id),
+      const knownSectionIds = new Set<string>(EXPLORE_SECTIONS.map((s) => s.id));
+      const exploreSections = upgraded.filter(
+        (id): id is ExploreSectionId => knownSectionIds.has(id),
       );
       set({
         project: {

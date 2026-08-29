@@ -6,6 +6,8 @@
 // and vite.config.web.ts) resolves to a different file per target — so any drift
 // between the two variants fails `npm run typecheck` / CI.
 
+import type { PaletteColor } from "../types";
+
 export interface BrandTextCard {
   content: string;
   fontSize: number;
@@ -15,8 +17,7 @@ export interface BrandTextCard {
 }
 
 export interface BrandLuckyPalette {
-  typeColors: string[];
-  surfaceColors: string[];
+  colors: PaletteColor[];
 }
 
 export interface Branding {

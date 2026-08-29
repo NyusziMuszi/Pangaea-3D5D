@@ -4,8 +4,7 @@
 // role objectOptions.ts plays for surface/shape option lists.
 
 export type ExploreSectionId =
-  | "typeColors"
-  | "surfaceColors"
+  | "colors"
   | "images"
   | "mappings"
   | "objectCounts"
@@ -20,8 +19,7 @@ export type ExploreSectionId =
 
 // Panel order.
 export const EXPLORE_SECTIONS: { id: ExploreSectionId; label: string }[] = [
-  { id: "typeColors", label: "Palette: Typography" },
-  { id: "surfaceColors", label: "Palette: Surface" },
+  { id: "colors", label: "Palette: Colours" },
   { id: "images", label: "Palette: Image" },
   { id: "mappings", label: "Image mapping" },
   { id: "objectCounts", label: "Object #" },
@@ -37,8 +35,7 @@ export const EXPLORE_SECTIONS: { id: ExploreSectionId; label: string }[] = [
 
 // == what Explore shows today.
 export const DEFAULT_EXPLORE_SECTIONS: ExploreSectionId[] = [
-  "typeColors",
-  "surfaceColors",
+  "colors",
   "images",
   "mappings",
   "objectCounts",

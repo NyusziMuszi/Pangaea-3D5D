@@ -9,19 +9,27 @@ import { activeObjectIndex, useStore } from "../state/store";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import { instanceFromDef, uid } from "../state/defaults";
 import { getPrefs, usePrefs } from "../state/prefs";
-import { COLOR_SCHEMES, MAPPINGS, OBJECT_SURFACES, RAMP_COLOR_MODES, type EffectDef, type ObjectState, type CameraType, type RampColorMode } from "../types";
+import {
+  COLOR_SCHEMES,
+  MAPPINGS,
+  OBJECT_SURFACES,
+  RAMP_COLOR_MODES,
+  type CameraType,
+  type EffectDef,
+  type ObjectState,
+  type RampColorMode,
+} from "../types";
 import { makeThumbnailUrl, mimeForName } from "./files";
 import { registerAsset } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
 import { engine } from "../engine/engineSingleton";
-import { Section, Subsection, Field, ColorSwatch, tickGradient } from "./controls";
+import { Section, Subsection, Field, tickGradient } from "./controls";
 import { LockPanel } from "./LockPanel";
+import { PaletteColorList } from "./PaletteColorList";
 import { EXPLORE_SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
 import type { ExploreSectionId } from "./exploreSections";
 import cancelIcon from "@assets/cancel.svg";
-import addIcon from "@assets/add_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 
-const MAX_COLORS = 12;
 const MAX_IMAGES = 10;
 
 // Toggle `value` in an "explore" set: remove it if present, add it otherwise.
@@ -163,8 +171,7 @@ export function LibraryPanel({
       }
       const { project: next, colorScheme } = generateLuckyScene(
         project,
-        lucky.surfaceColors,
-        lucky.typeColors,
+        lucky.colors,
         assetIds,
         {
           objectCounts: lucky.objectCounts,
@@ -372,88 +379,16 @@ export function LibraryPanel({
                   </li>
                 </div>
               )}
-              {shows("typeColors") && (
-                <Subsection title="Palette: Typography">
-                  <div className="swatch-list">
-                    {lucky.typeColors.map((c, i) => (
-                      <div className="swatch-row" key={i}>
-                        <ColorSwatch
-                          value={c}
-                          onChange={(v) =>
-                            update((p) => {
-                              p.lucky.typeColors[i] = v;
-                            })
-                          }
-                        />
-                        <button
-                          className="btn-icon"
-                          title="Remove colour"
-                          onClick={() =>
-                            update((p) => {
-                              p.lucky.typeColors.splice(i, 1);
-                            })
-                          }
-                        >
-                          <img src={cancelIcon} alt="remove" />
-                        </button>
-                      </div>
-                    ))}
-                    {lucky.typeColors.length < MAX_COLORS && (
-                      <button
-                        className="swatch-add-btn"
-                        title="Add colour"
-                        onClick={() =>
-                          update((p) => {
-                            p.lucky.typeColors.push("#a3d6dc");
-                          })
-                        }
-                      >
-                        <img src={addIcon} alt="add" />
-                      </button>
-                    )}
-                  </div>
-                </Subsection>
-              )}
-              {shows("surfaceColors") && (
-                <Subsection title="Palette: Surface">
-                  <div className="swatch-list">
-                    {lucky.surfaceColors.map((c, i) => (
-                      <div className="swatch-row" key={i}>
-                        <ColorSwatch
-                          value={c}
-                          onChange={(v) =>
-                            update((p) => {
-                              p.lucky.surfaceColors[i] = v;
-                            })
-                          }
-                        />
-                        <button
-                          className="btn-icon"
-                          title="Remove colour"
-                          onClick={() =>
-                            update((p) => {
-                              p.lucky.surfaceColors.splice(i, 1);
-                            })
-                          }
-                        >
-                          <img src={cancelIcon} alt="remove" />
-                        </button>
-                      </div>
-                    ))}
-                    {lucky.surfaceColors.length < MAX_COLORS && (
-                      <button
-                        className="swatch-add-btn"
-                        title="Add colour"
-                        onClick={() =>
-                          update((p) => {
-                            p.lucky.surfaceColors.push("#a3d6dc");
-                          })
-                        }
-                      >
-                        <img src={addIcon} alt="add" />
-                      </button>
-                    )}
-                  </div>
+              {shows("colors") && (
+                <Subsection title="Palette: Colours">
+                  <PaletteColorList
+                    colors={lucky.colors}
+                    onMutate={(fn) =>
+                      update((p) => {
+                        fn(p.lucky.colors);
+                      })
+                    }
+                  />
                 </Subsection>
               )}
 

@@ -126,6 +126,31 @@ export type TextBlendMode =
   | "multiply"
   | "screen";
 
+// A "Feeling lucky" palette colour and which pools it may be drawn from.
+// roles is empty for a colour the user has parked (kept in the list, never
+// rolled) — the opposite convention from the toggleExplore sets elsewhere in
+// this panel, where an empty set means "all" (see LibraryPanel.tsx).
+// "textBackground"/"textObject" are the text-card counterparts of
+// "background"/"object": the full-screen colour behind a text card and the
+// silhouette/wireframe backdrop drawn on it. Left unticked everywhere, both
+// pools fall back to the scene background pool, i.e. pre-split behaviour.
+export const PALETTE_ROLES = [
+  "type",
+  "background",
+  "object",
+  "textBackground",
+  "textObject",
+] as const;
+export type PaletteRole = (typeof PALETTE_ROLES)[number];
+
+export interface PaletteColor {
+  hex: string;
+  roles: PaletteRole[];
+  // Importance in "Feeling lucky" generation: 1 (rare) / 2 (normal, default) /
+  // 3 (favoured). Absent means 2 — see lucky.ts's WEIGHT_SCORE.
+  weight?: 1 | 2 | 3;
+}
+
 export interface TextStyle {
   content: string;
   fontSize: number;
@@ -211,19 +236,19 @@ export interface Project {
   objects: ObjectState[];
   segments: Segment[]; // exactly 6 by default: 3 animation + 3 text, alternating
   customEffects: EffectDef[];
-  // "Feeling lucky" presets: colour swatches, uploaded source images (stored as
-  // absolute file paths, resolved to data URLs on use), plus the controls
-  // steering a generated scene — how many objects, how colours are assigned, and
-  // an overall animation amount. Colours are split into two pools: typeColors
-  // (text) and surfaceColors (backgrounds, object surfaces, effect tints), so a
-  // generation can keep text legible against a separately-chosen surface palette.
+  // "Feeling lucky" presets: a colour palette, uploaded source images (stored
+  // as absolute file paths, resolved to data URLs on use), plus the controls
+  // steering a generated scene — how many objects, how colours are assigned,
+  // and an overall animation amount. Each palette colour carries three
+  // independent role checkboxes (Typography / Background / Object) deciding
+  // which pools a generation may draw it from, so text can stay legible
+  // against a separately-chosen background/object palette.
   //
   // objectCounts and colorSchemes are *sets* the user widens or narrows: each
   // generation randomly picks one entry from each, so checking more boxes
   // explores a wider space. Both are kept non-empty (emptying re-selects all).
   lucky: {
-    typeColors: string[];
-    surfaceColors: string[];
+    colors: PaletteColor[];
     images: string[];
     objectCounts: (1 | 2)[];
     colorSchemes: ColorScheme[];

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { branding } from "@branding";
 import { useStore } from "../state/store";
 import { usePrefs } from "../state/prefs";
 import { engine } from "../engine/engineSingleton";
@@ -21,6 +22,7 @@ import {
   type TextStyle,
 } from "../types";
 import { Section, Field, ColorSwatch } from "./controls";
+import { PaletteColorList } from "./PaletteColorList";
 import { EXPLORE_SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
 import type { ExploreSectionId } from "./exploreSections";
 import { Modal } from "./Modal";
@@ -230,11 +232,11 @@ function makeTextStyle(): TextStyle {
     content: "New text",
     fontSize: 150,
     align: "center",
-    textColor: "#000000",
-    backgroundColor: "#A3D6DC",
+    textColor: branding.textCards[0].textColor,
+    backgroundColor: branding.textCards[0].backgroundColor,
     reveal: "fade",
     textBackdrop: "none",
-    textBackdropColor: "#64e36e",
+    textBackdropColor: branding.textCards[0].textBackdropColor,
     textBackdropWireWidth: 1.5,
   };
 }
@@ -435,42 +437,6 @@ export function PreferencesPanel({
   }
 
   const objA = draft.project.objects[0];
-
-  function ColorList({
-    label,
-    colors,
-    onAdd,
-    onRemove,
-    onSet,
-  }: {
-    label: string;
-    colors: string[];
-    onAdd: () => void;
-    onRemove: (i: number) => void;
-    onSet: (i: number, v: string) => void;
-  }): JSX.Element {
-    return (
-      <Field label={label} stacked>
-        <div className="swatch-list">
-          {colors.map((c, i) => (
-            <div className="swatch-row" key={`${label}-${i}`}>
-              <ColorSwatch value={c} onChange={(v) => onSet(i, v)} />
-              <button
-                className="btn-icon"
-                title="Remove"
-                onClick={() => onRemove(i)}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-          <button className="mini" onClick={onAdd}>
-            + Add
-          </button>
-        </div>
-      </Field>
-    );
-  }
 
   return (
     <Modal
@@ -870,45 +836,12 @@ export function PreferencesPanel({
         </Section>
 
         <Section title="Explore" defaultOpen={false}>
-          <ExploreField id="typeColors">
-            <ColorList
-              label="Text colours"
-              colors={draft.project.lucky.typeColors}
-              onAdd={() =>
+          <ExploreField id="colors">
+            <PaletteColorList
+              colors={draft.project.lucky.colors}
+              onMutate={(fn) =>
                 mutateLucky((l) => {
-                  l.typeColors.push("#ffffff");
-                })
-              }
-              onRemove={(i) =>
-                mutateLucky((l) => {
-                  l.typeColors.splice(i, 1);
-                })
-              }
-              onSet={(i, v) =>
-                mutateLucky((l) => {
-                  l.typeColors[i] = v;
-                })
-              }
-            />
-          </ExploreField>
-          <hr className="prefs-hr" />
-          <ExploreField id="surfaceColors">
-            <ColorList
-              label="Surface colours"
-              colors={draft.project.lucky.surfaceColors}
-              onAdd={() =>
-                mutateLucky((l) => {
-                  l.surfaceColors.push("#ffffff");
-                })
-              }
-              onRemove={(i) =>
-                mutateLucky((l) => {
-                  l.surfaceColors.splice(i, 1);
-                })
-              }
-              onSet={(i, v) =>
-                mutateLucky((l) => {
-                  l.surfaceColors[i] = v;
+                  fn(l.colors);
                 })
               }
             />

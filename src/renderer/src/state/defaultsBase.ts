@@ -165,8 +165,7 @@ export const BASE_PROJECT: Project = {
   ],
   customEffects: [],
   lucky: {
-    typeColors: [...branding.lucky.typeColors],
-    surfaceColors: [...branding.lucky.surfaceColors],
+    colors: branding.lucky.colors.map((c) => ({ ...c, roles: [...c.roles] })),
     images: [],
     objectCounts: [1, 2],
     colorSchemes: ["byPair", "byType"],

@@ -1570,6 +1570,137 @@ textarea.code {
   width: 16px;
   height: 16px;
 }
+/* Unified colour palette: one wide row per colour (swatch + 3 role checkboxes
+   + remove). Geometry lives in custom properties on the shared container so
+   the header's leader lines can reuse the exact same column positions as the
+   row grid below it — see .palette-header. */
+.palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  --pal-sw: 18px;
+  --pal-cb: 14px;
+  --pal-gap: var(--space-2);
+  /* Extra room between the last checkbox and the swatch, on top of --pal-gap
+     — the checkboxes stay tight to each other, just further from the colour. */
+  --pal-sw-gap: 8px;
+}
+/* --chip-w is set inline per row (PaletteColorList.tsx) from that colour's
+   importance weight, so the chip column — and the remove button right after
+   it — track the chip's actual current width instead of reserving room for
+   the widest possible chip. */
+.palette-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--pal-n, 3), var(--pal-cb)) calc(var(--chip-w, 18px) + var(--pal-sw-gap));
+  gap: var(--pal-gap);
+  align-items: center;
+  /* Reserves the strip the absolutely-positioned remove button sits in, so a
+     wide chip can never run underneath it. */
+  padding-right: 24px;
+}
+/* Right-align within the widened swatch column so the extra --pal-sw-gap
+   room falls on its left — between the checkboxes and the colour. */
+.palette-row .palette-chip-slot {
+  justify-self: end;
+}
+/* Cancel the app-wide checkbox's right margin so the grid `gap` alone
+   controls spacing — otherwise the columns drift out from under the header's
+   leader lines. */
+.palette-row input[type="checkbox"] {
+  margin: 0;
+}
+/* Pinned to the row's right edge rather than flowing after the chip, so the
+   button stays put as the chip grows/shrinks. Box is sized to the icon (16px)
+   with no padding, so the hit area is the icon and nothing else. */
+.palette-row .btn-icon {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0;
+  width: 16px;
+  height: 16px;
+}
+/* Beats button.btn-icon:active's `transform: none`, which would otherwise
+   drop the vertical centering for the duration of the press. */
+.palette-row .btn-icon:active {
+  transform: translateY(-50%);
+}
+.palette-row .btn-icon img {
+  width: 16px;
+  height: 16px;
+}
+/* Slot width tracks --chip-w (set on .palette-row) so the grid column sized
+   from it, above, always hugs the chip's current width — the remove button
+   sits right after it rather than at a fixed distance. */
+.palette-chip-slot {
+  position: relative;
+  width: var(--chip-w, 18px);
+  height: var(--pal-sw);
+}
+/* Higher specificity than .color-swatch-btn so it wins regardless of source
+   order. Radius is half the (fixed) height rather than --radius-round
+   (50%, which would ellipse a non-square box) so a wide chip reads as a
+   pill, not a lens. */
+.palette-chip.color-swatch-btn {
+  width: var(--chip-w);
+  border-radius: calc(var(--pal-sw) / 2);
+  transition: width var(--dur-fast) var(--ease);
+}
+/* Drag handle on the chip's right edge, revealed on row hover/focus so it
+   doesn't clutter an otherwise-static palette. The hit target (10px) is
+   wider than the visible bar drawn via ::after, for an easier grab. */
+.palette-chip-grip {
+  position: absolute;
+  top: 0;
+  left: calc(var(--chip-w) - 5px);
+  width: 10px;
+  height: 100%;
+  cursor: ew-resize;
+  opacity: 0;
+}
+.palette-row:hover .palette-chip-grip,
+.palette-chip-grip:focus-visible {
+  opacity: 1;
+}
+.palette-chip-grip::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--white);
+}
+/* Height = last label's top (44) + its line-height (18) + its leaderH (6) —
+   keep in sync with PaletteColorList.tsx's HEADER_LAYOUT if either changes. */
+/* height is set inline (PaletteColorList.tsx) from the number of role columns
+   — the staggered labels get taller as roles are added. */
+.palette-header {
+  position: relative;
+}
+.palette-header-label {
+  position: absolute;
+  white-space: nowrap;
+  font-size: var(--font-xs);
+  line-height: 18px;
+  color: var(--text-dim);
+}
+/* 1px leader line from the label down to the top of the first row; --leader-h
+   is set per-label inline so each line terminates flush with the row grid
+   regardless of how far down its label is staggered. */
+.palette-header-label::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 100%;
+  width: 1px;
+  height: var(--leader-h, 0px);
+  background: currentColor;
+  opacity: 0.5;
+}
 .lucky-img-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

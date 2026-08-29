@@ -38,7 +38,14 @@ export const branding: Branding = {
   ],
   objectSurfaceColor: "#9AD6E6",
   lucky: {
-    typeColors: ["#9AD6E6", "#8E1818", "#D9D9D9"],
-    surfaceColors: ["#FF4A14", "#8E8355", "#A170AF", "#4F83B7"],
+    colors: [
+      { hex: "#9AD6E6", roles: ["type"] },
+      { hex: "#8E1818", roles: ["type"] },
+      { hex: "#D9D9D9", roles: ["type"] },
+      { hex: "#FF4A14", roles: ["background", "object"] },
+      { hex: "#8E8355", roles: ["background", "object"] },
+      { hex: "#A170AF", roles: ["background", "object"] },
+      { hex: "#4F83B7", roles: ["background", "object"] },
+    ],
   },
 };

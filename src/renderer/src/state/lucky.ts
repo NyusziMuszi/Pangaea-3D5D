@@ -34,6 +34,8 @@ import type {
   Mapping,
   ObjectState,
   ObjectSurface,
+  PaletteColor,
+  PaletteRole,
   PrimitiveModel,
   Project,
   RampColorMode,
@@ -52,6 +54,7 @@ import {
   SURFACE_COLOR_LOW_DEFAULT,
   totalDuration,
 } from "../types";
+import { branding } from "@branding";
 import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
 import {
   defaultObjectImage,
@@ -97,26 +100,27 @@ function lightness(hex: string): number {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
-// A distinct working palette of at most `budget` colours, guaranteed to contain
-// at least one light and one dark colour so text contrast is always satisfiable
-// without exceeding the budget.
-function buildScenePalette(palette: string[], budget: number): string[] {
-  const uniq = Array.from(new Set(palette));
-  for (const f of ["#A3D6DC", "#64e36e", "#6473e3", "#000000", "#ffffff"]) {
-    if (uniq.length >= budget) break;
-    if (!uniq.includes(f)) uniq.push(f);
-  }
-  const chosen = pickDistinct(uniq, budget);
-  if (!chosen.some((c) => lightness(c) >= 0.5)) chosen[chosen.length - 1] = "#ffffff";
-  if (!chosen.some((c) => lightness(c) < 0.5)) chosen[chosen.length - 1] = "#000000";
-  return chosen;
+// A distinct working palette of at most `budget` colours, drawn only from the
+// colours the user actually gave this role. Weighted by the user's per-colour
+// importance (scoreOf) so a low-weight colour is less likely to make the cut
+// here — this is the one gate every later pickWeighted call downstream can't
+// undo. Nothing is padded in: text contrast is a background-vs-type question
+// and the type pool is separate, so injecting black/white here would only
+// paint a colour the user never assigned to this role.
+function buildScenePalette(
+  palette: string[],
+  budget: number,
+  scoreOf: (c: string) => number,
+): string[] {
+  return pickDistinctWeighted(Array.from(new Set(palette)), budget, scoreOf);
 }
 
 // Pick { backdropColor, background, text } for one text card: background +
 // silhouette come from the surface palette (one lightness side), text comes
 // from the type palette (the opposite side, so it always reads).
 function pickTextColors(
-  surfacePool: string[],
+  bgPool: string[],
+  backdropPool: string[],
   typePool: string[],
   surfScore: (c: string) => number,
   typeScore: (c: string) => number,
@@ -125,23 +129,41 @@ function pickTextColors(
   background: string;
   text: string;
 } {
-  const sLight = surfacePool.filter((c) => lightness(c) >= 0.5);
-  const sDark = surfacePool.filter((c) => lightness(c) < 0.5);
-  const tLight = typePool.filter((c) => lightness(c) >= 0.5);
-  const tDark = typePool.filter((c) => lightness(c) < 0.5);
-  // background + silhouette must come from a side with >= 2 colours so they can
-  // be distinct. With a budget >= 3 and at least one colour on each side, one
-  // side always has >= 2 (pigeonhole), so we steer lightTheme toward it rather
-  // than flipping a blind coin (which could land on a single-colour side and
-  // collapse background + silhouette to one colour).
-  const canLight = sLight.length >= 2;
-  const canDark = sDark.length >= 2;
+  const light = (pool: string[]): string[] => pool.filter((c) => lightness(c) >= 0.5);
+  const dark = (pool: string[]): string[] => pool.filter((c) => lightness(c) < 0.5);
+  const tLight = light(typePool);
+  const tDark = dark(typePool);
+  // background + silhouette must come from a side that can yield two distinct
+  // colours across the two pools. When both pools are the same list (nothing
+  // ticked "text block background"/"text block object"), that reduces to the
+  // old ">= 2 colours on that side" test: with a budget >= 3 and at least one
+  // colour on each side, one side always has >= 2 (pigeonhole), so we steer
+  // lightTheme toward it rather than flipping a blind coin (which could land
+  // on a single-colour side and collapse background + silhouette to one
+  // colour).
+  const usable = (bgSide: string[], bdSide: string[]): boolean =>
+    bgSide.length > 0 && bdSide.length > 0 &&
+    new Set([...bgSide, ...bdSide]).size >= 2;
+  const canLight = usable(light(bgPool), light(backdropPool));
+  const canDark = usable(dark(bgPool), dark(backdropPool));
   const lightTheme = canLight && canDark ? Math.random() < 0.5 : canLight;
-  const sameSide = lightTheme ? sLight : sDark; // background + silhouette
+  const bgSide = lightTheme ? light(bgPool) : dark(bgPool);
+  const bdSide = lightTheme ? light(backdropPool) : dark(backdropPool);
   const opposite = lightTheme ? tDark : tLight; // text, from the type palette
-  const [background, second] = pickDistinctWeighted(sameSide, 2, surfScore);
+  // Neither side is usable (e.g. a single-colour palette): fall back to the
+  // whole pools so a trio is always returned.
+  const background = pickWeighted(bgSide.length ? bgSide : bgPool, surfScore);
+  const backdropChoices = (bdSide.length ? bdSide : backdropPool).filter(
+    (c) => c !== background,
+  );
   const textChoices = opposite.length ? opposite : typePool;
-  return { background, backdropColor: second ?? background, text: pickWeighted(textChoices, typeScore) };
+  return {
+    background,
+    backdropColor: backdropChoices.length
+      ? pickWeighted(backdropChoices, surfScore)
+      : background,
+    text: pickWeighted(textChoices, typeScore),
+  };
 }
 
 // Build an animated scalar of `n` keys spread evenly across [0, dur], easing
@@ -265,10 +287,13 @@ function applyLocks(base: Project, next: Project, locks: LuckLocks): void {
   }
 }
 
+// Last-resort palette when every colour in the list is unassigned (no role
+// ticked on anything) or the list itself is empty.
+const FALLBACK_SURFACE = Array.from(new Set(branding.lucky.colors.map((c) => c.hex)));
+
 export function generateLuckyScene(
   base: Project,
-  surfaceColors: string[],
-  typeColors: string[],
+  palette: PaletteColor[],
   imageAssetIds: string[],
   opts: LuckyOptions,
 ): { project: Project; colorScheme: ColorScheme } {
@@ -276,8 +301,19 @@ export function generateLuckyScene(
   const effectCount = clamp(1 + Math.round(anim * 6), 1, 7);
   const locks = opts.locks ?? ALL_UNLOCKED;
   const tasteProfile = opts.tasteProfile ?? EMPTY_TASTE_PROFILE;
-  const surfScore = (c: string): number => tasteProfile.surfaceColors?.[c.toLowerCase()] ?? 0;
-  const typeScore = (c: string): number => tasteProfile.textColors?.[c.toLowerCase()] ?? 0;
+  // User-set palette weight folded into the same exponential score scale the
+  // taste profile uses (taste.ts, GROWTH = 1.3): +3 -> ~2.2x as likely, -3 ->
+  // ~0.45x, roughly a 5x spread between a rare and a favoured colour. Never
+  // zero — a low-weight colour stays rollable, just less often. Adds on top
+  // of the learned taste score, so "important to me" and "I keep picking
+  // this" compound rather than compete.
+  const WEIGHT_SCORE: Record<1 | 2 | 3, number> = { 1: -3, 2: 0, 3: 3 };
+  const weightByHex = new Map(palette.map((c) => [c.hex.toLowerCase(), c.weight ?? 2]));
+  const weightScore = (c: string): number => WEIGHT_SCORE[weightByHex.get(c.toLowerCase()) ?? 2];
+  const surfScore = (c: string): number =>
+    (tasteProfile.surfaceColors?.[c.toLowerCase()] ?? 0) + weightScore(c);
+  const typeScore = (c: string): number =>
+    (tasteProfile.textColors?.[c.toLowerCase()] ?? 0) + weightScore(c);
   // Pin count when Objects locked, so per-object motion/effects/colour locks
   // (which copy by matching index) always line up with base. Otherwise pick
   // one entry from each explored set (empty falls back to the full range),
@@ -316,33 +352,48 @@ export function generateLuckyScene(
   const next = structuredClone(base) as Project;
   const dur = totalDuration(base);
 
-  const palette = surfaceColors.length
-    ? surfaceColors
-    : [
-        base.segments.find((s) => s.kind === "animation")?.backgroundColor ??
-          "#281b6c",
-        "#A3D6DC",
-        "#64e36e",
-        "#6473e3",
-      ];
-  const textPalette = typeColors.length ? typeColors : ["#ffffff", "#000000"];
+  const byRole = (r: PaletteRole): string[] =>
+    Array.from(
+      new Set(palette.filter((c) => c.roles.includes(r)).map((c) => c.hex)),
+    );
+  const all = Array.from(new Set(palette.map((c) => c.hex)));
+
+  // Each pool degrades gracefully: its own role -> every palette colour ->
+  // today's hard-coded fallbacks, so unticking every role on every colour
+  // never throws.
+  const backgroundPool = byRole("background").length
+    ? byRole("background")
+    : all.length
+      ? all
+      : FALLBACK_SURFACE;
+  const objectPool = byRole("object").length ? byRole("object") : backgroundPool;
+  const typePool = byRole("type").length ? byRole("type") : ["#ffffff", "#000000"];
+  // Text cards get their own background/backdrop pools when the user has
+  // ticked those roles; untouched, both fall back to the scene palette below,
+  // which is exactly the pre-split behaviour.
+  const textBackgroundPool = byRole("textBackground");
+  const textObjectPool = byRole("textObject");
 
   // Distinct colours a single generation may use. Per-segment schemes need more
   // room (5) so trios can differ; the single-type scheme stays tighter (4).
   const colorBudget = colorScheme === "byType" ? 4 : 5;
-  const scenePalette = buildScenePalette(palette, colorBudget);
-  // buildScenePalette pads scenePalette with synthetic fallback colours
-  // (including #000000/#ffffff) to guarantee a light+dark side for text
-  // contrast. Those synthetics must never paint an object's flat surface
-  // (silhouette/wireframe/faceted) — pickSurfaceColor below draws only from
-  // this unpadded set, same reasoning as typePalette just above.
-  const realSurfacePalette = Array.from(new Set(palette));
-  // The type palette only ever supplies a single text colour per card, so it
-  // needs no budget and no padding. Pass the user's distinct type colours
-  // through unchanged — buildScenePalette would inject undefined fallback
-  // colours (e.g. #6473e3), which must never appear in text the user did not
-  // define.
-  const typePalette = Array.from(new Set(textPalette));
+  const scenePalette = buildScenePalette(backgroundPool, colorBudget, weightScore);
+  // Object surfaces (silhouette/wireframe/faceted) come from the "object" role
+  // only — scenePalette is the background role, and the two are picked
+  // independently so a flat surface never borrows a background-only colour.
+  const realSurfacePalette = objectPool;
+  // Text-card pools, resolved once: a ticked role wins, otherwise the scene
+  // palette.
+  const textBgPalette = textBackgroundPool.length ? textBackgroundPool : scenePalette;
+  const textObjPalette = textObjectPool.length ? textObjectPool : textBgPalette;
+  const pickTextTrio = (): ReturnType<typeof pickTextColors> =>
+    pickTextColors(textBgPalette, textObjPalette, typePool, surfScore, typeScore);
+  // True once the user has split the text card off the scene palette. Where a
+  // scheme deliberately shares one colour between an animation break and its
+  // text card (byPair), that sharing has to give way — the two now draw from
+  // different pools — but only then, so an untouched palette keeps today's
+  // behaviour exactly.
+  const textPoolsSplit = textBackgroundPool.length > 0 || textObjectPool.length > 0;
 
   // Object appearance. Image vs. flat is dealt per object: an object can wear a
   // textured "image" surface (random asset + random mapping mode) or fall back
@@ -409,10 +460,18 @@ export function generateLuckyScene(
   // other (pickTextColors guarantees this), keeping text legible everywhere.
   if (colorScheme === "byType") {
     // One trio for all animation breaks, a different one for all text cards.
-    const objTrio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
-    let textTrio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
+    // The breaks' trio comes from the scene palette even when the text pools
+    // are split — only the cards follow "text block background/object".
+    const objTrio = pickTextColors(
+      scenePalette,
+      scenePalette,
+      typePool,
+      surfScore,
+      typeScore,
+    );
+    let textTrio = pickTextTrio();
     for (let i = 0; i < 6 && textTrio.background === objTrio.background; i++) {
-      textTrio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
+      textTrio = pickTextTrio();
     }
     for (const seg of next.segments) {
       if (seg.kind === "animation") seg.backgroundColor = objTrio.background;
@@ -429,13 +488,13 @@ export function generateLuckyScene(
     );
     const trios: ReturnType<typeof pickTextColors>[] = [];
     for (let i = 0; i < breakCount; i++) {
-      let trio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
+      let trio = pickTextTrio();
       for (
         let r = 0;
         r < 6 && trios.some((t) => t.background === trio.background);
         r++
       ) {
-        trio = pickTextColors(scenePalette, typePalette, surfScore, typeScore);
+        trio = pickTextTrio();
       }
       trios.push(trio);
     }
@@ -445,7 +504,9 @@ export function generateLuckyScene(
     for (const seg of next.segments) {
       if (seg.kind === "animation") {
         pair++;
-        seg.backgroundColor = trios[pair % trios.length].background;
+        seg.backgroundColor = textPoolsSplit
+          ? pickWeighted(scenePalette, surfScore)
+          : trios[pair % trios.length].background;
       } else if (seg.text) {
         const trio = trios[Math.max(pair, 0) % trios.length];
         applyTrio(seg.text, trio);
@@ -455,7 +516,7 @@ export function generateLuckyScene(
     // random: every segment coloured independently.
     for (const seg of next.segments) {
       if (seg.kind === "animation") seg.backgroundColor = pickWeighted(scenePalette, surfScore);
-      else if (seg.text) applyTrio(seg.text, pickTextColors(scenePalette, typePalette, surfScore, typeScore));
+      else if (seg.text) applyTrio(seg.text, pickTextTrio());
     }
   }
 
@@ -637,10 +698,11 @@ export function generateLuckyScene(
   );
   const instances = selected.map((def) => instanceFromDef(def));
 
-  // Tint any fresnel instance from a palette colour.
+  // Tint any fresnel instance from a palette colour. Draws from the object
+  // pool, not the background pool — it tints the object, not the backdrop.
   for (const inst of instances) {
     if (inst.defId === "fresnel") {
-      const [r, g, b] = hexToRgb01(pick(scenePalette));
+      const [r, g, b] = hexToRgb01(pickWeighted(objectPool, surfScore));
       inst.values.uTintR = constant(r);
       inst.values.uTintG = constant(g);
       inst.values.uTintB = constant(b);
