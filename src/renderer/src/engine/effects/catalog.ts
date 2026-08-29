@@ -14,54 +14,6 @@ float pg_noise(vec3 x){
 export const BUILTIN_EFFECTS: EffectDef[] = [
   // ----- Mesh / geometry deformers (vertex) -----
   {
-    id: "displace",
-    name: "Displace",
-    kind: "deform",
-    description: "Pushes the surface out by the image's brightness.",
-    builtin: true,
-    uniforms: [
-      {
-        name: "uAmplitude",
-        label: "Amplitude",
-        min: 0,
-        max: 1.2,
-        default: 0.35,
-        isIntensity: true,
-      },
-      { name: "uPulse", label: "Pulse", min: 0, max: 1, default: 0.3 },
-      { name: "uSpeed", label: "Speed", min: 0, max: 4, default: 1 },
-    ],
-    glslDeform: `
-  vec3 tx = texture2D(uTexture, uv).rgb;
-  float lum = dot(tx, vec3(0.299, 0.587, 0.114));
-  float pulse = 1.0 - uPulse + uPulse * (0.5 + 0.5 * sin(t * uSpeed));
-  pos.z += (lum - 0.5) * uAmplitude * pulse;
-  return pos;`,
-  },
-  {
-    id: "relief",
-    name: "Relief / Emboss",
-    kind: "deform",
-    description:
-      "Displaces vertices along their normals by the image's brightness, turning a photo into 3D relief.",
-    builtin: true,
-    uniforms: [
-      {
-        name: "uAmount",
-        label: "Amount",
-        min: 0,
-        max: 1,
-        default: 0.35,
-        isIntensity: true,
-      },
-    ],
-    glslDeform: `
-  vec3 tx = texture2D(uTexture, uv).rgb;
-  float lum = dot(tx, vec3(0.299, 0.587, 0.114));
-  pos += normal * (lum - 0.5) * uAmount;
-  return pos;`,
-  },
-  {
     id: "ripple",
     name: "Ripple",
     kind: "deform",
@@ -277,6 +229,54 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
     pg_noise(vec3(pos.zx * uScale - 5.0, t * uSpeed))
   ) - 0.5;
   pos += n * uAmount;
+  return pos;`,
+  },
+  {
+    id: "displace",
+    name: "Displace",
+    kind: "deform",
+    description: "Pushes the surface out by the image's brightness.",
+    builtin: true,
+    uniforms: [
+      {
+        name: "uAmplitude",
+        label: "Amplitude",
+        min: 0,
+        max: 1.2,
+        default: 0.35,
+        isIntensity: true,
+      },
+      { name: "uPulse", label: "Pulse", min: 0, max: 1, default: 0.3 },
+      { name: "uSpeed", label: "Speed", min: 0, max: 4, default: 1 },
+    ],
+    glslDeform: `
+  vec3 tx = texture2D(uTexture, uv).rgb;
+  float lum = dot(tx, vec3(0.299, 0.587, 0.114));
+  float pulse = 1.0 - uPulse + uPulse * (0.5 + 0.5 * sin(t * uSpeed));
+  pos.z += (lum - 0.5) * uAmplitude * pulse;
+  return pos;`,
+  },
+  {
+    id: "relief",
+    name: "Relief / Emboss",
+    kind: "deform",
+    description:
+      "Displaces vertices along their normals by the image's brightness, turning a photo into 3D relief.",
+    builtin: true,
+    uniforms: [
+      {
+        name: "uAmount",
+        label: "Amount",
+        min: 0,
+        max: 1,
+        default: 0.35,
+        isIntensity: true,
+      },
+    ],
+    glslDeform: `
+  vec3 tx = texture2D(uTexture, uv).rgb;
+  float lum = dot(tx, vec3(0.299, 0.587, 0.114));
+  pos += normal * (lum - 0.5) * uAmount;
   return pos;`,
   },
   // ----- Stylize (fragment) -----

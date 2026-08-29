@@ -24,7 +24,7 @@ export const EXPLORE_SECTIONS: { id: ExploreSectionId; label: string }[] = [
   { id: "surfaceColors", label: "Palette: Surface" },
   { id: "images", label: "Palette: Image" },
   { id: "mappings", label: "Image mapping" },
-  { id: "objectCounts", label: "Objects" },
+  { id: "objectCounts", label: "Object #" },
   { id: "surfaces", label: "Object surface" },
   { id: "rampColors", label: "Light colour" },
   { id: "shapes", label: "Shapes" },
