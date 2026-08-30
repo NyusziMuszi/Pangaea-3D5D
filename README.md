@@ -93,6 +93,12 @@ renderer scripts run; in a browser it's `undefined`. So the *same* renderer runs
 once that bridge is implemented with browser APIs — `src/main` and `src/preload` are not built for
 the web at all.
 
+The per-target seam extends beyond `window.api`: `src/renderer/src/branding/` (`electron.ts` /
+`web.ts`, picked by a vite alias) owns each build's colours, fonts, text-card copy, **and** its
+"Feeling lucky" Explore factory defaults and default visible-section list (`Branding.lucky` /
+`Branding.exploreSections`). Every field on `BrandLucky` is required, so a value added on one target
+but missed on the other fails `npm run typecheck` rather than silently drifting.
+
 - [src/renderer/src/platform/webApi.ts](src/renderer/src/platform/webApi.ts) — `installWebApi()`
   builds a `PangaeaApi`-typed shim from browser primitives. [main.tsx](src/renderer/src/main.tsx)
   calls it **only when `window.api` is absent**, so Electron is untouched. The shim imports the

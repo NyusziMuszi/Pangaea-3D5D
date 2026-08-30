@@ -4,6 +4,7 @@ import { useStore } from "../state/store";
 import { usePrefs } from "../state/prefs";
 import { engine } from "../engine/engineSingleton";
 import { uid } from "../state/defaults";
+import { defaultObjectImage } from "../state/defaultsBase";
 import {
   constant,
   CAMERA_TYPES,
@@ -56,6 +57,23 @@ const FONT_MIME: Record<string, string> = {
 // to the first key just in case a saved blueprint carried animation).
 const cval = (s: Scalar): number =>
   s.kind === "const" ? s.value : (s.keys[0]?.value ?? 0);
+
+// Live objects carry session-scoped image assets and keyframed transforms;
+// prefs blueprints are const-only (see cval) and have no asset registry, so
+// flatten transforms to their t=0 value and drop the image reference.
+function blueprintFromLive(o: ObjectState): ObjectState {
+  return {
+    ...o,
+    image: defaultObjectImage(),
+    rotX: constant(cval(o.rotX)),
+    rotY: constant(cval(o.rotY)),
+    rotZ: constant(cval(o.rotZ)),
+    scale: constant(cval(o.scale)),
+    posX: constant(cval(o.posX)),
+    posY: constant(cval(o.posY)),
+    posZ: constant(cval(o.posZ)),
+  };
+}
 
 function NumField({
   label,
@@ -345,18 +363,29 @@ export function PreferencesPanel({
     setToast(`Reverted to ${TEXT_CARD_FONT_FAMILY}`);
   }
 
-  // Pull explore settings, camera, and segment structure from the live project
-  // into the draft. Object shapes, effects, and transforms are left as-is.
+  // Pull explore settings, camera, segment structure, and both object
+  // blueprints from the live project into the draft.
   function captureWorkspace(): void {
     const live = structuredClone(useStore.getState().project) as Project;
+    const objA = live.objects[0]
+      ? blueprintFromLive(live.objects[0])
+      : undefined;
     setDraft((d) => ({
       ...d,
       project: {
         ...d.project,
-        lucky: live.lucky,
+        lucky: {
+          ...live.lucky,
+          locks: { colours: false, motion: false, effects: false, objects: false },
+        },
         scene: live.scene,
         segments: live.segments,
+        customEffects: live.customEffects,
+        objects: objA ? [objA] : d.project.objects,
       },
+      secondObject: live.objects[1]
+        ? blueprintFromLive(live.objects[1])
+        : d.secondObject,
     }));
     setToast("Loaded current workspace — review and Save");
   }
@@ -459,7 +488,7 @@ export function PreferencesPanel({
             <button
               className="secondary"
               onClick={captureWorkspace}
-              title="Copies your open project's Explore settings, camera, and segment structure (text content, colours, durations) into the fields below. Object shapes, effects, and transforms are not included. Review, then Save."
+              title="Copies your open project's Explore settings, camera, segment structure (text content, colours, durations), and both objects (shape, surface, effects, transforms) into the fields below. Review, then Save."
             >
               Make current the default
             </button>
@@ -845,6 +874,26 @@ export function PreferencesPanel({
                 })
               }
             />
+          </ExploreField>
+          <hr className="prefs-hr" />
+          <ExploreField id="images">
+            <Field label="Palette images" stacked>
+              <span className="field-control">
+                {draft.project.lucky.images.length} image
+                {draft.project.lucky.images.length === 1 ? "" : "s"}
+                <button
+                  className="mini"
+                  disabled={!draft.project.lucky.images.length}
+                  onClick={() =>
+                    mutateLucky((l) => {
+                      l.images = [];
+                    })
+                  }
+                >
+                  Clear
+                </button>
+              </span>
+            </Field>
           </ExploreField>
           <hr className="prefs-hr" />
           <ExploreField id="objectCounts">

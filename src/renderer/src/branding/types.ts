@@ -6,7 +6,15 @@
 // and vite.config.web.ts) resolves to a different file per target — so any drift
 // between the two variants fails `npm run typecheck` / CI.
 
-import type { PaletteColor } from "../types";
+import type {
+  ColorScheme,
+  Mapping,
+  ObjectSurface,
+  PaletteColor,
+  RampColorMode,
+  TextBlendMode,
+} from "../types";
+import type { ExploreSectionId } from "../ui/exploreSections"; // type-only: no runtime cycle
 
 export interface BrandTextCard {
   content: string;
@@ -16,8 +24,20 @@ export interface BrandTextCard {
   textBackdropColor: string;
 }
 
-export interface BrandLuckyPalette {
+// Per-target "Feeling lucky" factory defaults: the Explore config a brand-new
+// project (or a fresh "Reset to factory") starts with. `images`, `locks`, and
+// `enabledEffectIds` stay shared in state/defaultsBase.ts — they are identical
+// on both targets and not brand-shaped.
+export interface BrandLucky {
   colors: PaletteColor[];
+  objectCounts: (1 | 2)[];
+  colorSchemes: ColorScheme[];
+  surfaces: ObjectSurface[];
+  blendModes: TextBlendMode[];
+  textBackdrops: ("silhouette" | "wireframe")[];
+  rampColors: RampColorMode[];
+  mappings: Mapping[];
+  animation: number;
 }
 
 export interface Branding {
@@ -35,6 +55,8 @@ export interface Branding {
   textCards: [BrandTextCard, BrandTextCard, BrandTextCard];
   /** Default surface colour for the primary and second object. */
   objectSurfaceColor: string;
-  /** "Feeling lucky" default colour pools (the non-colour lucky fields stay shared across builds). */
-  lucky: BrandLuckyPalette;
+  /** "Feeling lucky" factory defaults for this target. */
+  lucky: BrandLucky;
+  /** Which Explore sections a fresh install shows by default. */
+  exploreSections: ExploreSectionId[];
 }

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { branding } from "@branding";
 import {
   COLOR_SCHEMES,
   type ColorScheme,
@@ -8,11 +9,7 @@ import {
   type Project,
 } from "../types";
 import { BASE_PROJECT, BASE_SECOND_OBJECT } from "./defaultsBase";
-import {
-  DEFAULT_EXPLORE_SECTIONS,
-  EXPLORE_SECTIONS,
-  type ExploreSectionId,
-} from "../ui/exploreSections";
+import { EXPLORE_SECTIONS, type ExploreSectionId } from "../ui/exploreSections";
 import {
   applyTasteSignal,
   diffEditFeatures,
@@ -158,7 +155,7 @@ function defaultPrefsState(): Pick<
     secondObject: structuredClone(BASE_SECOND_OBJECT),
     customFont: null,
     tasteProfile: EMPTY_TASTE_PROFILE,
-    exploreSections: [...DEFAULT_EXPLORE_SECTIONS],
+    exploreSections: [...branding.exploreSections],
   };
 }
 
@@ -183,7 +180,7 @@ export const usePrefs = create<PrefsState>((set, get) => {
 
     hydrate: (p) => {
       if (!p) return;
-      const stored: string[] = p.exploreSections ?? DEFAULT_EXPLORE_SECTIONS;
+      const stored: string[] = p.exploreSections ?? branding.exploreSections;
       // Upgrade: the old typeColors/surfaceColors sections collapsed into one
       // "colors" id — splice it in at the old position so a user who had
       // reordered or hidden the palette sections doesn't lose the section

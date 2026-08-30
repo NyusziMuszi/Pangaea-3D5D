@@ -32,15 +32,3 @@ export const EXPLORE_SECTIONS: { id: ExploreSectionId; label: string }[] = [
   { id: "effects", label: "Effects pool" },
   { id: "animation", label: "Animations" },
 ];
-
-// == what Explore shows today.
-export const DEFAULT_EXPLORE_SECTIONS: ExploreSectionId[] = [
-  "colors",
-  "images",
-  "mappings",
-  "objectCounts",
-  "surfaces",
-  "rampColors",
-  "colorSchemes",
-  "animation",
-];
