@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join, basename, dirname, resolve } from 'path'
-import { readFile, writeFile, mkdir, rm } from 'fs/promises'
+import { readFile, writeFile, mkdir, rm, rename } from 'fs/promises'
 import { tmpdir } from 'os'
 import ffmpegPath from 'ffmpeg-static'
 import ffmpeg from 'fluent-ffmpeg'
@@ -112,6 +112,13 @@ interface OpenFileOpts {
 // approvedPaths dialog gating that protects arbitrary file reads/writes.
 const PREFS_PATH = join(app.getPath('userData'), 'preferences.json')
 
+// prefs:write can fire several times in quick succession (Preferences' Save
+// persists project/secondObject/exploreSections as three separate calls) —
+// serialized here so concurrent writeFile calls to the same path can never
+// interleave and corrupt the file. Chained via .catch so one failed write
+// doesn't permanently wedge the queue for later writes.
+let prefsWriteChain: Promise<unknown> = Promise.resolve()
+
 function registerIpc(): void {
   // The self-test harness writes to fixed /tmp paths without a dialog; approve
   // them up front so the gating doesn't break PANGAEA_SELFTEST runs.
@@ -131,8 +138,18 @@ function registerIpc(): void {
   })
 
   // Flush the preferences blob to disk (pretty-printed for hand-editing / backup).
+  // Writes go to a temp file and are renamed into place (atomic on the same
+  // volume) so a mid-write crash can't leave a torn file, and are serialized
+  // via prefsWriteChain so back-to-back calls can't interleave.
   ipcMain.handle('prefs:write', async (_e, data: unknown) => {
-    await writeFile(PREFS_PATH, JSON.stringify(data, null, 2))
+    const json = JSON.stringify(data, null, 2)
+    const task = prefsWriteChain.then(async () => {
+      const tmpPath = `${PREFS_PATH}.tmp`
+      await writeFile(tmpPath, json)
+      await rename(tmpPath, PREFS_PATH)
+    })
+    prefsWriteChain = task.catch(() => {})
+    await task
     return { ok: true }
   })
 
