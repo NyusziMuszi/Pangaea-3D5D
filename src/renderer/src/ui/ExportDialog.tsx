@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
 import {
@@ -23,28 +23,80 @@ const QUALITY = {
 
 type Format = "mp4" | "png" | "sequence";
 
+// Remembers the last-used export settings for the lifetime of the app (reset
+// on restart) so reopening the dialog doesn't fall back to the hard-coded
+// defaults. Module-level rather than in Preferences: this is transient UI
+// state for the current session, not a persisted user preference.
+let lastExportSettings: {
+  format: Format;
+  fps: number;
+  duration: number;
+  quality: keyof typeof QUALITY;
+  pngWidth: number;
+  pngDpi: number;
+  seqStart: number;
+  seqCount: number;
+  seqSpacing: number;
+  seqSurfaces: Set<ObjectSurface>;
+} | null = null;
+
 export function ExportDialog({
   onClose,
 }: {
   onClose: () => void;
 }): JSX.Element {
   const project = useStore((s) => s.project);
-  const [format, setFormat] = useState<Format>("mp4");
-  const [fps, setFps] = useState(project.output.fps);
+  const setPlaying = useStore((s) => s.setPlaying);
+  const [format, setFormat] = useState<Format>(
+    lastExportSettings?.format ?? "mp4",
+  );
+  const [fps, setFps] = useState(lastExportSettings?.fps ?? project.output.fps);
   const [duration, setDuration] = useState(
-    Number(totalDuration(project).toFixed(2)),
+    lastExportSettings?.duration ?? Number(totalDuration(project).toFixed(2)),
   );
-  const [quality, setQuality] = useState<keyof typeof QUALITY>("High");
-  const [pngWidth, setPngWidth] = useState(project.output.width * 4);
-  const [pngDpi, setPngDpiValue] = useState(300);
+  const [quality, setQuality] = useState<keyof typeof QUALITY>(
+    lastExportSettings?.quality ?? "High",
+  );
+  const [pngWidth, setPngWidth] = useState(
+    lastExportSettings?.pngWidth ?? project.output.width * 4,
+  );
+  const [pngDpi, setPngDpiValue] = useState(lastExportSettings?.pngDpi ?? 300);
   const [seqStart, setSeqStart] = useState(
-    Number(engine.getPlayhead().toFixed(2)),
+    lastExportSettings?.seqStart ?? Number(engine.getPlayhead().toFixed(2)),
   );
-  const [seqCount, setSeqCount] = useState(6);
-  const [seqSpacing, setSeqSpacing] = useState(0.4);
+  const [seqCount, setSeqCount] = useState(lastExportSettings?.seqCount ?? 6);
+  const [seqSpacing, setSeqSpacing] = useState(
+    lastExportSettings?.seqSpacing ?? 0.4,
+  );
   const [seqSurfaces, setSeqSurfaces] = useState<Set<ObjectSurface>>(
-    () => new Set(FLAT_SURFACES),
+    () => new Set(lastExportSettings?.seqSurfaces ?? FLAT_SURFACES),
   );
+
+  useEffect(() => {
+    lastExportSettings = {
+      format,
+      fps,
+      duration,
+      quality,
+      pngWidth,
+      pngDpi,
+      seqStart,
+      seqCount,
+      seqSpacing,
+      seqSurfaces,
+    };
+  }, [
+    format,
+    fps,
+    duration,
+    quality,
+    pngWidth,
+    pngDpi,
+    seqStart,
+    seqCount,
+    seqSpacing,
+    seqSurfaces,
+  ]);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [seqProgress, setSeqProgress] = useState<{
     done: number;
@@ -83,12 +135,13 @@ export function ExportDialog({
 
   async function runVideo(): Promise<void> {
     const path = await window.api.saveFileDialog({
-      defaultName: defaultFilename("mp4"),
+      defaultName: defaultFilename(project, "mp4"),
       filters: [{ name: "MP4 Video", extensions: ["mp4"] }],
     });
     if (!path) return;
 
     engine.pause();
+    setPlaying(false);
     setBusy(true);
     setStatus("Rendering frames…");
     const controller = new AbortController();
@@ -119,12 +172,13 @@ export function ExportDialog({
 
   async function runStill(): Promise<void> {
     const path = await window.api.saveFileDialog({
-      defaultName: defaultFilename("png"),
+      defaultName: defaultFilename(project, "png"),
       filters: [{ name: "PNG Image", extensions: ["png"] }],
     });
     if (!path) return;
 
     engine.pause();
+    setPlaying(false);
     setBusy(true);
     setStatus("Rendering frame…");
     try {
@@ -144,11 +198,12 @@ export function ExportDialog({
     if (!dir) return;
 
     engine.pause();
+    setPlaying(false);
     setBusy(true);
     setStatus("Rendering frames…");
     const controller = new AbortController();
     abortRef.current = controller;
-    const stem = defaultStem();
+    const stem = defaultStem(project);
     const total = seqTotalFiles;
     let doneCount = 0;
     setSeqProgress({ done: 0, total });
