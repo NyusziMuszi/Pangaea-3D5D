@@ -6,11 +6,15 @@ import { usePrefs, type Preferences } from './state/prefs'
 import { defaultProject } from './state/defaults'
 import { useStore } from './state/store'
 import { installWebApi } from './platform/webApi'
+import { markWebBuild } from './platform/isWeb'
 
 // Under Electron, preload has already set window.api before this script runs. In
 // a plain browser (the GitHub Pages build) it's undefined, so install the
 // browser bridge now — before boot() awaits window.api.readPreferences().
-if (!window.api) installWebApi()
+if (!window.api) {
+  markWebBuild()
+  installWebApi()
+}
 
 // Hydrate persisted preferences from disk BEFORE the React app mounts, so the
 // synchronous defaultProject() factory (and the very first project) already

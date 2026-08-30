@@ -17,6 +17,14 @@ export type ExploreSectionId =
   | "effects"
   | "animation";
 
+// Sections whose options only affect text cards. Hidden from the Explore panel
+// when the timeline has no text segments — the controls would be inert.
+export const TEXT_CARD_SECTIONS: ReadonlySet<ExploreSectionId> = new Set([
+  "colorSchemes",
+  "textBackdrops",
+  "blendModes",
+]);
+
 // Panel order.
 export const EXPLORE_SECTIONS: { id: ExploreSectionId; label: string }[] = [
   { id: "colors", label: "Palette: Colours" },

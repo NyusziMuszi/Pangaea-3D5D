@@ -30,7 +30,7 @@ import { Section, Subsection, Field, tickGradient } from "./controls";
 import { LockPanel } from "./LockPanel";
 import { PaletteColorList } from "./PaletteColorList";
 import { EXPLORE_SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
-import type { ExploreSectionId } from "./exploreSections";
+import { TEXT_CARD_SECTIONS, type ExploreSectionId } from "./exploreSections";
 import cancelIcon from "@assets/cancel.svg";
 
 const MAX_IMAGES = 10;
@@ -69,8 +69,9 @@ export function LibraryPanel({
   const [showInfo, setShowInfo] = useState(false);
 
   const exploreSections = usePrefs((s) => s.exploreSections);
+  const hasTextCards = project.segments.some((s) => s.kind === "text");
   const shows = (id: ExploreSectionId): boolean =>
-    exploreSections.includes(id);
+    exploreSections.includes(id) && (hasTextCards || !TEXT_CARD_SECTIONS.has(id));
 
   // The Animations slider has 7 discrete stops (step = 1/6). The browser snaps
   // the thumb to the nearest stop, so the CSS fill must snap the same way —
@@ -348,21 +349,28 @@ export function LibraryPanel({
                       <strong>Shapes</strong> — which primitive shapes an
                       object may take.
                     </li>
-                    <li>
-                      <strong>Colour Rhythm</strong> <em>~ + ~ + ~ +</em>:
-                      animation is treated as a continuous sequence with the
-                      message cards interrupting it. <em>~ ~ + + x x</em>: each
-                      animation belongs to a message. <em>Random</em>: every
-                      segment is coloured independently.
-                    </li>
-                    <li>
-                      <strong>Text background</strong> — whether text cards show
-                      the object as a silhouette, none or wireframe backdrop.
-                    </li>
-                    <li>
-                      <strong>Blend</strong> — how text glyphs composite over
-                      the object silhouette on text cards.
-                    </li>
+                    {hasTextCards && (
+                      <li>
+                        <strong>Colour Rhythm</strong> <em>~ + ~ + ~ +</em>:
+                        animation is treated as a continuous sequence with the
+                        message cards interrupting it. <em>~ ~ + + x x</em>: each
+                        animation belongs to a message. <em>Random</em>: every
+                        segment is coloured independently.
+                      </li>
+                    )}
+                    {hasTextCards && (
+                      <li>
+                        <strong>Text background</strong> — whether text cards
+                        show the object as a silhouette, none or wireframe
+                        backdrop.
+                      </li>
+                    )}
+                    {hasTextCards && (
+                      <li>
+                        <strong>Blend</strong> — how text glyphs composite over
+                        the object silhouette on text cards.
+                      </li>
+                    )}
                     <li>
                       <strong>Effects pool</strong> — which built-in effects
                       Explore is allowed to use.

@@ -47,7 +47,7 @@ export function ProjectActions({
 
   async function save(): Promise<void> {
     const path = await window.api.saveFileDialog({
-      defaultName: defaultFilename("pangaea"),
+      defaultName: defaultFilename(project, "pangaea"),
       filters: [{ name: "Pangaea Project", extensions: ["pangaea"] }],
     });
     if (!path) return;
