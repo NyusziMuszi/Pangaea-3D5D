@@ -30,10 +30,19 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
       },
       { name: "uFrequency", label: "Frequency", min: 0, max: 40, default: 14 },
       { name: "uSpeed", label: "Speed", min: 0, max: 6, default: 2 },
+      {
+        name: "uAxis",
+        label: "Axis",
+        min: 0,
+        max: 2,
+        default: 2,
+        step: 1,
+        options: ["X", "Y", "Z"],
+      },
     ],
     glslDeform: `
-  float d = pg_radial(pos, uv);
-  pos.z += sin(d * uFrequency - t * uSpeed) * uAmplitude;
+  float d = pg_radial_axis(pos, uv, uAxis);
+  pos += pg_axis_dir(uAxis) * (sin(d * uFrequency - t * uSpeed) * uAmplitude);
   return pos;`,
   },
   {

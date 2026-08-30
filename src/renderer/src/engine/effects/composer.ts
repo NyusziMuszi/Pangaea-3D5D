@@ -119,6 +119,17 @@ float pg_radial(vec3 pos, vec2 uv) {
   return length(uv - 0.5);
 #endif
 }
+// Unit vector for a ripple/deform axis selector: 0 = X, 1 = Y, 2 = Z.
+vec3 pg_axis_dir(float a) {
+  return a < 0.5 ? vec3(1.0, 0.0, 0.0) : (a < 1.5 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0));
+}
+// Distance from the chosen axis. Z keeps pg_radial's uv-space behaviour on
+// plane-like geometry; X and Y have no uv analogue, so they use object space.
+float pg_radial_axis(vec3 pos, vec2 uv, float a) {
+  if (a < 0.5) return length(pos.yz);
+  if (a < 1.5) return length(pos.xz);
+  return pg_radial(pos, uv);
+}
 ${deformFns.join('\n')}
 void main() {
   vUv = uv;

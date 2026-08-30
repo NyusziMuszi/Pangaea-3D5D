@@ -8,6 +8,7 @@ import closeIcon from "../assets/close_small_24dp_E3E3E3_FILL0_wght400_GRAD0_ops
 import deleteIcon from "../assets/cancel.svg";
 
 import { findEffectDef } from "../engine/effects/catalog";
+import { evalScalar } from "../engine/animatable";
 import {
   constant,
   SURFACE_COLOR_LIGHT_DEFAULT,
@@ -786,6 +787,33 @@ export function InspectorPanel({
                       {def?.uniforms.map((u) => {
                         const scalar: Scalar =
                           inst.values[u.name] ?? constant(u.default);
+                        if (u.options) {
+                          const index = Math.round(evalScalar(scalar, 0));
+                          return (
+                            <Field key={u.name} label={u.label}>
+                              <select
+                                value={index}
+                                onChange={(e) =>
+                                  updateObject((o) => {
+                                    const target = o.effects.find(
+                                      (ef) => ef.instanceId === inst.instanceId,
+                                    );
+                                    if (target)
+                                      target.values[u.name] = constant(
+                                        Number(e.target.value),
+                                      );
+                                  })
+                                }
+                              >
+                                {u.options.map((label, i) => (
+                                  <option key={label} value={i}>
+                                    {label}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                          );
+                        }
                         return (
                           <ScalarControl
                             key={u.name}

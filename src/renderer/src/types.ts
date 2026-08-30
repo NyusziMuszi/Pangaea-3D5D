@@ -31,6 +31,10 @@ export interface UniformDef {
   // animating. "Feeling lucky" keyframes it. At most one per effect; when none
   // is flagged, callers fall back to the first uniform.
   isIntensity?: boolean;
+  // When present, the uniform is a discrete mode: the value is an index into
+  // this list and the Inspector renders a dropdown instead of a slider. Still
+  // a plain float uniform in GLSL.
+  options?: string[];
 }
 
 export type EffectKind = "deform" | "shade";
