@@ -6,7 +6,10 @@ import {
   type CSSProperties,
 } from "react";
 import { activeObjectIndex, useStore } from "../state/store";
-import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
+import {
+  BUILTIN_EFFECTS,
+  IMAGE_DEPENDENT_EFFECT_IDS,
+} from "../engine/effects/catalog";
 import { instanceFromDef, uid } from "../state/defaults";
 import { getPrefs, usePrefs } from "../state/prefs";
 import {
@@ -281,14 +284,12 @@ export function LibraryPanel({
   }
 
   const allDefs = [...BUILTIN_EFFECTS, ...project.customEffects];
+  // Library catalog acts on the live scene, so it gates on what's actually
+  // loaded on an object right now.
   const hasAnyImage = project.objects.some((o) => o.image.assetId);
-  const IMAGE_DEPENDENT_EFFECT_IDS = new Set([
-    "mask",
-    "displace",
-    "relief",
-    "fresnel",
-    "multiply",
-  ]);
+  // Explore's pool gates on what the *next* roll could deal — the palette's
+  // image pool — matching the "image" surface checkbox just above it.
+  const hasPaletteImages = lucky.images.length > 0;
 
   return (
     <div className={`library-wrap ${collapsed ? "collapsed" : ""}`}>
@@ -695,14 +696,15 @@ export function LibraryPanel({
                       .sort((a, b) => a.kind.localeCompare(b.kind))
                       .map((e) => {
                         const disabled =
-                          IMAGE_DEPENDENT_EFFECT_IDS.has(e.id) && !hasAnyImage;
+                          IMAGE_DEPENDENT_EFFECT_IDS.has(e.id) &&
+                          !hasPaletteImages;
                         return (
                         <label
                           className="lucky-radio"
                           key={e.id}
                           title={
                             disabled
-                              ? "Add an image to an object first"
+                              ? "Add images to the palette to explore image effects"
                               : undefined
                           }
                         >

@@ -355,6 +355,20 @@ export const BUILTIN_EFFECTS: EffectDef[] = [
   },
 ];
 
+// Effects that only do anything on an object wearing the "image" surface:
+// displace/relief sample this object's own uTexture, multiply/mask sample
+// the *other* object's texture via pg_sampleOther, and fresnel's rim glow —
+// while textureless — gets overwritten by every flat-surface branch in the
+// composer's fragment main() (silhouette/faceted/depth/wireframe all assign
+// `color` after the shade calls run).
+export const IMAGE_DEPENDENT_EFFECT_IDS: ReadonlySet<string> = new Set([
+  "displace",
+  "relief",
+  "fresnel",
+  "multiply",
+  "mask",
+]);
+
 export function findEffectDef(
   defId: string,
   customEffects: EffectDef[],

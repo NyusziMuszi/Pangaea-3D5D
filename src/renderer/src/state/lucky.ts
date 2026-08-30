@@ -55,7 +55,10 @@ import {
   totalDuration,
 } from "../types";
 import { branding } from "@branding";
-import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
+import {
+  BUILTIN_EFFECTS,
+  IMAGE_DEPENDENT_EFFECT_IDS,
+} from "../engine/effects/catalog";
 import {
   defaultObjectImage,
   defaultSecondObject,
@@ -676,26 +679,50 @@ export function generateLuckyScene(
   }
   next.objects = objects;
 
-  // ----- Effects (distributed across both objects) -----
+  // ----- Effects (image-dependent ones pinned to the object wearing the
+  // image; everything else distributed across all objects) -----
   const enabledIds = opts.enabledEffectIds;
   const isEnabled = (id: string): boolean =>
     !enabledIds?.length || enabledIds.includes(id);
-  const deformPool = BUILTIN_EFFECTS.filter(
-    (d) => d.kind === "deform" && isEnabled(d.id),
-  );
-  const shadePool: EffectDef[] = BUILTIN_EFFECTS.filter(
+  const imageIdx = objects.findIndex((o) => o.surface === "image");
+  // multiply/mask sample the *other* object's texture (pg_sampleOther), but a
+  // lucky roll only ever deals one object an image (dressObject above) — the
+  // other slot always reads the grey placeholder, making them a flat-darken /
+  // flat-alpha-dim no-op. Left out of the lucky pool; still pickable by hand
+  // in the Library.
+  const OTHER_OBJECT_EFFECT_IDS = new Set(["multiply", "mask"]);
+  const generalPool = BUILTIN_EFFECTS.filter(
     (d) =>
+      d.kind === "deform" &&
       isEnabled(d.id) &&
-      (d.id === "grayscale" ||
-        d.id === "fresnel" ||
-        // multiply/mask sample the *other* object (pg_sampleOther) — two objects only.
-        (twoObjects && (d.id === "multiply" || d.id === "mask"))),
+      !IMAGE_DEPENDENT_EFFECT_IDS.has(d.id),
   );
-  const selected = pickDistinctWeighted(
-    [...deformPool, ...shadePool],
-    effectCount,
-    (d) => tasteProfile.effects[d.id] ?? 0,
+  const imagePool: EffectDef[] =
+    imageIdx < 0
+      ? []
+      : BUILTIN_EFFECTS.filter(
+          (d) =>
+            isEnabled(d.id) &&
+            IMAGE_DEPENDENT_EFFECT_IDS.has(d.id) &&
+            !OTHER_OBJECT_EFFECT_IDS.has(d.id),
+        );
+  const effectScore = (d: EffectDef): number => tasteProfile.effects[d.id] ?? 0;
+  // Guarantee the image object gets at least one image effect, so a textured
+  // roll actually uses its photo; fill the rest from everything else.
+  const guaranteed = imagePool.length
+    ? pickDistinctWeighted(imagePool, 1, effectScore)
+    : [];
+  const remainingPool = [...generalPool, ...imagePool].filter(
+    (d) => !guaranteed.includes(d),
   );
+  const selected = [
+    ...guaranteed,
+    ...pickDistinctWeighted(
+      remainingPool,
+      effectCount - guaranteed.length,
+      effectScore,
+    ),
+  ];
   const instances = selected.map((def) => instanceFromDef(def));
 
   // Tint any fresnel instance from a palette colour. Draws from the object
@@ -709,12 +736,21 @@ export function generateLuckyScene(
     }
   }
 
-  // Deal the selected effects across the objects round-robin, so no single
-  // object hoards the whole stack. With one object, they all land on it.
+  // Deal the selected effects: image-dependent ones are pinned to the image
+  // object; everything else round-robins across all objects on its own
+  // cursor, so the flat object(s) still get a fair share of the plain
+  // deformers rather than being starved by the image object's guarantee.
   for (const o of objects) o.effects = [];
-  instances.forEach((inst, i) =>
-    objects[i % objects.length].effects.push(inst),
-  );
+  let generalCursor = 0;
+  selected.forEach((def, i) => {
+    const inst = instances[i];
+    if (imageIdx >= 0 && IMAGE_DEPENDENT_EFFECT_IDS.has(def.id)) {
+      objects[imageIdx].effects.push(inst);
+    } else {
+      objects[generalCursor % objects.length].effects.push(inst);
+      generalCursor++;
+    }
+  });
 
   // Keyframe exactly one effect's intensity so the scene always animates a fx.
   if (instances.length) keyframeIntensity(pick(instances));
