@@ -89,6 +89,11 @@
   --err: #ff6b6b;
   --slider-fill: #7a7a7a;
   --slider-track: #c8c8c8;
+
+  /* Tell the browser this UI is dark so native widgets Firefox draws itself
+     (scrollbars, spin buttons, select popups, form focus rings) pick their
+     dark variant instead of the default light one. */
+  color-scheme: dark;
 }
 
 ::-webkit-scrollbar {
@@ -264,6 +269,12 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   appearance: none;
+}
+/* Firefox draws its own spin buttons and ignores the pseudo-elements above;
+   `textfield` removes them so the field matches Chromium/Electron. */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 /* Custom colour swatch + popover picker (replaces the native OS colour dialog
    so the value is shown/edited as hex rather than RGB). */
@@ -1170,6 +1181,32 @@ input[type="checkbox"]:checked::after {
 .scrub::-webkit-slider-thumb:hover,
 .scalar-slider::-webkit-slider-thumb:hover {
   background: var(--accent);
+}
+/* Firefox equivalents — it never matches the ::-webkit-* pseudo-elements, so
+   without these the track is unpainted (invisible) and only the default thumb
+   shows. Same geometry/fill; Firefox centres the thumb on the track itself,
+   so no negative margin is needed, but the default thumb border must go. */
+.scrub::-moz-range-track,
+.scalar-slider::-moz-range-track {
+  height: 4px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background-image:
+    var(--tick-gradient, none),
+    linear-gradient(
+      to right,
+      var(--slider-fill) var(--slider-pct, 0%),
+      var(--slider-track) var(--slider-pct, 0%)
+    );
+}
+.scrub::-moz-range-thumb,
+.scalar-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: var(--radius-round);
+  background: var(--slider-fill);
+  transition: background var(--dur-fast) var(--ease);
 }
 .scrub::-moz-range-thumb:hover,
 .scalar-slider::-moz-range-thumb:hover {
