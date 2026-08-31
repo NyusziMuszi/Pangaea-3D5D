@@ -3,6 +3,7 @@ import { PALETTE_ROLES, type PaletteColor, type PaletteRole } from "../types";
 import { ColorSwatch } from "./controls";
 import cancelIcon from "@assets/cancel.svg";
 import addIcon from "@assets/add_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
+import removeIcon from "@assets/remove_24dp_E3E3E3_FILL1_wght400_GRAD0_opsz24.svg";
 
 // Shared cap: the merged list now holds what used to be two 12-entry lists.
 export const MAX_COLORS = 16;
@@ -46,6 +47,10 @@ function toggleRole(color: PaletteColor, role: PaletteRole): void {
   const i = color.roles.indexOf(role);
   if (i >= 0) color.roles.splice(i, 1);
   else color.roles.push(role);
+}
+
+function clampWeight(w: number): 1 | 2 | 3 {
+  return Math.min(3, Math.max(1, w)) as 1 | 2 | 3;
 }
 
 // The colour swatch, widened to CHIP_W[weight] to show importance at a
@@ -197,17 +202,45 @@ export function PaletteColorList({
               })
             }
           />
-          <button
-            className="btn-icon"
-            title="Remove colour"
-            onClick={() =>
-              onMutate((cs) => {
-                cs.splice(i, 1);
-              })
-            }
-          >
-            <img src={cancelIcon} alt="remove" />
-          </button>
+          <div className="palette-row-actions">
+            <button
+              className="btn-icon"
+              title="Decrease importance"
+              aria-label="Decrease importance"
+              disabled={(c.weight ?? 2) <= 1}
+              onClick={() =>
+                onMutate((cs) => {
+                  cs[i].weight = clampWeight((cs[i].weight ?? 2) - 1);
+                })
+              }
+            >
+              <img src={removeIcon} alt="decrease" />
+            </button>
+            <button
+              className="btn-icon"
+              title="Increase importance"
+              aria-label="Increase importance"
+              disabled={(c.weight ?? 2) >= 3}
+              onClick={() =>
+                onMutate((cs) => {
+                  cs[i].weight = clampWeight((cs[i].weight ?? 2) + 1);
+                })
+              }
+            >
+              <img src={addIcon} alt="increase" />
+            </button>
+            <button
+              className="btn-icon"
+              title="Remove colour"
+              onClick={() =>
+                onMutate((cs) => {
+                  cs.splice(i, 1);
+                })
+              }
+            >
+              <img src={cancelIcon} alt="remove" />
+            </button>
+          </div>
         </div>
       ))}
       {colors.length < MAX_COLORS && (

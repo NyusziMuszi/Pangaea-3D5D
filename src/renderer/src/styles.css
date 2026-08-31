@@ -1647,9 +1647,9 @@ textarea.code {
   grid-template-columns: repeat(var(--pal-n, 3), var(--pal-cb)) calc(var(--chip-w, 18px) + var(--pal-sw-gap));
   gap: var(--pal-gap);
   align-items: center;
-  /* Reserves the strip the absolutely-positioned remove button sits in, so a
-     wide chip can never run underneath it. */
-  padding-right: 24px;
+  /* Reserves the strip .palette-row-actions (three 16px icon buttons) sits
+     in, so a wide chip can never run underneath it. */
+  padding-right: 58px;
 }
 /* Right-align within the widened swatch column so the extra --pal-sw-gap
    room falls on its left — between the checkboxes and the colour. */
@@ -1663,21 +1663,27 @@ textarea.code {
   margin: 0;
 }
 /* Pinned to the row's right edge rather than flowing after the chip, so the
-   button stays put as the chip grows/shrinks. Box is sized to the icon (16px)
-   with no padding, so the hit area is the icon and nothing else. */
-.palette-row .btn-icon {
+   group stays put as the chip grows/shrinks: -/+ weight stepper, then the
+   remove button, with a bit of extra breathing room before remove so it
+   doesn't read as a third step of the stepper. */
+.palette-row-actions {
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.palette-row-actions .btn-icon:last-child {
+  margin-left: 4px;
+}
+/* Box is sized to the icon (16px) with no padding, so the hit area is the
+   icon and nothing else. */
+.palette-row .btn-icon {
   padding: 0;
   width: 16px;
   height: 16px;
-}
-/* Beats button.btn-icon:active's `transform: none`, which would otherwise
-   drop the vertical centering for the duration of the press. */
-.palette-row .btn-icon:active {
-  transform: translateY(-50%);
 }
 .palette-row .btn-icon img {
   width: 16px;
@@ -1698,11 +1704,17 @@ textarea.code {
 .palette-chip.color-swatch-btn {
   width: var(--chip-w);
   border-radius: calc(var(--pal-sw) / 2);
-  transition: width var(--dur-fast) var(--ease);
+  /* Overrides (rather than merges with) the base button rule's transition
+     list, so border-radius/box-shadow have to be re-listed here alongside
+     width for the hover cue below to ease in instead of snapping. */
+  transition:
+    width var(--dur-fast) var(--ease),
+    border-radius var(--dur) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
 }
-/* Drag handle on the chip's right edge, revealed on row hover/focus so it
-   doesn't clutter an otherwise-static palette. The hit target (10px) is
-   wider than the visible bar drawn via ::after, for an easier grab. */
+/* Drag handle on the chip's right edge — an invisible hit target (10px,
+   wider than the chip's own edge) for an easier grab; revealed to the eye by
+   styling the chip itself on hover/focus, below. */
 .palette-chip-grip {
   position: absolute;
   top: 0;
@@ -1710,21 +1722,15 @@ textarea.code {
   width: 10px;
   height: 100%;
   cursor: ew-resize;
-  opacity: 0;
 }
-.palette-row:hover .palette-chip-grip,
-.palette-chip-grip:focus-visible {
-  opacity: 1;
-}
-.palette-chip-grip::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 2px;
-  bottom: 2px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--white);
+/* Same trick as button:hover's thicker top line (box-shadow inset), rotated
+   onto the draggable right edge instead of the top, plus the same
+   square-corner treatment buttons get on hover — applied only to the right
+   end, since the left end isn't draggable and stays a rounded cap. */
+.palette-row:hover .palette-chip.color-swatch-btn,
+.palette-chip-slot:focus-within .palette-chip.color-swatch-btn {
+  border-radius: calc(var(--pal-sw) / 2) 0 0 calc(var(--pal-sw) / 2);
+  box-shadow: -3px 0 0 var(--white) inset;
 }
 /* Height = last label's top (44) + its line-height (18) + its leaderH (6) —
    keep in sync with PaletteColorList.tsx's HEADER_LAYOUT if either changes. */
