@@ -17,6 +17,7 @@ export function ExploreCheckboxGroup<T extends string | number>({
   variant,
   disabledFor,
   titleFor,
+  iconFor,
   onChange,
 }: {
   options: readonly ExploreOption<T>[];
@@ -30,6 +31,7 @@ export function ExploreCheckboxGroup<T extends string | number>({
   // An option that cannot apply yet (e.g. "image" with no palette images).
   disabledFor?: (value: T) => boolean;
   titleFor?: (value: T) => string | undefined;
+  iconFor?: (value: T) => JSX.Element | undefined;
   onChange: (next: T[] | undefined) => void;
 }): JSX.Element {
   const stack = variant === "stack";
@@ -39,6 +41,7 @@ export function ExploreCheckboxGroup<T extends string | number>({
     <Group className={stack ? "lucky-radio-group" : "field-control"}>
       {options.map((o) => {
         const disabled = disabledFor?.(o.value) ?? false;
+        const icon = iconFor?.(o.value);
         return (
           <label className={labelClass} key={String(o.value)} title={titleFor?.(o.value)}>
             <input
@@ -47,6 +50,7 @@ export function ExploreCheckboxGroup<T extends string | number>({
               checked={!selected || selected.includes(o.value)}
               onChange={() => onChange(toggleExploreSet(selected, o.value, all, { optional }))}
             />
+            {icon && <span className="explore-opt-icon">{icon}</span>}
             <span>{o.label}</span>
           </label>
         );

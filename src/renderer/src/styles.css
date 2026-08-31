@@ -362,6 +362,108 @@ input[type="number"] {
 .color-eyedropper:hover {
   color: var(--text);
 }
+/* Shape picker: replaces the native Type <select> so each option can show an
+   icon (a plain <select> can't render an image inside an <option>). Popover
+   mechanics mirror .color-swatch/.color-popover above. */
+.shape-picker {
+  display: flex;
+  min-width: 0;
+}
+.shape-picker-field {
+  flex: 1;
+}
+.shape-picker-compact {
+  flex: none;
+}
+.shape-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  width: 100%;
+  font-weight: 400;
+  font-size: var(--font-sm);
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: none;
+}
+.shape-picker-trigger:hover {
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+.shape-picker-trigger:active {
+  transform: none;
+  box-shadow: none;
+}
+.shape-picker-trigger:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+/* Compact: sized to content, matching .object-head-select. */
+.shape-picker-compact .shape-picker-trigger {
+  width: auto;
+  font-size: var(--font-xs);
+  padding: var(--space-1) var(--space-2);
+}
+.shape-picker-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.shape-picker-caret {
+  flex: none;
+  color: var(--text-dim);
+}
+.shape-picker-popover {
+  position: fixed;
+  z-index: 1000;
+  width: 268px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.shape-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+}
+.shape-picker-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  text-align: center;
+  font-size: var(--font-2xs);
+  line-height: 1.2;
+  cursor: pointer;
+}
+.shape-picker-tile span {
+  overflow-wrap: break-word;
+}
+.shape-picker-tile:hover,
+.shape-picker-tile:focus {
+  outline: none;
+  color: var(--text);
+  background: var(--panel-active);
+}
+.shape-picker-tile.selected {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 textarea {
   resize: vertical;
   width: 100%;
@@ -469,6 +571,11 @@ button.collapse-btn:hover {
   align-items: stretch;
   gap: var(--space-4);
 }
+.btn-with-icon {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
 .lock-panel {
   position: absolute;
   top: 40px; /* line up with the collapse tab */
@@ -477,6 +584,7 @@ button.collapse-btn:hover {
   width: 120px;
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-2) var(--space-2) var(--space-5) var(--space-5);
   background: var(--panel);
   border: 1px solid var(--border);
@@ -653,6 +761,7 @@ button.collapse-btn:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
 
   color: var(--text-dim);
   font-weight: 600;
@@ -1838,6 +1947,19 @@ button.lucky-img-thumb {
   opacity: 0.4;
   cursor: default;
 }
+/* Icon slot in an Explore checkbox row (currently just Shapes) — inherits its
+   colour from the label so it dims/greys the same way the text does. */
+.explore-opt-icon {
+  flex: none;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: inherit;
+}
+.explore-opt-icon svg {
+  width: 100%;
+  height: 100%;
+}
 .prefs-explore-field {
   display: flex;
   gap: 8px;
@@ -1858,4 +1980,10 @@ button.lucky-img-thumb {
   padding: 0 var(--space-2);
   font-size: 15px;
   line-height: 1;
+}
+.lucky-roll {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
 }

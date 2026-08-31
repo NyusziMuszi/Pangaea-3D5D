@@ -7,7 +7,8 @@ import { engine } from "../engine/engineSingleton";
 import { KeyframeTrack, DurationField, ColorSwatch } from "./controls";
 import { accentVars, objectAccentColor } from "./accent";
 import { objectKeyframeChannels } from "./keyframeChannels";
-import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS } from "./objectOptions";
+import { SURFACE_OPTIONS } from "./objectOptions";
+import { ShapePicker } from "./ShapePicker";
 import { bytesToDataUrl, mimeForName } from "./files";
 import { isAnimated } from "./scalarUtils";
 import {
@@ -553,20 +554,11 @@ export function TimelinePanel(): JSX.Element {
                   onClick={() => selectObjectOnly(index)}
                 >
                   <div className="object-head">
-                    <select
-                      className="object-head-select"
+                    <ShapePicker
                       value={obj.modelDataUrl ? "bespoke" : obj.primitive}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => setObjectType(index, e.target.value)}
-                    >
-                      <option value="none">None</option>
-                      {PRIMITIVE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                      <option value="bespoke">Bespoke</option>
-                    </select>
+                      onChange={(v) => setObjectType(index, v)}
+                      variant="compact"
+                    />
                     <select
                       className="object-head-select"
                       value={obj.surface ?? "image"}

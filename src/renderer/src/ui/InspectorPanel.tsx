@@ -28,7 +28,8 @@ import {
   ColorRow,
   DurationField,
 } from "./controls";
-import { PRIMITIVE_OPTIONS, SURFACE_OPTIONS } from "./objectOptions";
+import { SURFACE_OPTIONS } from "./objectOptions";
+import { ShapePicker } from "./ShapePicker";
 import { accentVars, objectAccentColor } from "./accent";
 import { defaultProject } from "../state/defaults";
 import { assetUrl, registerAsset } from "../state/assets";
@@ -474,22 +475,15 @@ export function InspectorPanel({
               <>
                 <Section title="Shape" className="accented" style={accentStyle}>
                   <Field label="Type">
-                    <select
+                    <ShapePicker
                       value={
                         activeObject.modelDataUrl
                           ? "bespoke"
                           : activeObject.primitive
                       }
-                      onChange={(e) => setObjectType(e.target.value)}
-                    >
-                      <option value="none">None</option>
-                      {PRIMITIVE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                      <option value="bespoke">Bespoke</option>
-                    </select>
+                      onChange={(v) => setObjectType(v)}
+                      variant="field"
+                    />
                   </Field>
                   <Field label="Surface">
                     <select

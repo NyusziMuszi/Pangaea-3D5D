@@ -34,8 +34,10 @@ import { Section, Subsection, Field, tickGradient } from "./controls";
 import { LockPanel } from "./LockPanel";
 import { PaletteColorList } from "./PaletteColorList";
 import { SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
+import { ShapeIcon } from "./ShapeIcon";
 import { EffectIcon, type EffectIconHandle } from "./EffectIcon";
 import {
+  EXPLORE_DEFAULT_OPEN,
   exploreLabel,
   TEXT_CARD_SECTIONS,
   type ExploreSectionId,
@@ -113,8 +115,6 @@ export function LibraryPanel({
   const [generating, setGenerating] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
 
-  const exploreSections = usePrefs((s) => s.exploreSections);
-
   // Bumped whenever the Effects catalog becomes visible (section expanded,
   // or scrolled into view) so each pill's EffectIcon replays its intro loop.
   const catalogRef = useRef<HTMLDivElement | null>(null);
@@ -132,6 +132,8 @@ export function LibraryPanel({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  const exploreSections = usePrefs((s) => s.exploreSections);
   const hasTextCards = project.segments.some((s) => s.kind === "text");
   const shows = (id: ExploreSectionId): boolean =>
     exploreSections.includes(id) && (hasTextCards || !TEXT_CARD_SECTIONS.has(id));
@@ -423,7 +425,10 @@ export function LibraryPanel({
                 </div>
               )}
               {shows("colors") && (
-                <Subsection title={exploreLabel("colors")}>
+                <Subsection
+                  title={exploreLabel("colors")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("colors")}
+                >
                   <PaletteColorList
                     colors={lucky.colors}
                     onMutate={(fn) =>
@@ -436,7 +441,10 @@ export function LibraryPanel({
               )}
 
               {shows("images") && (
-                <Subsection title={exploreLabel("images")}>
+                <Subsection
+                  title={exploreLabel("images")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("images")}
+                >
                   {lucky.images.length > 0 && (
                     <div className="lucky-img-grid" data-resolved={thumbResolved}>
                       {lucky.images.map((path, i) => {
@@ -474,7 +482,10 @@ export function LibraryPanel({
 
               {/* Mapping only applies to an object wearing an image. */}
               {shows("mappings") && hasPaletteImages && (
-                <Subsection title={exploreLabel("mappings")}>
+                <Subsection
+                  title={exploreLabel("mappings")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("mappings")}
+                >
                   <ExploreCheckboxGroup
                     variant="stack"
                     options={MAPPING_OPTIONS}
@@ -491,7 +502,10 @@ export function LibraryPanel({
               )}
 
               {shows("objectCounts") && (
-                <Subsection title={exploreLabel("objectCounts")}>
+                <Subsection
+                  title={exploreLabel("objectCounts")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("objectCounts")}
+                >
                   <ExploreCheckboxGroup
                     variant="stack"
                     options={OBJECT_COUNT_OPTIONS}
@@ -507,7 +521,10 @@ export function LibraryPanel({
               )}
 
               {shows("surfaces") && (
-                <Subsection title={exploreLabel("surfaces")}>
+                <Subsection
+                  title={exploreLabel("surfaces")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("surfaces")}
+                >
                   <ExploreCheckboxGroup
                     variant="stack"
                     options={SURFACE_OPTIONS}
@@ -532,7 +549,10 @@ export function LibraryPanel({
               {shows("rampColors") &&
                 (!lucky.surfaces.length ||
                   lucky.surfaces.some((s) => s === "faceted" || s === "depth")) && (
-                  <Subsection title={exploreLabel("rampColors")}>
+                  <Subsection
+                    title={exploreLabel("rampColors")}
+                    defaultOpen={EXPLORE_DEFAULT_OPEN.has("rampColors")}
+                  >
                     <ExploreCheckboxGroup
                       variant="stack"
                       options={RAMP_COLOR_OPTIONS}
@@ -549,13 +569,17 @@ export function LibraryPanel({
                 )}
 
               {shows("shapes") && (
-                <Subsection title={exploreLabel("shapes")}>
+                <Subsection
+                  title={exploreLabel("shapes")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("shapes")}
+                >
                   <ExploreCheckboxGroup
                     variant="stack"
                     options={PRIMITIVE_OPTIONS}
                     selected={lucky.shapes}
                     all={PRIMITIVE_MODELS}
                     optional
+                    iconFor={(v) => <ShapeIcon shape={v} />}
                     onChange={(next) =>
                       update((p) => {
                         p.lucky.shapes = next;
@@ -566,7 +590,10 @@ export function LibraryPanel({
               )}
 
               {shows("colorSchemes") && (
-                <Subsection title={exploreLabel("colorSchemes")}>
+                <Subsection
+                  title={exploreLabel("colorSchemes")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("colorSchemes")}
+                >
                   <ExploreCheckboxGroup
                     variant="stack"
                     options={COLOR_SCHEME_OPTIONS}
@@ -582,7 +609,10 @@ export function LibraryPanel({
               )}
 
               {shows("textBackdrops") && (
-                <Subsection title={exploreLabel("textBackdrops")}>
+                <Subsection
+                  title={exploreLabel("textBackdrops")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("textBackdrops")}
+                >
                   <ExploreCheckboxGroup
                     variant="stack"
                     options={TEXT_BACKDROP_OPTIONS}
@@ -598,7 +628,10 @@ export function LibraryPanel({
               )}
 
               {shows("blendModes") && (
-                <Subsection title={exploreLabel("blendModes")}>
+                <Subsection
+                  title={exploreLabel("blendModes")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("blendModes")}
+                >
                   <ExploreCheckboxGroup
                     variant="stack"
                     options={BLEND_MODE_OPTIONS}
@@ -614,7 +647,10 @@ export function LibraryPanel({
               )}
 
               {shows("effects") && (
-                <Subsection title={exploreLabel("effects")}>
+                <Subsection
+                  title={exploreLabel("effects")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("effects")}
+                >
                   <ExploreCheckboxGroup
                     variant="stack"
                     options={luckyEffectOptions}
@@ -639,7 +675,10 @@ export function LibraryPanel({
               )}
 
               {shows("animation") && (
-                <Subsection title={exploreLabel("animation")}>
+                <Subsection
+                  title={exploreLabel("animation")}
+                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("animation")}
+                >
                   <input
                     className="scalar-slider"
                     type="range"
@@ -673,10 +712,63 @@ export function LibraryPanel({
 
               <div className="lucky-actions">
                 <button
-                  className="full important"
+                  className="full important lucky-roll"
                   disabled={generating}
                   onClick={onGenerate}
                 >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <rect
+                      width="12"
+                      height="12"
+                      x="2"
+                      y="10"
+                      rx="2"
+                      ry="2"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <path
+                      d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M6 18h.01"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M10 14h.01"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M15 6h.01"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M18 9h.01"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                   Feeling lucky
                 </button>
                 <button

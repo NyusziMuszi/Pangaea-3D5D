@@ -28,6 +28,7 @@ import {
 import { Section, Field, ColorSwatch } from "./controls";
 import { PaletteColorList } from "./PaletteColorList";
 import { SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
+import { ShapeIcon } from "./ShapeIcon";
 import { exploreLabel, type ExploreSectionId } from "../state/exploreSections";
 import { ExploreCheckboxGroup } from "./ExploreCheckboxGroup";
 import {
@@ -852,6 +853,7 @@ export function PreferencesPanel({
                 selected={draft.project.lucky.shapes}
                 all={PRIMITIVE_MODELS}
                 optional
+                iconFor={(v) => <ShapeIcon shape={v} />}
                 onChange={(next) =>
                   mutateLucky((l) => {
                     l.shapes = next;

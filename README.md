@@ -262,6 +262,14 @@ An effect is an `EffectDef`: a GLSL snippet plus declared uniforms.
 - **shade** effects implement the body of `vec4 shade(vec4 color, vec2 uv, float t)` (fragment
   stage) and must `return color;`.
 
+**Built-in catalog** ([catalog.ts](src/renderer/src/engine/effects/catalog.ts) `BUILTIN_EFFECTS`):
+
+- **deform** — Ripple, Wave, Twist, Bulge, Noise Warp, Inflate / Breathe, Taper, Vortex, Jitter,
+  Displace, Relief / Emboss
+- **shade** — Fresnel / Rim Glow, Multiply, Mask (Displace/Relief/Fresnel sample this object's own
+  texture; Multiply/Mask sample the *other* object's via `pg_sampleOther` — see
+  `IMAGE_DEPENDENT_EFFECT_IDS` / `OTHER_OBJECT_EFFECT_IDS` in catalog.ts)
+
 [composer.ts](src/renderer/src/engine/effects/composer.ts) `composeObjectShader(effects, mapping)`
 concatenates all enabled deform/shade chunks into one `ShaderMaterial`, chaining outputs in stack
 order. Authors write **plain** uniform names (`uAmplitude`); the composer:
@@ -290,8 +298,8 @@ geometry signature — `primitive|model-present|mapping` — against the previou
 `setProject`/`renderFrame` pass; only a change rebuilds the mesh, so a transform-only edit
 (rotation, scale, position, a uniform value) reuses the existing geometry.
 
-- **primitive** — one of the 13 `PrimitiveModel`s (plane, landscape, sphere, portal, cylinder,
-  capsule, torus, box, lathe, knot, twist, polyhedron, dodecahedron) built by `primitiveGeometry()`.
+- **primitive** — one of the 13 `PrimitiveModel`s built by `primitiveGeometry()`: plane, landscape,
+  sphere, portal, cylinder, capsule, torus, box, lathe, knot, twist, polyhedron, dodecahedron.
 - **imported model** — a glb/gltf/obj's dominant mesh, normalized; UV or **triplanar** mapping for
   un-UV'd meshes, loaded via `loadModelGeometry()` ([loaders.ts](src/renderer/src/engine/loaders.ts)).
 

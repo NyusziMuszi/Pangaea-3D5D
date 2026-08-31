@@ -43,14 +43,25 @@ export const EXPLORE_SECTIONS: { id: ExploreSectionId; label: string }[] = [
   { id: "mappings", label: "Image mapping" },
   { id: "objectCounts", label: "Object #" },
   { id: "surfaces", label: "Object surface" },
-  { id: "rampColors", label: "Light colour" },
+  { id: "rampColors", label: "Light colour (Faceted, Depth)" },
   { id: "shapes", label: "Shapes" },
   { id: "colorSchemes", label: "Colour Rhythm" },
   { id: "textBackdrops", label: "Text background" },
-  { id: "blendModes", label: "Blend" },
+  { id: "blendModes", label: "Blend (Text)" },
   { id: "effects", label: "Effects pool" },
   { id: "animation", label: "Animations" },
 ];
+
+// Sections that start expanded in the Explore panel; every other visible
+// section renders folded. Explore has grown past a screenful, so showing all of
+// it open buries the roll button — folding the rarely-touched axes keeps every
+// control one click away without hiding that it exists. Not a per-target
+// branding choice: both builds open on the same three.
+export const EXPLORE_DEFAULT_OPEN: ReadonlySet<ExploreSectionId> = new Set([
+  "colors",
+  "images",
+  "animation",
+]);
 
 const LABELS: Record<ExploreSectionId, string> = Object.fromEntries(
   EXPLORE_SECTIONS.map((s) => [s.id, s.label]),
