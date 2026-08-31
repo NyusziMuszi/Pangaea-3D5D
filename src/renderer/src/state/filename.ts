@@ -1,8 +1,8 @@
 // Builds the shared filename stem.
-//   desktop: 3d5d-insta-MM-DD-HH-MM-object
-//   web:     MM-DD-HH-MM-object
-// "object" is the first object's label (see objectLabel), slugified for
-// filesystem/URL safety.
+//   desktop: 3d-5d-MM-DD-HH-MM-shape[-shape2]
+//   web:     MM-DD-HH-MM-shape[-shape2]
+// "shape[-shape2]" lists every object's label (see objectLabel), slugified
+// for filesystem/URL safety.
 import { objectLabel, type Project } from "../types";
 import { branding } from "@branding";
 
@@ -14,10 +14,11 @@ export function defaultStem(project: Project): string {
   const d = new Date();
   const pad = (n: number): string => String(n).padStart(2, "0");
   const stamp = `${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}`;
-  const first = project.objects[0];
-  const object = slug(first ? objectLabel(first) : "scene");
+  const shapes = project.objects.length
+    ? project.objects.map((o) => slug(objectLabel(o))).join("-")
+    : "scene";
   const prefix = `${branding.filenamePrefix}${stamp}`;
-  return `${prefix}-${object}`;
+  return `${prefix}-${shapes}`;
 }
 
 // Builds a unique default filename: [stem].[ext]
