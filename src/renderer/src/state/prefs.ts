@@ -9,7 +9,8 @@ import {
   type Project,
 } from "../types";
 import { BASE_PROJECT, BASE_SECOND_OBJECT } from "./defaultsBase";
-import { EXPLORE_SECTIONS, type ExploreSectionId } from "../ui/exploreSections";
+import { EXPLORE_SECTIONS, type ExploreSectionId } from "./exploreSections";
+import { LUCKY_EFFECTS } from "../engine/effects/catalog";
 import {
   applyTasteSignal,
   diffEditFeatures,
@@ -86,6 +87,12 @@ export function migrateLuckyConfig(lucky: Project["lucky"]): Project["lucky"] {
     surfaces: lucky.surfaces ?? BASE_PROJECT.lucky.surfaces,
     blendModes: lucky.blendModes ?? BASE_PROJECT.lucky.blendModes,
     textBackdrops: lucky.textBackdrops ?? BASE_PROJECT.lucky.textBackdrops,
+    // multiply/mask were once offered in the Explore pool but can never roll
+    // (see catalog.ts's OTHER_OBJECT_EFFECT_IDS). Drop them so a stored set can
+    // still reach "every option ticked", which collapses to undefined = all.
+    enabledEffectIds: lucky.enabledEffectIds?.filter((id) =>
+      LUCKY_EFFECTS.some((e) => e.id === id),
+    ),
     objectCounts: lucky.objectCounts ?? BASE_PROJECT.lucky.objectCounts,
     images: lucky.images ?? BASE_PROJECT.lucky.images,
     animation: lucky.animation ?? BASE_PROJECT.lucky.animation,

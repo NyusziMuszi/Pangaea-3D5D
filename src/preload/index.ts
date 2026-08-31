@@ -35,6 +35,9 @@ const api = {
     defaultName?: string
     filters?: { name: string; extensions: string[] }[]
   }): Promise<string | null> => ipcRenderer.invoke('dialog:saveFile', opts),
+  // Whether this host can grant a directory-scoped write (the image-sequence
+  // export needs one). True under Electron; the browser shim reports false.
+  canPickDirectory: true as boolean,
   openDirectoryDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openDirectory'),
   writeFile: (path: string, data: Uint8Array): Promise<{ ok: boolean; path: string }> =>
     ipcRenderer.invoke('file:write', { path, data }),

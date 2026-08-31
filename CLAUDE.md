@@ -101,10 +101,11 @@ Start with [types.ts](src/renderer/src/types.ts) (the `Project` data model), the
    order/ids/kinds/GLSL body); changing a uniform *value* just updates
    `material.uniforms[key].value` per frame — don't conflate the two paths.
 
-4. **Subject modes** (`plane` / `model` / `particles`) are rebuilt in
-   `Engine.reconcileSubject()` when `subjectSig` changes. `model` accepts a primitive or an
-   imported glb/gltf/obj (single dominant mesh, triplanar mapping if un-UV'd). `particles` uses a
-   separate particle `ShaderMaterial` driven by its own keyframeable `Scalar`s.
+4. **Object geometry** (`ObjectState.primitive`, one of 13 built-in shapes, or an imported
+   glb/gltf/obj) is rebuilt by each object's `ObjectSlot.reconcile()` in
+   [Engine.ts](src/renderer/src/engine/Engine.ts) only when its geometry signature (primitive +
+   model-present + mapping) changes — a transform-only edit reuses the existing mesh. An imported
+   model keeps its single dominant mesh geometry and gets triplanar mapping if un-UV'd.
 
 5. **State flow.** A single `Project` lives in the zustand store
    ([state/store.ts](src/renderer/src/state/store.ts)). Mutate only via `store.update(mutator)`

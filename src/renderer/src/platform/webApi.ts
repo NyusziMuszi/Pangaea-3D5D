@@ -89,7 +89,9 @@ const api: PangaeaApi = {
 
   // No folder-access API on the web build. The image-sequence export needs
   // batch disk writes, which only the desktop app can grant via a real
-  // directory-scoped dialog; fail fast with an actionable message.
+  // directory-scoped dialog; callers check this flag to hide the option, and
+  // openDirectoryDialog fails fast with an actionable message if one doesn't.
+  canPickDirectory: false,
   openDirectoryDialog: () =>
     Promise.reject(new Error('Image-sequence export needs the desktop app (folder access).')),
 

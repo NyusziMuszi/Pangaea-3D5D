@@ -94,6 +94,17 @@ export const PRIMITIVE_MODELS = [
 // the backdrop, so it moves in sync with the (hidden) scene.
 export type TextBackdrop = "none" | "silhouette" | "wireframe";
 
+// The backdrops "Feeling lucky" may roll: "none" is only reachable by hand, so
+// it is excluded from the Explore pool.
+export type ExploreTextBackdrop = Exclude<TextBackdrop, "none">;
+export const EXPLORE_TEXT_BACKDROPS = [
+  "silhouette", "wireframe",
+] as const satisfies readonly ExploreTextBackdrop[];
+
+// How many objects a roll may deal.
+export type ObjectCount = 1 | 2;
+export const OBJECT_COUNTS = [1, 2] as const satisfies readonly ObjectCount[];
+
 // How an object's surface is rendered: textured ("image", today's default —
 // shows the loaded image or the grey placeholder), as a flat "silhouette"
 // or "wireframe" drawn in surfaceColor, as a "faceted" solid — a two-colour
@@ -113,7 +124,7 @@ export const SURFACE_COLOR_LOW_DEFAULT = "#1a1a1a"; // depth far end
 
 // Which end-colour a faceted/depth ramp takes when Explore rolls one.
 export type RampColorMode = "white" | "black" | "coloured";
-export const RAMP_COLOR_MODES: RampColorMode[] = ["white", "black", "coloured"];
+export const RAMP_COLOR_MODES = ["white", "black", "coloured"] as const satisfies readonly RampColorMode[];
 
 // How the glyphs combine with whatever is beneath them (only applies when
 // textBackdrop is "silhouette"). "normal" is today's flat textColor fill;
@@ -129,6 +140,9 @@ export type TextBlendMode =
   | "exclusion"
   | "multiply"
   | "screen";
+export const TEXT_BLEND_MODES = [
+  "normal", "invert", "exclusion", "multiply", "screen",
+] as const satisfies readonly TextBlendMode[];
 
 // A "Feeling lucky" palette colour and which pools it may be drawn from.
 // roles is empty for a colour the user has parked (kept in the list, never
@@ -254,14 +268,14 @@ export interface Project {
   lucky: {
     colors: PaletteColor[];
     images: string[];
-    objectCounts: (1 | 2)[];
+    objectCounts: ObjectCount[];
     colorSchemes: ColorScheme[];
     // Which surfaces Explore may roll: the flat ones a non-image object may be
     // drawn from, plus "image" — with "image" unchecked, objects stay flat even
     // when palette images are loaded.
     surfaces: ObjectSurface[];
     blendModes: TextBlendMode[];
-    textBackdrops: ("silhouette" | "wireframe")[];
+    textBackdrops: ExploreTextBackdrop[];
     animation: number; // 0..1 overall animation amount
     // Which built-in effect IDs Lucky is allowed to pick from. Undefined = all.
     enabledEffectIds?: string[];

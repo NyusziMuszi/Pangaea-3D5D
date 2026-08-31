@@ -8,7 +8,6 @@ import {
   type ObjectSurface,
 } from "../types";
 import { defaultFilename, defaultStem } from "../state/filename";
-import { isWebBuild } from "../platform/isWeb";
 import { exportVideo, type ExportProgress } from "../engine/export/exporter";
 import { setPngDpi } from "../engine/export/pngDpi";
 import { getPrefs } from "../state/prefs";
@@ -295,7 +294,7 @@ export function ExportDialog({
           >
             <option value="mp4">MP4 video</option>
             <option value="png">Still frame (PNG, transparent)</option>
-            {!isWebBuild && (
+            {window.api.canPickDirectory && (
               <option value="sequence">
                 Image sequence (PNG, transparent)
               </option>

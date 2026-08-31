@@ -8,9 +8,15 @@ import { defaultObjectImage } from "../state/defaultsBase";
 import {
   constant,
   CAMERA_TYPES,
+  COLOR_SCHEMES,
+  EXPLORE_TEXT_BACKDROPS,
   MAPPINGS,
+  OBJECT_COUNTS,
+  OBJECT_SURFACES,
   PRIMITIVE_MODELS,
   RAMP_COLOR_MODES,
+  TEXT_BLEND_MODES,
+  type EffectKind,
   type ObjectState,
   type Project,
   type Scalar,
@@ -22,7 +28,16 @@ import {
 import { Section, Field, ColorSwatch } from "./controls";
 import { PaletteColorList } from "./PaletteColorList";
 import { SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
-import type { ExploreSectionId } from "./exploreSections";
+import { exploreLabel, type ExploreSectionId } from "../state/exploreSections";
+import { ExploreCheckboxGroup } from "./ExploreCheckboxGroup";
+import {
+  BLEND_MODE_OPTIONS,
+  COLOR_SCHEME_OPTIONS,
+  MAPPING_OPTIONS,
+  OBJECT_COUNT_OPTIONS,
+  RAMP_COLOR_OPTIONS,
+  TEXT_BACKDROP_OPTIONS,
+} from "./exploreOptions";
 import { Modal } from "./Modal";
 import {
   setCustomTextCardFont,
@@ -30,16 +45,7 @@ import {
   TEXT_CARD_FONT_FAMILY,
 } from "../engine/fonts";
 import { bytesToDataUrl } from "./files";
-import { BUILTIN_EFFECTS } from "../engine/effects/catalog";
-
-const SCHEMES = ["byType", "byPair", "random"] as const;
-type ColorScheme = (typeof SCHEMES)[number];
-
-const SCHEME_LABELS: Record<ColorScheme, string> = {
-  byType: "~ + ~ + ~ +",
-  byPair: "~ ~ + + x x",
-  random: "Random",
-};
+import { LUCKY_EFFECTS } from "../engine/effects/catalog";
 
 // Extension -> font mime, embedded in the stored data URL. The browser parses
 // the face by content, so an approximate mime is fine.
@@ -125,6 +131,69 @@ function SelectField<T extends string>({
   );
 }
 
+// Wraps an already-labeled group (a <Field>, <ColorList>, or <NumField> — each
+// renders its own Field internally) with a visibility checkbox. The checkbox is
+// a sibling, not nested inside the group's <label>, since Field wraps its
+// children in a <label> and nesting an input there would make any click inside
+// the group also toggle visibility.
+//
+// Module scope, not a closure in the render body: a component declared inside a
+// component is a fresh component *type* every render, so React would remount
+// each wrapped group (PaletteColorList included) on every keystroke.
+function ExploreField({
+  id,
+  draft,
+  onToggle,
+  children,
+}: {
+  id: ExploreSectionId;
+  draft: Draft;
+  onToggle: (id: ExploreSectionId) => void;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <div className="prefs-explore-field">
+      <input
+        type="checkbox"
+        title="Show in the Explore panel"
+        checked={draft.exploreSections.includes(id)}
+        onChange={() => onToggle(id)}
+      />
+      {children}
+    </div>
+  );
+}
+
+// One kind's worth of the Explore effects pool. Deform and Shade rendered the
+// same block verbatim before this.
+function EffectKindField({
+  kind,
+  label,
+  draft,
+  onChange,
+}: {
+  kind: EffectKind;
+  label: string;
+  draft: Draft;
+  onChange: (next: string[] | undefined) => void;
+}): JSX.Element {
+  return (
+    <Field label={label} stacked>
+      <ExploreCheckboxGroup
+        variant="inline"
+        options={LUCKY_EFFECTS.filter((e) => e.kind === kind).map((e) => ({
+          value: e.id,
+          label: e.name,
+        }))}
+        selected={draft.project.lucky.enabledEffectIds}
+        all={LUCKY_EFFECTS.map((e) => e.id)}
+        optional
+        onChange={onChange}
+      />
+    </Field>
+  );
+}
+
 function makeTextStyle(): TextStyle {
   return {
     content: "New text",
@@ -184,30 +253,6 @@ export function PreferencesPanel({
         : [...d.exploreSections, id];
     });
 
-  // Wraps an already-labeled group (a <Field>, <ColorList>, or <NumField> —
-  // each renders its own Field internally) with a visibility checkbox. The
-  // checkbox is a sibling, not nested inside the group's <label>, since Field
-  // wraps its children in a <label> and nesting an input there would make any
-  // click inside the group also toggle visibility.
-  function ExploreField({
-    id,
-    children,
-  }: {
-    id: ExploreSectionId;
-    children: ReactNode;
-  }): JSX.Element {
-    return (
-      <div className="prefs-explore-field">
-        <input
-          type="checkbox"
-          title="Show in the Explore panel"
-          checked={draft.exploreSections.includes(id)}
-          onChange={() => toggleSection(id)}
-        />
-        {children}
-      </div>
-    );
-  }
 
   function rerenderCards(): void {
     const proj = useStore.getState().project;
@@ -670,76 +715,31 @@ export function PreferencesPanel({
               enabled by default — uncheck any you never want generated.
             </p>
           </div>
-          <Field label="Deform" stacked>
-            <span className="field-control">
-              {BUILTIN_EFFECTS.filter((e) => e.kind === "deform").map((e) => (
-                <label key={e.id} className="checkbox-inline-label">
-                  <input
-                    type="checkbox"
-                    checked={
-                      !draft.project.lucky.enabledEffectIds ||
-                      draft.project.lucky.enabledEffectIds.includes(e.id)
-                    }
-                    onChange={() =>
-                      mutateLucky((l) => {
-                        const all = BUILTIN_EFFECTS.map((x) => x.id);
-                        const current = l.enabledEffectIds ?? all;
-                        const idx = current.indexOf(e.id);
-                        if (idx >= 0) {
-                          l.enabledEffectIds = current.filter(
-                            (id) => id !== e.id,
-                          );
-                        } else {
-                          const next = [...current, e.id];
-                          l.enabledEffectIds =
-                            next.length === all.length ? undefined : next;
-                        }
-                      })
-                    }
-                  />{" "}
-                  {e.name}
-                </label>
-              ))}
-            </span>
-          </Field>
+          <EffectKindField
+            kind="deform"
+            label="Deform"
+            draft={draft}
+            onChange={(next) =>
+              mutateLucky((l) => {
+                l.enabledEffectIds = next;
+              })
+            }
+          />
           <hr className="prefs-hr" />
-
-          <Field label="Shade" stacked>
-            <span className="field-control">
-              {BUILTIN_EFFECTS.filter((e) => e.kind === "shade").map((e) => (
-                <label key={e.id} className="checkbox-inline-label">
-                  <input
-                    type="checkbox"
-                    checked={
-                      !draft.project.lucky.enabledEffectIds ||
-                      draft.project.lucky.enabledEffectIds.includes(e.id)
-                    }
-                    onChange={() =>
-                      mutateLucky((l) => {
-                        const all = BUILTIN_EFFECTS.map((x) => x.id);
-                        const current = l.enabledEffectIds ?? all;
-                        const idx = current.indexOf(e.id);
-                        if (idx >= 0) {
-                          l.enabledEffectIds = current.filter(
-                            (id) => id !== e.id,
-                          );
-                        } else {
-                          const next = [...current, e.id];
-                          l.enabledEffectIds =
-                            next.length === all.length ? undefined : next;
-                        }
-                      })
-                    }
-                  />{" "}
-                  {e.name}
-                </label>
-              ))}
-            </span>
-          </Field>
+          <EffectKindField
+            kind="shade"
+            label="Shade"
+            draft={draft}
+            onChange={(next) =>
+              mutateLucky((l) => {
+                l.enabledEffectIds = next;
+              })
+            }
+          />
         </Section>
 
         <Section title="Explore" defaultOpen={false}>
-          <ExploreField id="colors">
+          <ExploreField id="colors" draft={draft} onToggle={toggleSection}>
             <PaletteColorList
               colors={draft.project.lucky.colors}
               onMutate={(fn) =>
@@ -750,8 +750,8 @@ export function PreferencesPanel({
             />
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="images">
-            <Field label="Palette images" stacked>
+          <ExploreField id="images" draft={draft} onToggle={toggleSection}>
+            <Field label={exploreLabel("images")} stacked>
               <span className="field-control">
                 {draft.project.lucky.images.length} image
                 {draft.project.lucky.images.length === 1 ? "" : "s"}
@@ -770,247 +770,148 @@ export function PreferencesPanel({
             </Field>
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="objectCounts">
-            <Field label="Objects" stacked>
-              <span className="field-control">
-                {([1, 2] as const).map((n, i) => (
-                  <label key={n} className="checkbox-inline-label">
-                    <input
-                      type="checkbox"
-                      checked={draft.project.lucky.objectCounts.includes(n)}
-                      onChange={() =>
-                        mutateLucky((l) => {
-                          const idx = l.objectCounts.indexOf(n);
-                          if (idx >= 0) l.objectCounts.splice(idx, 1);
-                          else l.objectCounts.push(n);
-                        })
-                      }
-                    />{" "}
-                    {i === 0 ? "Mono" : "Duo"}
-                  </label>
-                ))}
-              </span>
+          <ExploreField id="mappings" draft={draft} onToggle={toggleSection}>
+            <Field label={exploreLabel("mappings")} stacked>
+              <ExploreCheckboxGroup
+                variant="inline"
+                options={MAPPING_OPTIONS}
+                selected={draft.project.lucky.mappings}
+                all={MAPPINGS}
+                optional
+                onChange={(next) =>
+                  mutateLucky((l) => {
+                    l.mappings = next;
+                  })
+                }
+              />
             </Field>
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="surfaces">
-            <Field label="Object surface" stacked>
-              <span className="field-control">
-                {SURFACE_OPTIONS.map((o) => (
-                  <label
-                    key={o.value}
-                    className="checkbox-inline-label"
-                    title={
-                      o.value === "image" && !draft.project.lucky.images.length
-                        ? "Add images to the palette to explore image surfaces"
-                        : undefined
-                    }
-                  >
-                    <input
-                      type="checkbox"
-                      checked={draft.project.lucky.surfaces.includes(o.value)}
-                      disabled={o.value === "image" && !draft.project.lucky.images.length}
-                      onChange={() =>
-                        mutateLucky((l) => {
-                          const idx = l.surfaces.indexOf(o.value);
-                          if (idx >= 0) l.surfaces.splice(idx, 1);
-                          else l.surfaces.push(o.value);
-                        })
-                      }
-                    />{" "}
-                    {o.label}
-                  </label>
-                ))}
-              </span>
+          <ExploreField id="objectCounts" draft={draft} onToggle={toggleSection}>
+            <Field label={exploreLabel("objectCounts")} stacked>
+              <ExploreCheckboxGroup
+                variant="inline"
+                options={OBJECT_COUNT_OPTIONS}
+                selected={draft.project.lucky.objectCounts}
+                all={OBJECT_COUNTS}
+                onChange={(next) =>
+                  mutateLucky((l) => {
+                    if (next) l.objectCounts = next;
+                  })
+                }
+              />
             </Field>
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="rampColors">
-            <Field label="Light colour" stacked>
-              <span className="field-control">
-                {(
-                  [
-                    ["white", "White"],
-                    ["black", "Black"],
-                    ["coloured", "Coloured"],
-                  ] as const
-                ).map(([v, label]) => (
-                  <label key={v} className="checkbox-inline-label">
-                    <input
-                      type="checkbox"
-                      checked={
-                        !draft.project.lucky.rampColors ||
-                        draft.project.lucky.rampColors.includes(v)
-                      }
-                      onChange={() =>
-                        mutateLucky((l) => {
-                          const all = RAMP_COLOR_MODES;
-                          const current = l.rampColors ?? all;
-                          const idx = current.indexOf(v);
-                          const next =
-                            idx >= 0
-                              ? current.filter((x) => x !== v)
-                              : [...current, v];
-                          l.rampColors =
-                            next.length === all.length ? undefined : next;
-                        })
-                      }
-                    />{" "}
-                    {label}
-                  </label>
-                ))}
-              </span>
+          <ExploreField id="surfaces" draft={draft} onToggle={toggleSection}>
+            <Field label={exploreLabel("surfaces")} stacked>
+              <ExploreCheckboxGroup
+                variant="inline"
+                options={SURFACE_OPTIONS}
+                selected={draft.project.lucky.surfaces}
+                all={OBJECT_SURFACES}
+                disabledFor={(v) =>
+                  v === "image" && !draft.project.lucky.images.length
+                }
+                titleFor={(v) =>
+                  v === "image" && !draft.project.lucky.images.length
+                    ? "Add images to the palette to explore image surfaces"
+                    : undefined
+                }
+                onChange={(next) =>
+                  mutateLucky((l) => {
+                    if (next) l.surfaces = next;
+                  })
+                }
+              />
             </Field>
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="shapes">
-            <Field label="Shapes" stacked>
-              <span className="field-control">
-                {PRIMITIVE_OPTIONS.map((o) => (
-                  <label key={o.value} className="checkbox-inline-label">
-                    <input
-                      type="checkbox"
-                      checked={
-                        !draft.project.lucky.shapes ||
-                        draft.project.lucky.shapes.includes(o.value)
-                      }
-                      onChange={() =>
-                        mutateLucky((l) => {
-                          const all = [...PRIMITIVE_MODELS];
-                          const current = l.shapes ?? all;
-                          const idx = current.indexOf(o.value);
-                          if (idx >= 0) {
-                            const next = current.filter((m) => m !== o.value);
-                            l.shapes = next.length ? next : all;
-                          } else {
-                            const next = [...current, o.value];
-                            l.shapes =
-                              next.length === all.length ? undefined : next;
-                          }
-                        })
-                      }
-                    />{" "}
-                    {o.label}
-                  </label>
-                ))}
-              </span>
+          <ExploreField id="rampColors" draft={draft} onToggle={toggleSection}>
+            <Field label={exploreLabel("rampColors")} stacked>
+              <ExploreCheckboxGroup
+                variant="inline"
+                options={RAMP_COLOR_OPTIONS}
+                selected={draft.project.lucky.rampColors}
+                all={RAMP_COLOR_MODES}
+                optional
+                onChange={(next) =>
+                  mutateLucky((l) => {
+                    l.rampColors = next;
+                  })
+                }
+              />
             </Field>
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="colorSchemes">
-            <Field label="Colour Rhythm" stacked>
-              <span className="field-control">
-                {SCHEMES.map((s) => (
-                  <label key={s} className="checkbox-inline-label">
-                    <input
-                      type="checkbox"
-                      checked={draft.project.lucky.colorSchemes.includes(s)}
-                      onChange={() =>
-                        mutateLucky((l) => {
-                          const idx = l.colorSchemes.indexOf(s as ColorScheme);
-                          if (idx >= 0) l.colorSchemes.splice(idx, 1);
-                          else l.colorSchemes.push(s as ColorScheme);
-                        })
-                      }
-                    />{" "}
-                    {SCHEME_LABELS[s]}
-                  </label>
-                ))}
-              </span>
+          <ExploreField id="shapes" draft={draft} onToggle={toggleSection}>
+            <Field label={exploreLabel("shapes")} stacked>
+              <ExploreCheckboxGroup
+                variant="inline"
+                options={PRIMITIVE_OPTIONS}
+                selected={draft.project.lucky.shapes}
+                all={PRIMITIVE_MODELS}
+                optional
+                onChange={(next) =>
+                  mutateLucky((l) => {
+                    l.shapes = next;
+                  })
+                }
+              />
             </Field>
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="textBackdrops">
-            <Field label="Text background" stacked>
-              <span className="field-control">
-                {(["silhouette", "wireframe"] as const).map((v) => (
-                  <label key={v} className="checkbox-inline-label">
-                    <input
-                      type="checkbox"
-                      checked={draft.project.lucky.textBackdrops.includes(v)}
-                      onChange={() =>
-                        mutateLucky((l) => {
-                          const idx = l.textBackdrops.indexOf(v);
-                          if (idx >= 0) l.textBackdrops.splice(idx, 1);
-                          else l.textBackdrops.push(v);
-                        })
-                      }
-                    />{" "}
-                    {v.charAt(0).toUpperCase() + v.slice(1)}
-                  </label>
-                ))}
-              </span>
+          <ExploreField id="colorSchemes" draft={draft} onToggle={toggleSection}>
+            <Field label={exploreLabel("colorSchemes")} stacked>
+              <ExploreCheckboxGroup
+                variant="inline"
+                options={COLOR_SCHEME_OPTIONS}
+                selected={draft.project.lucky.colorSchemes}
+                all={COLOR_SCHEMES}
+                onChange={(next) =>
+                  mutateLucky((l) => {
+                    if (next) l.colorSchemes = next;
+                  })
+                }
+              />
             </Field>
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="blendModes">
-            <Field label="Blend" stacked>
-              <span className="field-control">
-                {(
-                  [
-                    "normal",
-                    "invert",
-                    "exclusion",
-                    "multiply",
-                    "screen",
-                  ] as const satisfies readonly TextBlendMode[]
-                ).map((v) => (
-                  <label key={v} className="checkbox-inline-label">
-                    <input
-                      type="checkbox"
-                      checked={draft.project.lucky.blendModes.includes(v)}
-                      onChange={() =>
-                        mutateLucky((l) => {
-                          const idx = l.blendModes.indexOf(v);
-                          if (idx >= 0) l.blendModes.splice(idx, 1);
-                          else l.blendModes.push(v);
-                        })
-                      }
-                    />{" "}
-                    {v.charAt(0).toUpperCase() + v.slice(1)}
-                  </label>
-                ))}
-              </span>
+          <ExploreField id="textBackdrops" draft={draft} onToggle={toggleSection}>
+            <Field label={exploreLabel("textBackdrops")} stacked>
+              <ExploreCheckboxGroup
+                variant="inline"
+                options={TEXT_BACKDROP_OPTIONS}
+                selected={draft.project.lucky.textBackdrops}
+                all={EXPLORE_TEXT_BACKDROPS}
+                onChange={(next) =>
+                  mutateLucky((l) => {
+                    if (next) l.textBackdrops = next;
+                  })
+                }
+              />
             </Field>
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="mappings">
-            <Field label="Image mapping" stacked>
-              <span className="field-control">
-                {MAPPINGS.map((v) => (
-                  <label key={v} className="checkbox-inline-label">
-                    <input
-                      type="checkbox"
-                      checked={
-                        !draft.project.lucky.mappings ||
-                        draft.project.lucky.mappings.includes(v)
-                      }
-                      onChange={() =>
-                        mutateLucky((l) => {
-                          const all = [...MAPPINGS];
-                          const current = l.mappings ?? all;
-                          const idx = current.indexOf(v);
-                          if (idx >= 0) {
-                            const next = current.filter((m) => m !== v);
-                            l.mappings = next.length ? next : all;
-                          } else {
-                            const next = [...current, v];
-                            l.mappings =
-                              next.length === all.length ? undefined : next;
-                          }
-                        })
-                      }
-                    />{" "}
-                    {v === "uv" ? "UV" : v.charAt(0).toUpperCase() + v.slice(1)}
-                  </label>
-                ))}
-              </span>
+          <ExploreField id="blendModes" draft={draft} onToggle={toggleSection}>
+            <Field label={exploreLabel("blendModes")} stacked>
+              <ExploreCheckboxGroup
+                variant="inline"
+                options={BLEND_MODE_OPTIONS}
+                selected={draft.project.lucky.blendModes}
+                all={TEXT_BLEND_MODES}
+                onChange={(next) =>
+                  mutateLucky((l) => {
+                    if (next) l.blendModes = next;
+                  })
+                }
+              />
             </Field>
           </ExploreField>
           <hr className="prefs-hr" />
-          <ExploreField id="animation">
+          <ExploreField id="animation" draft={draft} onToggle={toggleSection}>
             <NumField
-              label="Animations"
+              label={exploreLabel("animation")}
               value={draft.project.lucky.animation}
               step={0.05}
               min={0}

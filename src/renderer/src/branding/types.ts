@@ -14,7 +14,7 @@ import type {
   RampColorMode,
   TextBlendMode,
 } from "../types";
-import type { ExploreSectionId } from "../ui/exploreSections"; // type-only: no runtime cycle
+import type { ExploreSectionId } from "../state/exploreSections"; // type-only: no runtime cycle
 
 export interface BrandTextCard {
   content: string;
@@ -59,4 +59,6 @@ export interface Branding {
   lucky: BrandLucky;
   /** Which Explore sections a fresh install shows by default. */
   exploreSections: ExploreSectionId[];
+  /** Prepended to every exported/saved filename stem (see state/filename.ts). */
+  filenamePrefix: string;
 }

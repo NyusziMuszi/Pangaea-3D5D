@@ -71,4 +71,5 @@ export const branding: Branding = {
     "animation",
     "rampColors",
   ],
+  filenamePrefix: "3d5d-insta-",
 };

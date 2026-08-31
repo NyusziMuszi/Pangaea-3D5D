@@ -68,4 +68,5 @@ export const branding: Branding = {
     "blendModes",
     "animation",
   ],
+  filenamePrefix: "",
 };

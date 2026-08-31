@@ -58,6 +58,7 @@ import { branding } from "@branding";
 import {
   BUILTIN_EFFECTS,
   IMAGE_DEPENDENT_EFFECT_IDS,
+  OTHER_OBJECT_EFFECT_IDS,
 } from "../engine/effects/catalog";
 import {
   defaultObjectImage,
@@ -76,12 +77,12 @@ import {
 const clamp = (v: number, lo: number, hi: number): number =>
   Math.max(lo, Math.min(hi, v));
 
-function pick<T>(arr: T[]): T {
+function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 // Pick `n` distinct elements from `arr` (or all of them if n exceeds length).
-function pickDistinct<T>(arr: T[], n: number): T[] {
+function pickDistinct<T>(arr: readonly T[], n: number): T[] {
   const pool = arr.slice();
   const out: T[] = [];
   while (out.length < n && pool.length) {
@@ -686,12 +687,6 @@ export function generateLuckyScene(
   const isEnabled = (id: string): boolean =>
     !enabledIds?.length || enabledIds.includes(id);
   const imageIdx = objects.findIndex((o) => o.surface === "image");
-  // multiply/mask sample the *other* object's texture (pg_sampleOther), but a
-  // lucky roll only ever deals one object an image (dressObject above) — the
-  // other slot always reads the grey placeholder, making them a flat-darken /
-  // flat-alpha-dim no-op. Left out of the lucky pool; still pickable by hand
-  // in the Library.
-  const OTHER_OBJECT_EFFECT_IDS = new Set(["multiply", "mask"]);
   const generalPool = BUILTIN_EFFECTS.filter(
     (d) =>
       d.kind === "deform" &&

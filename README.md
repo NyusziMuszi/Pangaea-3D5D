@@ -26,7 +26,7 @@ exports a valid file; `ffmpeg` confirms `h264 (High) yuv420p, 1080x1350, 30 fps`
 | Electron shell + IPC file I/O                             | ✅                                                   |
 | Time-pure render engine (preview + export share one path) | ✅                                                   |
 | Effect stack (GLSL chunk injection) + built-in catalog    | ✅                                                   |
-| Subject modes: plane / 3D model / particles               | ✅                                                   |
+| 13 primitive shapes + imported glb/gltf/obj, up to 2 objects | ✅                                                 |
 | 6-segment timeline + colored text cards                   | ✅                                                   |
 | Keyframes + easing on every scalar property               | ✅ (diamond toggles; **no bezier curve editor yet**) |
 | In-app GLSL editor (live recompile, uniform auto-UI)      | ✅ (plain textarea, **not Monaco yet**)              |
@@ -129,6 +129,7 @@ How each `window.api` method maps in the browser:
 | `readImagePath` (absolute disk path)   | in-memory `handleStore`, keyed by a `webfile:` handle   |
 | `readPreferences` / `writePreferences` | `localStorage['pangaea:prefs']`                         |
 | `encodeFrames` (ffmpeg fallback)       | rejects — the browser has no ffmpeg main process        |
+| `openDirectoryDialog` (sequence export)| `canPickDirectory: false` hides the option; calling it rejects |
 
 Web-specific limitations:
 
@@ -140,6 +141,8 @@ Web-specific limitations:
   Making them portable would mean embedding the bytes in the `Project`, which also affects Electron
   — out of scope for now.
 - **Saves and exports are downloads only** — no silent save-to-folder.
+- **Image-sequence export is desktop-only** — it needs a directory-scoped write, which browsers
+  don't grant; the option is hidden when `window.api.canPickDirectory` is false.
 
 ---
 
@@ -175,19 +178,19 @@ src/
         taste.ts           TasteProfile model + weighted pick/learn for "Feeling lucky"
         lucky.ts           generateLuckyScene() — the "Feeling lucky" random-scene generator
         assets.ts          image asset registry (bytes keyed by id, referenced from Project)
-        filename.ts        defaultFilename() for save/export dialogs
+        filename.ts        defaultStem(project) / defaultFilename(project, ext) for save/export dialogs
+        exploreSections.ts ExploreSectionId, EXPLORE_SECTIONS, toggleExploreSet() — Explore panel config
       engine/
-        Engine.ts          THE core: scene/camera/subject/overlay, reconcile, renderFrame(t), playback
+        Engine.ts          THE core: scene/camera/objects/overlay, reconcile, renderFrame(t), playback
         engineSingleton.ts single Engine instance (creates the WebGL context at import)
         animatable.ts      evalScalar(scalar, t) — keyframe interpolation + easing
         timeline.ts        computeTimeline(project, t) — active segment, scene clock, card opacity
         textOverlay.ts     renderTextCard() → canvas; TextOverlay fullscreen quad
-        loaders.ts         loadImage(), loadModelGeometry() (glb/gltf/obj)
+        loaders.ts         loadModelGeometry() (glb/gltf/obj)
         fonts.ts           setCustomTextCardFont() / revertTextCardFont() for custom card fonts
         effects/
-          catalog.ts       BUILTIN_EFFECTS (EffectDef[]) + findEffectDef()
-          composer.ts      composeSubjectShader() — stacks GLSL chunks into one ShaderMaterial
-          particle.ts      particle ShaderMaterial + buildParticleGeometry()
+          catalog.ts       BUILTIN_EFFECTS (EffectDef[]) + findEffectDef(); LUCKY_EFFECTS for Explore's pool
+          composer.ts      composeObjectShader() — stacks GLSL chunks into one ShaderMaterial
         export/
           exporter.ts      exportVideo() — WebCodecs primary, ffmpeg fallback
       ui/                  React panels + controls (see UI section), plus:
@@ -196,10 +199,15 @@ src/
         Modal.tsx          shared modal chrome (ExportDialog, ShaderEditorModal, PreferencesPanel)
         ProjectActions.tsx New / Open / Save / Export / Preferences
         objectOptions.ts   PRIMITIVE_OPTIONS / SURFACE_OPTIONS — labeled dropdown options
+        exploreOptions.ts  labelled option lists for the Explore checkbox groups
+        ExploreCheckboxGroup.tsx  shared selection logic behind every Explore option set
+        PaletteColorList.tsx  the "Palette: Colours" Explore section, shared by both panels
         accent.ts          accent-colour helpers for UI theming
-        scalarUtils.ts     toggleKeyAt/setValueAt/startAnimating/stopAnimating for ScalarControl
+        scalarUtils.ts     toggleKeyAt/setValueAt/startAnimating for ScalarControl
       platform/
         webApi.ts          browser window.api shim for the static web build (absent under Electron)
+      branding/
+        electron.ts / web.ts  per-target colours/fonts/copy, lucky factory defaults (@branding alias)
 ```
 
 ---
@@ -238,7 +246,7 @@ type Scalar =
 `evalScalar` interpolates between keyframes with per-keyframe easing
 (`linear|easeIn|easeOut|easeInOut|hold`). UI keyframing helpers live in
 [ui/scalarUtils.ts](src/renderer/src/ui/scalarUtils.ts) (`toggleKeyAt`, `setValueAt`,
-`startAnimating`, `stopAnimating`). The `<ScalarControl>` component renders the slider + the
+`startAnimating`). The `<ScalarControl>` component renders the slider + the
 ◆ diamond that adds/removes a keyframe at the current playhead.
 
 ### 3. The effect module contract + composer
@@ -250,7 +258,7 @@ An effect is an `EffectDef`: a GLSL snippet plus declared uniforms.
 - **shade** effects implement the body of `vec4 shade(vec4 color, vec2 uv, float t)` (fragment
   stage) and must `return color;`.
 
-[composer.ts](src/renderer/src/engine/effects/composer.ts) `composeSubjectShader(effects, mapping)`
+[composer.ts](src/renderer/src/engine/effects/composer.ts) `composeObjectShader(effects, mapping)`
 concatenates all enabled deform/shade chunks into one `ShaderMaterial`, chaining outputs in stack
 order. Authors write **plain** uniform names (`uAmplitude`); the composer:
 
@@ -270,22 +278,27 @@ order. Authors write **plain** uniform names (`uAmplitude`); the composer:
 GLSL compile errors are surfaced through `Engine.onShaderError` (wired to
 `renderer.debug.onShaderError`) and shown in the shader editor.
 
-### 4. Subject modes
+### 4. Object geometry
 
-`Engine.reconcileSubject()` rebuilds geometry when `subjectSig` changes
-(`mode|primitive|model?|mapping|density|imageReady`):
+Each of `Project.objects`' up to 2 entries is rendered by its own `ObjectSlot` (a private class
+inside [Engine.ts](src/renderer/src/engine/Engine.ts)). `ObjectSlot.reconcile()` compares a
+geometry signature — `primitive|model-present|mapping` — against the previous one on every
+`setProject`/`renderFrame` pass; only a change rebuilds the mesh, so a transform-only edit
+(rotation, scale, position, a uniform value) reuses the existing geometry.
 
-- `plane` — subdivided `PlaneGeometry`, the canvas for deformers.
-- `model` — one of the 12 `PrimitiveModel`s (plane, sphere, portal, cylinder, capsule, torus, box,
-  lathe, knot, twist, polyhedron, dodecahedron) **or** an imported glb/gltf/obj (dominant mesh,
-  normalized; UV or **triplanar** mapping for un-UV'd meshes). Uses the composed ShaderMaterial, so
-  deformers/shaders apply to it too. Each object's **surface** is `image` (textured, default),
-  `silhouette`/`wireframe` (flat-filled or edge-only in `surfaceColor`), or `faceted` (flat-shaded
-  by a fixed light so facets read). `Project.objects` may hold 1 or 2 objects — a second object is a
-  full peer (its own shape/transform/effects) that may additionally sample the first object's
-  texture (used by multiply/mask-style effects).
-- `particles` — image sampled into a colored point cloud; uses the separate particle material
-  with its own controls on `subject.particle` (also `Scalar`s, also keyframeable).
+- **primitive** — one of the 13 `PrimitiveModel`s (plane, landscape, sphere, portal, cylinder,
+  capsule, torus, box, lathe, knot, twist, polyhedron, dodecahedron) built by `primitiveGeometry()`.
+- **imported model** — a glb/gltf/obj's dominant mesh, normalized; UV or **triplanar** mapping for
+  un-UV'd meshes, loaded via `loadModelGeometry()` ([loaders.ts](src/renderer/src/engine/loaders.ts)).
+
+Either way the mesh shares the same composed `ShaderMaterial`, so deformers/shaders apply
+uniformly. Each object's **surface** — independent of its geometry, and reconciled separately by
+`reconcileMaterial()` — is `image` (textured, default), `silhouette`/`wireframe` (flat-filled or
+edge-only in `surfaceColor`), `faceted` (a two-colour ramp between `surfaceColor` and
+`surfaceColorLight`, driven by a fixed light so facets read), or `depth` (a two-colour ramp between
+`surfaceColor` and `surfaceColorLow`, driven by distance to the camera). A second object is a full
+peer (its own shape/transform/effects) that may additionally sample the first object's texture
+(used by multiply/mask-style effects).
 
 ### 5. Timeline & text cards
 
@@ -312,14 +325,16 @@ a data URL.
 ## UI map
 
 - [ProjectActions.tsx](src/renderer/src/ui/ProjectActions.tsx) — New / Open / Save / Export / Preferences.
-- [LibraryPanel.tsx](src/renderer/src/ui/LibraryPanel.tsx) — image, subject mode/primitive/mapping/
-  model import, effect catalog (Add), `+ Shader` (author custom).
+- [LibraryPanel.tsx](src/renderer/src/ui/LibraryPanel.tsx) — the "Feeling lucky" Explore panel
+  (palette, object/effect/animation pools, generate), Scene (camera), and the effect catalog
+  (Add) / `+ Shader` (author custom).
 - [PreviewPanel.tsx](src/renderer/src/ui/PreviewPanel.tsx) — mounts the engine canvas (aspect-locked
   1080/1350), transport (play/scrub), segment ticks.
 - [TimelinePanel.tsx](src/renderer/src/ui/TimelinePanel.tsx) — segment regions (select) + the
   ordered effect stack (enable/reorder/remove).
 - [InspectorPanel.tsx](src/renderer/src/ui/InspectorPanel.tsx) — context-sensitive: selected
-  effect's uniforms, selected segment/text props, plus Subject / Camera / Scene sections.
+  effect's uniforms, selected segment's Text/Background props, or the active object's Shape
+  section (type, mapping, surface, transforms).
 - [ShaderEditorModal.tsx](src/renderer/src/ui/ShaderEditorModal.tsx) — GLSL body editor + uniform
   list editor; recompiles live, shows compile errors.
 - [ExportDialog.tsx](src/renderer/src/ui/ExportDialog.tsx) — fps/duration/quality, progress, cancel.
@@ -347,8 +362,12 @@ modified `color`. (The post-FX catalog is intentionally thin; this is the place 
 uniforms you'd extend `UniformDef`, the composer's declaration/alias generation, `valueOf`, and a
 new control in `controls.tsx`.
 
-**Add a subject mode** — extend `SubjectMode` in types, add a branch in `Engine.rebuildSubject()`,
-and include the discriminator in `subjectSig`.
+**Add a primitive shape** — extend `PRIMITIVE_MODELS` in [types.ts](src/renderer/src/types.ts)
+and add a case to `primitiveGeometry()` in [Engine.ts](src/renderer/src/engine/Engine.ts). It picks
+up PRIMITIVE_OPTIONS (dropdowns) and the Explore shapes pool automatically.
+
+**Add an object surface** — extend `ObjectSurface` in types.ts, add its shading branch in
+`ObjectSlot.reconcileMaterial()`, and a case in `SURFACE_OPTIONS` (objectOptions.ts).
 
 **Add output sizes** — `output.width/height` already flow through the engine and exporter; the
 renderer is resolution-agnostic. Add a picker in the Export dialog / project settings and the
@@ -377,7 +396,7 @@ hand-edit) bump a per-axis `TasteProfile` score that biases future rolls via `pi
 [ui/LockPanel.tsx](src/renderer/src/ui/LockPanel.tsx) lets the user pin categories
 (colours/motion/effects/objects) so a roll leaves them untouched.
 
-**Object surfaces** — see invariant #4 above (`image`/`silhouette`/`wireframe`/`faceted`).
+**Object surfaces** — see invariant #4 above (`image`/`silhouette`/`wireframe`/`faceted`/`depth`).
 
 **Text blend modes + backdrops** — a text card can show a `textBackdrop` (`silhouette` or
 `wireframe` render of the object, still animated by the active deformers) instead of the flat

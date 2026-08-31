@@ -9,14 +9,19 @@ import { activeObjectIndex, useStore } from "../state/store";
 import {
   BUILTIN_EFFECTS,
   IMAGE_DEPENDENT_EFFECT_IDS,
+  LUCKY_EFFECTS,
 } from "../engine/effects/catalog";
 import { instanceFromDef, uid } from "../state/defaults";
 import { getPrefs, usePrefs } from "../state/prefs";
 import {
   COLOR_SCHEMES,
+  EXPLORE_TEXT_BACKDROPS,
   MAPPINGS,
+  OBJECT_COUNTS,
   OBJECT_SURFACES,
+  PRIMITIVE_MODELS,
   RAMP_COLOR_MODES,
+  TEXT_BLEND_MODES,
   type CameraType,
   type EffectDef,
   type ObjectState,
@@ -29,19 +34,59 @@ import { Section, Subsection, Field, tickGradient } from "./controls";
 import { LockPanel } from "./LockPanel";
 import { PaletteColorList } from "./PaletteColorList";
 import { SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
-import { TEXT_CARD_SECTIONS, type ExploreSectionId } from "./exploreSections";
+import {
+  exploreLabel,
+  TEXT_CARD_SECTIONS,
+  type ExploreSectionId,
+} from "../state/exploreSections";
+import { ExploreCheckboxGroup } from "./ExploreCheckboxGroup";
+import {
+  BLEND_MODE_OPTIONS,
+  COLOR_SCHEME_OPTIONS,
+  MAPPING_OPTIONS,
+  OBJECT_COUNT_OPTIONS,
+  RAMP_COLOR_OPTIONS,
+  TEXT_BACKDROP_OPTIONS,
+} from "./exploreOptions";
 import cancelIcon from "@assets/cancel.svg";
 
 const MAX_IMAGES = 10;
 
-// Toggle `value` in an "explore" set: remove it if present, add it otherwise.
-// Emptying the set re-selects everything (`all`) so a generation always has a
-// choice to make — deselecting all is the same as exploring all.
-function toggleExplore<T>(set: T[], value: T, all: readonly T[]): T[] {
-  const next = set.includes(value)
-    ? set.filter((v) => v !== value)
-    : [...set, value];
-  return next.length ? next : [...all];
+// The Explore effects pool: only effects a roll can actually deal (see
+// LUCKY_EFFECTS), grouped by kind so deformers and shaders stay together.
+const luckyEffectOptions = [...LUCKY_EFFECTS]
+  .sort((a, b) => a.kind.localeCompare(b.kind))
+  .map((e) => ({ value: e.id, label: e.name }));
+const luckyEffectIds = LUCKY_EFFECTS.map((e) => e.id);
+
+function ZigzagRule({ patId }: { patId: string }): JSX.Element {
+  return (
+    <svg
+      className="catalog-rule"
+      width="100%"
+      height="8"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <pattern
+          id={patId}
+          x="0"
+          y="0"
+          width="12"
+          height="8"
+          patternUnits="userSpaceOnUse"
+        >
+          <polyline
+            points="0,8 6,0 12,8"
+            fill="none"
+            stroke="var(--border)"
+            strokeWidth="1.5"
+          />
+        </pattern>
+      </defs>
+      <rect width="100%" height="8" fill={`url(#${patId})`} />
+    </svg>
+  );
 }
 
 export function LibraryPanel({
@@ -253,35 +298,6 @@ export function LibraryPanel({
     openShaderEditor(def.id);
   }
 
-  function ZigzagRule({ patId }: { patId: string }): JSX.Element {
-    return (
-      <svg
-        className="catalog-rule"
-        width="100%"
-        height="8"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          <pattern
-            id={patId}
-            x="0"
-            y="0"
-            width="12"
-            height="8"
-            patternUnits="userSpaceOnUse"
-          >
-            <polyline
-              points="0,8 6,0 12,8"
-              fill="none"
-              stroke="var(--border)"
-              strokeWidth="1.5"
-            />
-          </pattern>
-        </defs>
-        <rect width="100%" height="8" fill={`url(#${patId})`} />
-      </svg>
-    );
-  }
 
   const allDefs = [...BUILTIN_EFFECTS, ...project.customEffects];
   // Library catalog acts on the live scene, so it gates on what's actually
@@ -379,16 +395,16 @@ export function LibraryPanel({
                       keyframe count, extra animated transforms, and rotation
                       intensity.
                     </li>
+                    <li>
+                      <strong>Colours</strong> — Every trio puts the background
+                      and silhouette on one lightness side and the text on the
+                      opposite side, so text always stays legible.
+                    </li>
                   </ul>
-                  <li>
-                    <strong>Colours</strong> — Every trio puts the background
-                    and silhouette on one lightness side and the text on the
-                    opposite side, so text always stays legible.
-                  </li>
                 </div>
               )}
               {shows("colors") && (
-                <Subsection title="Palette: Colours">
+                <Subsection title={exploreLabel("colors")}>
                   <PaletteColorList
                     colors={lucky.colors}
                     onMutate={(fn) =>
@@ -401,7 +417,7 @@ export function LibraryPanel({
               )}
 
               {shows("images") && (
-                <Subsection title="Palette: Image">
+                <Subsection title={exploreLabel("images")}>
                   {lucky.images.length > 0 && (
                     <div className="lucky-img-grid" data-resolved={thumbResolved}>
                       {lucky.images.map((path, i) => {
@@ -437,320 +453,174 @@ export function LibraryPanel({
                 </Subsection>
               )}
 
-              {shows("mappings") && lucky.images.length > 0 && (
-                <Subsection title="Image mapping">
-                  <div className="lucky-radio-group">
-                    {MAPPINGS.map((v) => (
-                      <label className="lucky-radio" key={v}>
-                        <input
-                          type="checkbox"
-                          checked={
-                            !lucky.mappings || lucky.mappings.includes(v)
-                          }
-                          onChange={() =>
-                            update((p) => {
-                              p.lucky.mappings = toggleExplore(
-                                p.lucky.mappings ?? [...MAPPINGS],
-                                v,
-                                MAPPINGS,
-                              );
-                            })
-                          }
-                        />
-                        <span>
-                          {v === "uv"
-                            ? "UV"
-                            : v.charAt(0).toUpperCase() + v.slice(1)}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
+              {/* Mapping only applies to an object wearing an image. */}
+              {shows("mappings") && hasPaletteImages && (
+                <Subsection title={exploreLabel("mappings")}>
+                  <ExploreCheckboxGroup
+                    variant="stack"
+                    options={MAPPING_OPTIONS}
+                    selected={lucky.mappings}
+                    all={MAPPINGS}
+                    optional
+                    onChange={(next) =>
+                      update((p) => {
+                        p.lucky.mappings = next;
+                      })
+                    }
+                  />
                 </Subsection>
               )}
 
               {shows("objectCounts") && (
-                <Subsection title="Object #">
-                  <div className="lucky-radio-group">
-                    {(
-                  [
-                    [1, "Mono"],
-                    [2, "Duo"],
-                  ] as const
-                ).map(([v, label]) => (
-                  <label className="lucky-radio" key={v}>
-                    <input
-                      type="checkbox"
-                      checked={lucky.objectCounts.includes(v)}
-                      onChange={() =>
-                        update((p) => {
-                          p.lucky.objectCounts = toggleExplore(
-                            p.lucky.objectCounts,
-                            v,
-                            [1, 2],
-                          );
-                        })
-                      }
-                    />
-                    <span>{label}</span>
-                  </label>
-                ))}
-                  </div>
+                <Subsection title={exploreLabel("objectCounts")}>
+                  <ExploreCheckboxGroup
+                    variant="stack"
+                    options={OBJECT_COUNT_OPTIONS}
+                    selected={lucky.objectCounts}
+                    all={OBJECT_COUNTS}
+                    onChange={(next) =>
+                      update((p) => {
+                        if (next) p.lucky.objectCounts = next;
+                      })
+                    }
+                  />
                 </Subsection>
               )}
 
               {shows("surfaces") && (
-                <Subsection title="Object surface">
-                  <div className="lucky-radio-group">
-                    {SURFACE_OPTIONS.map((o) => (
-                      <label
-                        className="lucky-radio"
-                        key={o.value}
-                        title={
-                          o.value === "image" && !lucky.images.length
-                            ? "Add images to the palette to explore image surfaces"
-                            : undefined
-                        }
-                      >
-                        <input
-                          type="checkbox"
-                          checked={lucky.surfaces.includes(o.value)}
-                          disabled={o.value === "image" && !lucky.images.length}
-                          onChange={() =>
-                            update((p) => {
-                              p.lucky.surfaces = toggleExplore(
-                                p.lucky.surfaces,
-                                o.value,
-                                OBJECT_SURFACES,
-                              );
-                            })
-                          }
-                        />
-                        <span>{o.label}</span>
-                      </label>
-                    ))}
-                  </div>
+                <Subsection title={exploreLabel("surfaces")}>
+                  <ExploreCheckboxGroup
+                    variant="stack"
+                    options={SURFACE_OPTIONS}
+                    selected={lucky.surfaces}
+                    all={OBJECT_SURFACES}
+                    disabledFor={(v) => v === "image" && !hasPaletteImages}
+                    titleFor={(v) =>
+                      v === "image" && !hasPaletteImages
+                        ? "Add images to the palette to explore image surfaces"
+                        : undefined
+                    }
+                    onChange={(next) =>
+                      update((p) => {
+                        if (next) p.lucky.surfaces = next;
+                      })
+                    }
+                  />
                 </Subsection>
               )}
 
+              {/* The ramp's second colour only exists on a faceted/depth surface. */}
               {shows("rampColors") &&
                 (!lucky.surfaces.length ||
-                  lucky.surfaces.some(
-                    (s) => s === "faceted" || s === "depth",
-                  )) && (
-                  <Subsection title="Light colour">
-                    <div className="lucky-radio-group">
-                      {(
-                        [
-                          ["white", "White"],
-                          ["black", "Black"],
-                          ["coloured", "Coloured"],
-                        ] as const
-                      ).map(([v, label]) => (
-                        <label className="lucky-radio" key={v}>
-                          <input
-                            type="checkbox"
-                            checked={
-                              !lucky.rampColors || lucky.rampColors.includes(v)
-                            }
-                            onChange={() =>
-                              update((p) => {
-                                const all = RAMP_COLOR_MODES;
-                                const current = p.lucky.rampColors ?? all;
-                                const next = toggleExplore(current, v, all);
-                                p.lucky.rampColors =
-                                  next.length === all.length ? undefined : next;
-                              })
-                            }
-                          />
-                          <span>{label}</span>
-                        </label>
-                      ))}
-                    </div>
+                  lucky.surfaces.some((s) => s === "faceted" || s === "depth")) && (
+                  <Subsection title={exploreLabel("rampColors")}>
+                    <ExploreCheckboxGroup
+                      variant="stack"
+                      options={RAMP_COLOR_OPTIONS}
+                      selected={lucky.rampColors}
+                      all={RAMP_COLOR_MODES}
+                      optional
+                      onChange={(next) =>
+                        update((p) => {
+                          p.lucky.rampColors = next;
+                        })
+                      }
+                    />
                   </Subsection>
                 )}
 
               {shows("shapes") && (
-                <Subsection title="Shapes">
-                  <div className="lucky-radio-group">
-                    {PRIMITIVE_OPTIONS.map((o) => (
-                      <label className="lucky-radio" key={o.value}>
-                        <input
-                          type="checkbox"
-                          checked={
-                            !lucky.shapes || lucky.shapes.includes(o.value)
-                          }
-                          onChange={() =>
-                            update((p) => {
-                              const all = PRIMITIVE_OPTIONS.map((x) => x.value);
-                              const current = p.lucky.shapes ?? all;
-                              const next = toggleExplore(current, o.value, all);
-                              p.lucky.shapes =
-                                next.length === all.length ? undefined : next;
-                            })
-                          }
-                        />
-                        <span>{o.label}</span>
-                      </label>
-                    ))}
-                  </div>
+                <Subsection title={exploreLabel("shapes")}>
+                  <ExploreCheckboxGroup
+                    variant="stack"
+                    options={PRIMITIVE_OPTIONS}
+                    selected={lucky.shapes}
+                    all={PRIMITIVE_MODELS}
+                    optional
+                    onChange={(next) =>
+                      update((p) => {
+                        p.lucky.shapes = next;
+                      })
+                    }
+                  />
                 </Subsection>
               )}
 
               {shows("colorSchemes") && (
-                <Subsection title="Colour Rhythm">
-                  <div className="lucky-radio-group">
-                    {(
-                      [
-                        ["byType", "~ + ~ + ~ +"],
-                        ["byPair", "~ ~ + + x x"],
-                        ["random", "Random"],
-                      ] as const
-                    ).map(([v, label]) => (
-                      <label className="lucky-radio" key={v}>
-                        <input
-                          type="checkbox"
-                          checked={lucky.colorSchemes.includes(v)}
-                          onChange={() =>
-                            update((p) => {
-                              p.lucky.colorSchemes = toggleExplore(
-                                p.lucky.colorSchemes,
-                                v,
-                                COLOR_SCHEMES,
-                              );
-                            })
-                          }
-                        />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
+                <Subsection title={exploreLabel("colorSchemes")}>
+                  <ExploreCheckboxGroup
+                    variant="stack"
+                    options={COLOR_SCHEME_OPTIONS}
+                    selected={lucky.colorSchemes}
+                    all={COLOR_SCHEMES}
+                    onChange={(next) =>
+                      update((p) => {
+                        if (next) p.lucky.colorSchemes = next;
+                      })
+                    }
+                  />
                 </Subsection>
               )}
 
               {shows("textBackdrops") && (
-                <Subsection title="Text background">
-                  <div className="lucky-radio-group">
-                    {(
-                      [
-                        ["silhouette", "Silhouette"],
-                        ["wireframe", "Wireframe"],
-                      ] as const
-                    ).map(([v, label]) => (
-                      <label className="lucky-radio" key={v}>
-                        <input
-                          type="checkbox"
-                          checked={lucky.textBackdrops.includes(v)}
-                          onChange={() =>
-                            update((p) => {
-                              p.lucky.textBackdrops = toggleExplore(
-                                p.lucky.textBackdrops,
-                                v,
-                                ["silhouette", "wireframe"],
-                              );
-                            })
-                          }
-                        />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
+                <Subsection title={exploreLabel("textBackdrops")}>
+                  <ExploreCheckboxGroup
+                    variant="stack"
+                    options={TEXT_BACKDROP_OPTIONS}
+                    selected={lucky.textBackdrops}
+                    all={EXPLORE_TEXT_BACKDROPS}
+                    onChange={(next) =>
+                      update((p) => {
+                        if (next) p.lucky.textBackdrops = next;
+                      })
+                    }
+                  />
                 </Subsection>
               )}
 
               {shows("blendModes") && (
-                <Subsection title="Blend">
-                  <div className="lucky-radio-group">
-                    {(
-                      [
-                        ["normal", "Normal"],
-                        ["invert", "Invert"],
-                        ["exclusion", "Exclusion"],
-                        ["multiply", "Multiply"],
-                        ["screen", "Screen"],
-                      ] as const
-                    ).map(([v, label]) => (
-                      <label className="lucky-radio" key={v}>
-                        <input
-                          type="checkbox"
-                          checked={lucky.blendModes.includes(v)}
-                          onChange={() =>
-                            update((p) => {
-                              p.lucky.blendModes = toggleExplore(
-                                p.lucky.blendModes,
-                                v,
-                                [
-                                  "normal",
-                                  "invert",
-                                  "exclusion",
-                                  "multiply",
-                                  "screen",
-                                ],
-                              );
-                            })
-                          }
-                        />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
+                <Subsection title={exploreLabel("blendModes")}>
+                  <ExploreCheckboxGroup
+                    variant="stack"
+                    options={BLEND_MODE_OPTIONS}
+                    selected={lucky.blendModes}
+                    all={TEXT_BLEND_MODES}
+                    onChange={(next) =>
+                      update((p) => {
+                        if (next) p.lucky.blendModes = next;
+                      })
+                    }
+                  />
                 </Subsection>
               )}
 
               {shows("effects") && (
-                <Subsection title="Effects pool">
-                  <div className="lucky-radio-group">
-                    {[...BUILTIN_EFFECTS]
-                      .sort((a, b) => a.kind.localeCompare(b.kind))
-                      .map((e) => {
-                        const disabled =
-                          IMAGE_DEPENDENT_EFFECT_IDS.has(e.id) &&
-                          !hasPaletteImages;
-                        return (
-                        <label
-                          className="lucky-radio"
-                          key={e.id}
-                          title={
-                            disabled
-                              ? "Add images to the palette to explore image effects"
-                              : undefined
-                          }
-                        >
-                          <input
-                            type="checkbox"
-                            disabled={disabled}
-                            checked={
-                              !lucky.enabledEffectIds ||
-                              lucky.enabledEffectIds.includes(e.id)
-                            }
-                            onChange={() =>
-                              update((p) => {
-                                const all = BUILTIN_EFFECTS.map((x) => x.id);
-                                const current = p.lucky.enabledEffectIds ?? all;
-                                const idx = current.indexOf(e.id);
-                                if (idx >= 0) {
-                                  p.lucky.enabledEffectIds = current.filter(
-                                    (id) => id !== e.id,
-                                  );
-                                } else {
-                                  const next = [...current, e.id];
-                                  p.lucky.enabledEffectIds =
-                                    next.length === all.length
-                                      ? undefined
-                                      : next;
-                                }
-                              })
-                            }
-                          />
-                          <span>{e.name}</span>
-                        </label>
-                        );
-                      })}
-                  </div>
+                <Subsection title={exploreLabel("effects")}>
+                  <ExploreCheckboxGroup
+                    variant="stack"
+                    options={luckyEffectOptions}
+                    selected={lucky.enabledEffectIds}
+                    all={luckyEffectIds}
+                    optional
+                    disabledFor={(id) =>
+                      IMAGE_DEPENDENT_EFFECT_IDS.has(id) && !hasPaletteImages
+                    }
+                    titleFor={(id) =>
+                      IMAGE_DEPENDENT_EFFECT_IDS.has(id) && !hasPaletteImages
+                        ? "Add images to the palette to explore image effects"
+                        : undefined
+                    }
+                    onChange={(next) =>
+                      update((p) => {
+                        p.lucky.enabledEffectIds = next;
+                      })
+                    }
+                  />
                 </Subsection>
               )}
 
               {shows("animation") && (
-                <Subsection title="Animations">
+                <Subsection title={exploreLabel("animation")}>
                   <input
                     className="scalar-slider"
                     type="range"
@@ -780,6 +650,7 @@ export function LibraryPanel({
                   </div>
                 </Subsection>
               )}
+
 
               <div className="lucky-actions">
                 <button
