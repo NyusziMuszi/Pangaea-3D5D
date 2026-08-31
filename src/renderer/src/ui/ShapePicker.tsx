@@ -20,7 +20,7 @@ const SHAPE_PICKER_OPTIONS: ShapePickerOption[] = [
   { value: "bespoke", label: "Bespoke", icon: "bespoke" },
 ];
 
-const GRID_COLUMNS = 4;
+const GRID_COLUMNS = 3;
 
 /**
  * Replaces the native <select> for an object's Type field — a native
@@ -55,7 +55,7 @@ export function ShapePicker({
   const openAt = (): void => {
     const r = btnRef.current?.getBoundingClientRect();
     if (!r) return;
-    const estimatedPickerHeight = 260;
+    const estimatedPickerHeight = 300;
     const spaceBelow = window.innerHeight - r.bottom;
     const top =
       spaceBelow < estimatedPickerHeight + 6

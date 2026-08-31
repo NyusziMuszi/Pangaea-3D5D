@@ -425,7 +425,7 @@ input[type="number"] {
 .shape-picker-popover {
   position: fixed;
   z-index: 1000;
-  width: 268px;
+  width: 204px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -434,7 +434,7 @@ input[type="number"] {
 }
 .shape-picker-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-2);
 }
 .shape-picker-tile {
