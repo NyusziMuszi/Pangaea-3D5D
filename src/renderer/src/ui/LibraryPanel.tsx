@@ -34,6 +34,7 @@ import { Section, Subsection, Field, tickGradient } from "./controls";
 import { LockPanel } from "./LockPanel";
 import { PaletteColorList } from "./PaletteColorList";
 import { SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
+import { EffectIcon, type EffectIconHandle } from "./EffectIcon";
 import {
   exploreLabel,
   TEXT_CARD_SECTIONS,
@@ -113,6 +114,24 @@ export function LibraryPanel({
   const [showInfo, setShowInfo] = useState(false);
 
   const exploreSections = usePrefs((s) => s.exploreSections);
+
+  // Bumped whenever the Effects catalog becomes visible (section expanded,
+  // or scrolled into view) so each pill's EffectIcon replays its intro loop.
+  const catalogRef = useRef<HTMLDivElement | null>(null);
+  const [introToken, setIntroToken] = useState(0);
+  const effectIconRefs = useRef<Map<string, EffectIconHandle>>(new Map());
+  useEffect(() => {
+    const el = catalogRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setIntroToken((n) => n + 1);
+      },
+      { threshold: 0.01 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const hasTextCards = project.segments.some((s) => s.kind === "text");
   const shows = (id: ExploreSectionId): boolean =>
     exploreSections.includes(id) && (hasTextCards || !TEXT_CARD_SECTIONS.has(id));
@@ -705,10 +724,18 @@ export function LibraryPanel({
             </Section>
 
             <Section title="Effects" defaultOpen={false}>
-              <div className="catalog">
-                {allDefs.map((def) => {
+              <div className="catalog" ref={catalogRef}>
+                {allDefs.map((def, i) => {
                   const needsImage = IMAGE_DEPENDENT_EFFECT_IDS.has(def.id);
                   const disabled = needsImage && !hasAnyImage;
+                  const hoverHandlers = {
+                    onPointerEnter: () =>
+                      effectIconRefs.current.get(def.id)?.startHover(),
+                    onPointerLeave: () =>
+                      effectIconRefs.current.get(def.id)?.stopHover(),
+                    onFocus: () => effectIconRefs.current.get(def.id)?.startHover(),
+                    onBlur: () => effectIconRefs.current.get(def.id)?.stopHover(),
+                  };
                   return (
                   <Fragment key={def.id}>
                     <button
@@ -720,7 +747,17 @@ export function LibraryPanel({
                           : undefined
                       }
                       onClick={() => addEffect(def)}
+                      {...hoverHandlers}
                     >
+                      <EffectIcon
+                        defId={def.id}
+                        introToken={introToken}
+                        index={i}
+                        ref={(handle) => {
+                          if (handle) effectIconRefs.current.set(def.id, handle);
+                          else effectIconRefs.current.delete(def.id);
+                        }}
+                      />
                       <span className="catalog-name">{def.name}</span>
                     </button>
                     {(def.id === "relief" || def.id === "jitter") && (
@@ -734,7 +771,20 @@ export function LibraryPanel({
                   className="catalog-item"
                   onClick={newCustomShader}
                   title="Author a new GLSL effect"
+                  onPointerEnter={() => effectIconRefs.current.get("bespoke")?.startHover()}
+                  onPointerLeave={() => effectIconRefs.current.get("bespoke")?.stopHover()}
+                  onFocus={() => effectIconRefs.current.get("bespoke")?.startHover()}
+                  onBlur={() => effectIconRefs.current.get("bespoke")?.stopHover()}
                 >
+                  <EffectIcon
+                    defId="bespoke"
+                    introToken={introToken}
+                    index={allDefs.length}
+                    ref={(handle) => {
+                      if (handle) effectIconRefs.current.set("bespoke", handle);
+                      else effectIconRefs.current.delete("bespoke");
+                    }}
+                  />
                   <span className="catalog-name">Bespoke</span>
                 </button>
               </div>

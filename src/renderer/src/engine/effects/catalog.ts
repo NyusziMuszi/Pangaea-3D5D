@@ -11,6 +11,8 @@ float pg_noise(vec3 x){
                  mix(pg_hash(i + vec3(0,1,1)), pg_hash(i + vec3(1,1,1)), f.x), f.y), f.z);
 }`;
 
+// Each entry below has a companion animated icon in ui/effectIcons.ts —
+// keep that in sync when adding/renaming an id here.
 export const BUILTIN_EFFECTS: EffectDef[] = [
   // ----- Mesh / geometry deformers (vertex) -----
   {
