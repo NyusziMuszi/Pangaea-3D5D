@@ -23,6 +23,50 @@ type OpenedFile = { path: string; name: string; data: Uint8Array }
 // session-scoped-presets limitation noted for the web build).
 const handleStore = new Map<string, { bytes: Uint8Array; mime: string }>()
 
+// File System Access API surface this shim uses. Not in the project's TS lib
+// (WICG spec, Chromium-only), so declared minimally here rather than pulling
+// in a @types package for three members.
+interface FileSystemWritableFileStream {
+  write(data: BufferSource | Blob): Promise<void>
+  close(): Promise<void>
+}
+interface FileSystemFileHandle {
+  name: string
+  createWritable(): Promise<FileSystemWritableFileStream>
+}
+declare global {
+  interface Window {
+    showSaveFilePicker?: (opts: {
+      suggestedName?: string
+      types?: { description: string; accept: Record<string, string[]> }[]
+    }) => Promise<FileSystemFileHandle>
+  }
+}
+
+// Real save-location picker, where the browser has one. Firefox/Safari lack
+// it, so saveFileDialog falls back to the synthetic-name + anchor-download
+// path below.
+const hasSavePicker = typeof window !== 'undefined' && 'showSaveFilePicker' in window
+
+// Handles from a successful showSaveFilePicker, keyed by suggested name (the
+// same string saveFileDialog returns as the synthetic "path"). writeFile pops
+// the entry it matches — one-shot, so a stale handle can't hijack a later
+// same-named write.
+const saveHandles = new Map<string, FileSystemFileHandle>()
+
+// Chrome requires a MIME key on `accept`; only the extensions this app's save
+// dialogs actually offer need an entry.
+function mimeFor(ext: string): string {
+  switch (ext) {
+    case 'mp4':
+      return 'video/mp4'
+    case 'png':
+      return 'image/png'
+    default:
+      return 'application/octet-stream'
+  }
+}
+
 // Last path segment, splitting on both separators so it works regardless of
 // which the stored name happens to use.
 function basename(p: string): string {
@@ -82,10 +126,31 @@ const api: PangaeaApi = {
     return { ok: true, data: entry.bytes, mime: entry.mime }
   },
 
-  // No native save dialog on the web. Return a synthetic path (the suggested
-  // name) so the existing saveDialog -> writeFile two-call flow is untouched; the
-  // real "where does it go" choice happens in the browser's download UI.
-  saveFileDialog: async (opts) => opts.defaultName ?? 'project.pangaea',
+  // Where the File System Access API exists, ask for a real save location and
+  // stash the resulting handle under its suggested name; writeFile looks it up
+  // by that same name. Elsewhere, fall back to a synthetic path (the suggested
+  // name) so the existing saveDialog -> writeFile two-call flow is untouched —
+  // the real "where does it go" choice happens in the browser's download UI.
+  saveFileDialog: async (opts) => {
+    const defaultName = opts.defaultName ?? 'project.pangaea'
+    if (!hasSavePicker) return defaultName
+    try {
+      const handle = await window.showSaveFilePicker!({
+        suggestedName: defaultName,
+        types: opts.filters?.map((f) => ({
+          description: f.name,
+          accept: { [mimeFor(f.extensions[0])]: f.extensions.map((e) => '.' + e) }
+        }))
+      })
+      saveHandles.set(handle.name, handle)
+      return handle.name
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return null
+      throw err
+    }
+  },
+
+  canPickSaveLocation: hasSavePicker,
 
   // No folder-access API on the web build. The image-sequence export needs
   // batch disk writes, which only the desktop app can grant via a real
@@ -95,9 +160,19 @@ const api: PangaeaApi = {
   openDirectoryDialog: () =>
     Promise.reject(new Error('Image-sequence export needs the desktop app (folder access).')),
 
-  // Trigger a browser download of the bytes. `path` is the synthetic name from
-  // saveFileDialog; the file downloads under its basename.
+  // Write through the handle saveFileDialog obtained via showSaveFilePicker,
+  // if there is one for this path; otherwise fall back to a browser download.
+  // `path` is the (synthetic, in the fallback case) name from saveFileDialog;
+  // the download uses its basename.
   writeFile: async (path, data) => {
+    const handle = saveHandles.get(basename(path))
+    if (handle) {
+      saveHandles.delete(handle.name)
+      const w = await handle.createWritable()
+      await w.write(data.slice())
+      await w.close()
+      return { ok: true, path }
+    }
     // .slice() copies into a fresh ArrayBuffer-backed view — the codebase's
     // idiom for satisfying BlobPart (Uint8Array may be SharedArrayBuffer-backed).
     const url = URL.createObjectURL(new Blob([data.slice()]))

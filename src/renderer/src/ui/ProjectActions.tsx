@@ -61,10 +61,16 @@ export function ProjectActions({
       const payload: SavedFile = { project, assets };
       const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
       await window.api.writeFile(path, bytes);
-      setToast("Project saved");
+      setToast(
+        window.api.canPickSaveLocation ? "Project saved" : "Project downloaded",
+      );
       getPrefs().recordSave(project, useStore.getState().lastLuckyColorScheme);
     } catch {
-      setToast("Could not save project");
+      setToast(
+        window.api.canPickSaveLocation
+          ? "Could not save project"
+          : "Could not download project",
+      );
     }
   }
 
@@ -100,7 +106,7 @@ export function ProjectActions({
         Open
       </button>
       <button className="important" onClick={save}>
-        Save
+        {window.api.canPickSaveLocation ? "Save" : "Download"}
       </button>
       <button className="important" onClick={onOpenExport}>
         Export

@@ -125,7 +125,7 @@ How each `window.api` method maps in the browser:
 | Electron (native)                      | Browser shim                                             |
 | -------------------------------------- | ------------------------------------------------------- |
 | open dialogs → file path + bytes       | hidden `<input type="file">` → bytes                    |
-| `saveFileDialog` + `writeFile`         | synthetic path → anchor **download** (no folder picker) |
+| `saveFileDialog` + `writeFile`         | `showSaveFilePicker` where available, else synthetic path → anchor **download** |
 | `readImagePath` (absolute disk path)   | in-memory `handleStore`, keyed by a `webfile:` handle   |
 | `readPreferences` / `writePreferences` | `localStorage['pangaea:prefs']`                         |
 | `encodeFrames` (ffmpeg fallback)       | rejects — the browser has no ffmpeg main process        |
@@ -140,7 +140,11 @@ Web-specific limitations:
   `handleStore` (paths are `webfile:` handles, not disk paths), so they don't survive a reload.
   Making them portable would mean embedding the bytes in the `Project`, which also affects Electron
   — out of scope for now.
-- **Saves and exports are downloads only** — no silent save-to-folder.
+- **Save/export location picking depends on the browser** — Chromium browsers (Chrome/Edge) get a
+  real native save dialog via the File System Access API (`window.api.canPickSaveLocation` is
+  `true`), and the file is written straight to the chosen location. Browsers without that API
+  (Firefox, Safari) fall back to a plain download into the default downloads folder; the UI
+  relabels itself accordingly ("Download" / "Export & download", "Downloaded ⟨name⟩").
 - **Image-sequence export is desktop-only** — it needs a directory-scoped write, which browsers
   don't grant; the option is hidden when `window.api.canPickDirectory` is false.
 

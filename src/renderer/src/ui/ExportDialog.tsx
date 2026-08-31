@@ -107,6 +107,8 @@ export function ExportDialog({
   const [done, setDone] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  const canPickLocation = window.api.canPickSaveLocation;
+
   const pngHeight = Math.round(
     (pngWidth * project.output.height) / project.output.width,
   );
@@ -155,7 +157,9 @@ export function ExportDialog({
         (p) => setProgress(p),
         controller.signal,
       );
-      setStatus(`Done — exported with ${encoder}. Saved to ${path}`);
+      setStatus(
+        `Done — exported with ${encoder}. ${canPickLocation ? "Saved to" : "Downloaded"} ${path}`,
+      );
       setDone(true);
       getPrefs().recordExport(project, useStore.getState().lastLuckyColorScheme);
     } catch (e) {
@@ -184,7 +188,9 @@ export function ExportDialog({
       setStatus("Rendering frame…");
       const bytes = await engine.captureStill(pngWidth, pngHeight);
       await window.api.writeFile(path, setPngDpi(bytes, pngDpi));
-      setStatus(`Done — saved to ${path}`);
+      setStatus(
+        `Done — ${canPickLocation ? "saved to" : "downloaded"} ${path}`,
+      );
       setDone(true);
     } catch (e) {
       setStatus(`Export failed: ${(e as Error).message}`);
@@ -279,7 +285,9 @@ export function ExportDialog({
             >
               {format === "sequence"
                 ? "Choose folder & export"
-                : "Choose location & export"}
+                : canPickLocation
+                  ? "Choose location & export"
+                  : "Export & download"}
             </button>
           </>
         )
