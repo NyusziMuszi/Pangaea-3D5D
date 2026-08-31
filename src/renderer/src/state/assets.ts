@@ -65,16 +65,3 @@ export function assetBytes(id: string): Uint8Array | null {
 export function assetMime(id: string): string | null {
   return registry.get(id)?.mime ?? null;
 }
-
-export function assetBlob(id: string): Blob | null {
-  const a = registry.get(id);
-  return a ? new Blob([a.bytes.slice()], { type: a.mime }) : null;
-}
-
-// Drop an asset and revoke its blob URL. Optional housekeeping; the registry is
-// session-scoped, so leaks are bounded by a session anyway.
-export function releaseAsset(id: string): void {
-  const a = registry.get(id);
-  if (a?.url) URL.revokeObjectURL(a.url);
-  registry.delete(id);
-}

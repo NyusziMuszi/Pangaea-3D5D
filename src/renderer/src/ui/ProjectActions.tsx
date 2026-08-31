@@ -46,28 +46,32 @@ export function ProjectActions({
   }
 
   async function save(): Promise<void> {
-    const path = await window.api.saveFileDialog({
-      defaultName: defaultFilename(project, "pangaea"),
-      filters: [{ name: "Pangaea Project", extensions: ["pangaea"] }],
-    });
-    if (!path) return;
-    const assets: SavedFile["assets"] = {};
-    for (const id of referencedAssetIds(project)) {
-      const bytes = assetBytes(id);
-      const mime = assetMime(id);
-      if (bytes && mime) assets[id] = { mime, base64: bytesToBase64(bytes) };
+    try {
+      const path = await window.api.saveFileDialog({
+        defaultName: defaultFilename(project, "pangaea"),
+        filters: [{ name: "Pangaea Project", extensions: ["pangaea"] }],
+      });
+      if (!path) return;
+      const assets: SavedFile["assets"] = {};
+      for (const id of referencedAssetIds(project)) {
+        const bytes = assetBytes(id);
+        const mime = assetMime(id);
+        if (bytes && mime) assets[id] = { mime, base64: bytesToBase64(bytes) };
+      }
+      const payload: SavedFile = { project, assets };
+      const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
+      await window.api.writeFile(path, bytes);
+      setToast("Project saved");
+      getPrefs().recordSave(project, useStore.getState().lastLuckyColorScheme);
+    } catch {
+      setToast("Could not save project");
     }
-    const payload: SavedFile = { project, assets };
-    const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
-    await window.api.writeFile(path, bytes);
-    setToast("Project saved");
-    getPrefs().recordSave(project, useStore.getState().lastLuckyColorScheme);
   }
 
   async function open(): Promise<void> {
-    const file = await window.api.openProjectFile();
-    if (!file) return;
     try {
+      const file = await window.api.openProjectFile();
+      if (!file) return;
       const text = new TextDecoder().decode(file.data);
       const parsed = JSON.parse(text) as SavedFile;
       // Re-register every embedded asset under its saved id *before* setting the

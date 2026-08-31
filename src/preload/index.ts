@@ -27,7 +27,6 @@ const api = {
     ipcRenderer.invoke('dialog:openFile', {
       filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'woff', 'woff2'] }]
     }),
-  readFile: (path: string): Promise<OpenedFile> => ipcRenderer.invoke('file:read', path),
   readImagePath: (
     path: string
   ): Promise<{ ok: boolean; data?: Uint8Array; mime?: string; error?: string }> =>
@@ -48,7 +47,7 @@ const api = {
   // Read/write the app's persisted preferences blob (userData/preferences.json).
   // Read returns null when the file is missing or corrupt.
   readPreferences: (): Promise<unknown> => ipcRenderer.invoke('prefs:read'),
-  writePreferences: (data: unknown): Promise<{ ok: boolean }> =>
+  writePreferences: (data: unknown): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('prefs:write', data)
 }
 

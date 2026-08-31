@@ -1,15 +1,6 @@
 import * as THREE from 'three'
 import { GLTFLoader, OBJLoader } from 'three-stdlib'
 
-export function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = reject
-    img.src = dataUrl
-  })
-}
-
 async function dataUrlToArrayBuffer(dataUrl: string): Promise<ArrayBuffer> {
   const res = await fetch(dataUrl)
   return res.arrayBuffer()

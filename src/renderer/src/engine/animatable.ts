@@ -1,4 +1,4 @@
-import type { Scalar, Easing, Keyframe } from '../types'
+import type { Scalar, Easing } from '../types'
 
 function applyEase(u: number, ease: Easing): number {
   const x = Math.min(1, Math.max(0, u))
@@ -38,9 +38,4 @@ export function evalScalar(s: Scalar, t: number): number {
     }
   }
   return last.value
-}
-
-// Convenience for building a constant scalar.
-export function keyframeOf(t: number, value: number, ease: Easing = 'easeInOut'): Keyframe {
-  return { t, value, ease }
 }

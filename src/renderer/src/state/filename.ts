@@ -14,7 +14,8 @@ export function defaultStem(project: Project): string {
   const d = new Date();
   const pad = (n: number): string => String(n).padStart(2, "0");
   const stamp = `${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}`;
-  const object = slug(objectLabel(project.objects[0]));
+  const first = project.objects[0];
+  const object = slug(first ? objectLabel(first) : "scene");
   const prefix = isWebBuild ? stamp : `3d5d-insta-${stamp}`;
   return `${prefix}-${object}`;
 }

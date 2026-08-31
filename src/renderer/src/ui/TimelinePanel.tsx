@@ -549,7 +549,7 @@ export function TimelinePanel(): JSX.Element {
                 <div
                   key={index}
                   className={`segment object accented ${objectActive && selectedObjectIndex === index ? "sel" : ""}`}
-                  style={accentVars(objectAccentColor(project, obj, index))}
+                  style={accentVars(objectAccentColor(obj, index))}
                   onClick={() => selectObjectOnly(index)}
                 >
                   <div className="object-head">

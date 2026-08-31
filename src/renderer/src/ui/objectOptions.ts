@@ -17,7 +17,3 @@ export const SURFACE_OPTIONS: { value: ObjectSurface; label: string }[] =
 export const FLAT_SURFACE_OPTIONS = SURFACE_OPTIONS.filter((o) =>
   FLAT_SURFACES.includes(o.value),
 );
-
-// Surfaces Explore may be told to roll, including "image" (an object wearing a
-// palette image). Shared by LibraryPanel and PreferencesPanel.
-export const EXPLORE_SURFACE_OPTIONS = SURFACE_OPTIONS;

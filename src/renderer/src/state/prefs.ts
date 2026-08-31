@@ -86,6 +86,9 @@ export function migrateLuckyConfig(lucky: Project["lucky"]): Project["lucky"] {
     surfaces: lucky.surfaces ?? BASE_PROJECT.lucky.surfaces,
     blendModes: lucky.blendModes ?? BASE_PROJECT.lucky.blendModes,
     textBackdrops: lucky.textBackdrops ?? BASE_PROJECT.lucky.textBackdrops,
+    objectCounts: lucky.objectCounts ?? BASE_PROJECT.lucky.objectCounts,
+    images: lucky.images ?? BASE_PROJECT.lucky.images,
+    animation: lucky.animation ?? BASE_PROJECT.lucky.animation,
   };
   // The {...incoming} spread above would otherwise carry these stale legacy
   // keys through into re-persisted prefs.

@@ -4,7 +4,6 @@ import {
 } from "../state/store";
 import arrowUpIcon from "../assets/arrow_drop_up_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
 import arrowDownIcon from "../assets/arrow_drop_down_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
-import closeIcon from "../assets/close_small_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg";
 import deleteIcon from "../assets/cancel.svg";
 
 import { findEffectDef } from "../engine/effects/catalog";
@@ -121,7 +120,7 @@ export function InspectorPanel({
   // The accent colour scheme for the active object: its surface/identity
   // colour. Set as inline CSS variables on the panel and each section.
   const accentStyle: CSSProperties | undefined = activeObject
-    ? accentVars(objectAccentColor(project, activeObject, activeObjectIndex))
+    ? accentVars(objectAccentColor(activeObject, activeObjectIndex))
     : undefined;
 
   function updateObject(fn: (o: ObjectState) => void): void {

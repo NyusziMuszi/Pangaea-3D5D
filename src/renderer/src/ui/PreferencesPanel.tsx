@@ -9,11 +9,8 @@ import {
   constant,
   CAMERA_TYPES,
   MAPPINGS,
-  OBJECT_SURFACES,
   PRIMITIVE_MODELS,
   RAMP_COLOR_MODES,
-  type CameraType,
-  type Mapping,
   type ObjectState,
   type Project,
   type Scalar,
@@ -24,7 +21,7 @@ import {
 } from "../types";
 import { Section, Field, ColorSwatch } from "./controls";
 import { PaletteColorList } from "./PaletteColorList";
-import { EXPLORE_SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
+import { SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
 import type { ExploreSectionId } from "./exploreSections";
 import { Modal } from "./Modal";
 import {
@@ -128,123 +125,6 @@ function SelectField<T extends string>({
   );
 }
 
-// Shared transform/surface fields for an object blueprint (A and B).
-function ObjectFields({
-  obj,
-  onChange,
-}: {
-  obj: ObjectState;
-  onChange: (fn: (o: ObjectState) => void) => void;
-}): JSX.Element {
-  return (
-    <>
-      <SelectField
-        label="Shape"
-        value={obj.primitive}
-        options={PRIMITIVE_MODELS}
-        onChange={(v) =>
-          onChange((o) => {
-            o.primitive = v;
-          })
-        }
-      />
-      <SelectField
-        label="Mapping"
-        value={obj.mapping}
-        options={MAPPINGS}
-        onChange={(v) =>
-          onChange((o) => {
-            o.mapping = v;
-          })
-        }
-      />
-      <SelectField
-        label="Surface"
-        value={obj.surface}
-        options={OBJECT_SURFACES}
-        onChange={(v) =>
-          onChange((o) => {
-            o.surface = v;
-          })
-        }
-      />
-      <Field label="Surface colour" stacked>
-        <ColorSwatch
-          value={obj.surfaceColor}
-          onChange={(v) =>
-            onChange((o) => {
-              o.surfaceColor = v;
-            })
-          }
-        />
-      </Field>
-      <NumField
-        label="Scale"
-        value={cval(obj.scale)}
-        onChange={(v) =>
-          onChange((o) => {
-            o.scale = constant(v);
-          })
-        }
-      />
-      <NumField
-        label="Rotate X"
-        value={cval(obj.rotX)}
-        onChange={(v) =>
-          onChange((o) => {
-            o.rotX = constant(v);
-          })
-        }
-      />
-      <NumField
-        label="Rotate Y"
-        value={cval(obj.rotY)}
-        onChange={(v) =>
-          onChange((o) => {
-            o.rotY = constant(v);
-          })
-        }
-      />
-      <NumField
-        label="Rotate Z"
-        value={cval(obj.rotZ)}
-        onChange={(v) =>
-          onChange((o) => {
-            o.rotZ = constant(v);
-          })
-        }
-      />
-      <NumField
-        label="Position X"
-        value={cval(obj.posX)}
-        onChange={(v) =>
-          onChange((o) => {
-            o.posX = constant(v);
-          })
-        }
-      />
-      <NumField
-        label="Position Y"
-        value={cval(obj.posY)}
-        onChange={(v) =>
-          onChange((o) => {
-            o.posY = constant(v);
-          })
-        }
-      />
-      <NumField
-        label="Position Z"
-        value={cval(obj.posZ)}
-        onChange={(v) =>
-          onChange((o) => {
-            o.posZ = constant(v);
-          })
-        }
-      />
-    </>
-  );
-}
-
 function makeTextStyle(): TextStyle {
   return {
     content: "New text",
@@ -289,11 +169,6 @@ export function PreferencesPanel({
       return next;
     });
 
-  const mutateObjectA = (fn: (o: ObjectState) => void): void =>
-    mutate((d) => {
-      const o = d.project.objects[0];
-      if (o) fn(o);
-    });
   const mutateLucky = (fn: (l: Project["lucky"]) => void): void =>
     mutate((d) => fn(d.project.lucky));
   const mutateText = (i: number, fn: (t: TextStyle) => void): void =>
@@ -376,6 +251,7 @@ export function PreferencesPanel({
         ...d.project,
         lucky: {
           ...live.lucky,
+          images: [],
           locks: { colours: false, motion: false, effects: false, objects: false },
         },
         scene: live.scene,
@@ -464,8 +340,6 @@ export function PreferencesPanel({
       }
     });
   }
-
-  const objA = draft.project.objects[0];
 
   return (
     <Modal
@@ -922,7 +796,7 @@ export function PreferencesPanel({
           <ExploreField id="surfaces">
             <Field label="Object surface" stacked>
               <span className="field-control">
-                {EXPLORE_SURFACE_OPTIONS.map((o) => (
+                {SURFACE_OPTIONS.map((o) => (
                   <label
                     key={o.value}
                     className="checkbox-inline-label"

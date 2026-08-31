@@ -13,7 +13,6 @@ export const CUSTOM_FONT_FAMILY = 'Pangaea Custom Card Font'
 let activeFamily = TEXT_CARD_FONT_FAMILY
 
 let loadPromise: Promise<void> | null = null
-let loaded = false
 
 // Register the bundled text-card font so the 2D canvas can draw text cards with
 // it. Idempotent: the FontFace is loaded and added to document.fonts once.
@@ -27,13 +26,8 @@ export function loadTextCardFont(): Promise<void> {
     })
     await face.load()
     document.fonts.add(face)
-    loaded = true
   })()
   return loadPromise
-}
-
-export function isTextCardFontLoaded(): boolean {
-  return loaded
 }
 
 // The family text cards should currently render with. textOverlay reads this

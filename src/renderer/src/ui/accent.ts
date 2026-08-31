@@ -9,7 +9,7 @@
 // carries the identity class.
 
 import type { CSSProperties } from "react";
-import type { ObjectState, Project } from "../types";
+import type { ObjectState } from "../types";
 
 const clamp = (v: number, lo: number, hi: number): number =>
   Math.min(hi, Math.max(lo, v));
@@ -131,18 +131,14 @@ export function accentVars(baseHex: string): CSSProperties {
 // (an image surface) — so each object still reads as a distinct accent. Cycles
 // if there are more objects than hues.
 const IDENTITY_HUES = ["#997a59", "#955999", "#599399", "#5a7da0", "#a06a5a"];
-export function identityHue(index: number): string {
+function identityHue(index: number): string {
   return IDENTITY_HUES[index % IDENTITY_HUES.length];
 }
 
 // The base colour an object's accent is drawn from: its surface colour when the
 // surface is a solid (silhouette/wireframe/faceted), otherwise — an image
 // surface has no single colour of its own — a fixed per-object identity hue.
-export function objectAccentColor(
-  project: Project,
-  obj: ObjectState,
-  index: number,
-): string {
+export function objectAccentColor(obj: ObjectState, index: number): string {
   const surface = obj.surface ?? "image";
   if (surface !== "image") return obj.surfaceColor || "#878787";
   return identityHue(index);

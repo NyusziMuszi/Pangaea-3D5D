@@ -76,10 +76,6 @@ const api: PangaeaApi = {
   openProjectFile: () => openFile('.pangaea,.json', 'other'),
   openFontFile: () => openFile('.ttf,.otf,.woff,.woff2', 'other'),
 
-  // Dead code in the renderer (nothing calls readFile); reject so a stray caller
-  // fails loudly rather than silently getting bad data.
-  readFile: () => Promise.reject(new Error('readFile is unavailable in the browser build')),
-
   readImagePath: async (path) => {
     const entry = handleStore.get(path)
     if (!entry) return { ok: false, error: 'Unknown handle: ' + path }
@@ -130,8 +126,12 @@ const api: PangaeaApi = {
   },
 
   writePreferences: async (data) => {
-    localStorage.setItem('pangaea:prefs', JSON.stringify(data))
-    return { ok: true }
+    try {
+      localStorage.setItem('pangaea:prefs', JSON.stringify(data))
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
   }
 }
 

@@ -166,13 +166,6 @@ function registerIpc(): void {
     return { path, name: basename(path), data: new Uint8Array(data) }
   })
 
-  // Read a file by path — only if it was dialog-approved this session.
-  ipcMain.handle('file:read', async (_e, path: string) => {
-    const resolved = assertApproved(path)
-    const data = await readFile(resolved)
-    return { path: resolved, name: basename(resolved), data: new Uint8Array(data) }
-  })
-
   // Read an image by path WITHOUT dialog-approval gating. This is the one
   // deliberate, user-approved relaxation of the read sandbox: it lets
   // "Feeling lucky" presets (which store absolute file paths) resolve to bytes

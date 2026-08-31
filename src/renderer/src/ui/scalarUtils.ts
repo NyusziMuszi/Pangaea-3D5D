@@ -29,32 +29,9 @@ export function startAnimating(s: Scalar, t: number): Scalar {
   return { kind: 'keys', keys: [{ t, value: evalScalar(s, t), ease: 'easeInOut' }] }
 }
 
-export function stopAnimating(s: Scalar, t: number): Scalar {
-  return { kind: 'const', value: evalScalar(s, t) }
-}
-
 // Sorted key times for an animated scalar; [] for a constant.
 export function keyTimes(s: Scalar): number[] {
   return s.kind === 'keys' ? s.keys.map((k) => k.t) : []
-}
-
-// Greatest key time strictly before t (using EPS so sitting on a key steps away).
-export function prevKeyTime(s: Scalar, t: number): number | null {
-  if (s.kind !== 'keys') return null
-  let best: number | null = null
-  for (const k of s.keys) {
-    if (k.t < t - EPS) best = k.t
-  }
-  return best
-}
-
-// Least key time strictly after t (keys are sorted, so the first match wins).
-export function nextKeyTime(s: Scalar, t: number): number | null {
-  if (s.kind !== 'keys') return null
-  for (const k of s.keys) {
-    if (k.t > t + EPS) return k.t
-  }
-  return null
 }
 
 // Remove the key within EPS of t. No-op if none matches; reverts to const when

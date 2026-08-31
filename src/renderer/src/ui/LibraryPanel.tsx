@@ -20,7 +20,6 @@ import {
   type CameraType,
   type EffectDef,
   type ObjectState,
-  type RampColorMode,
 } from "../types";
 import { makeThumbnailUrl, mimeForName } from "./files";
 import { registerAsset } from "../state/assets";
@@ -29,7 +28,7 @@ import { engine } from "../engine/engineSingleton";
 import { Section, Subsection, Field, tickGradient } from "./controls";
 import { LockPanel } from "./LockPanel";
 import { PaletteColorList } from "./PaletteColorList";
-import { EXPLORE_SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
+import { SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
 import { TEXT_CARD_SECTIONS, type ExploreSectionId } from "./exploreSections";
 import cancelIcon from "@assets/cancel.svg";
 
@@ -121,7 +120,7 @@ export function LibraryPanel({
     let cancelled = false;
     const pending = lucky.images.filter((p) => !thumbUrlCache.current.has(p));
     if (pending.length === 0) return;
-    Promise.all(pending.map(resolveThumb)).then((results) => {
+    Promise.all(pending.map((p) => resolveThumb(p).catch(() => null))).then((results) => {
       if (!cancelled && results.some(Boolean)) setThumbResolved((n) => n + 1);
     });
     return () => {
@@ -502,7 +501,7 @@ export function LibraryPanel({
               {shows("surfaces") && (
                 <Subsection title="Object surface">
                   <div className="lucky-radio-group">
-                    {EXPLORE_SURFACE_OPTIONS.map((o) => (
+                    {SURFACE_OPTIONS.map((o) => (
                       <label
                         className="lucky-radio"
                         key={o.value}

@@ -8,6 +8,7 @@ import {
   type ObjectSurface,
 } from "../types";
 import { defaultFilename, defaultStem } from "../state/filename";
+import { isWebBuild } from "../platform/isWeb";
 import { exportVideo, type ExportProgress } from "../engine/export/exporter";
 import { setPngDpi } from "../engine/export/pngDpi";
 import { getPrefs } from "../state/prefs";
@@ -134,19 +135,19 @@ export function ExportDialog({
   }
 
   async function runVideo(): Promise<void> {
-    const path = await window.api.saveFileDialog({
-      defaultName: defaultFilename(project, "mp4"),
-      filters: [{ name: "MP4 Video", extensions: ["mp4"] }],
-    });
-    if (!path) return;
-
-    engine.pause();
-    setPlaying(false);
-    setBusy(true);
-    setStatus("Rendering frames…");
-    const controller = new AbortController();
-    abortRef.current = controller;
     try {
+      const path = await window.api.saveFileDialog({
+        defaultName: defaultFilename(project, "mp4"),
+        filters: [{ name: "MP4 Video", extensions: ["mp4"] }],
+      });
+      if (!path) return;
+
+      engine.pause();
+      setPlaying(false);
+      setBusy(true);
+      setStatus("Rendering frames…");
+      const controller = new AbortController();
+      abortRef.current = controller;
       const { encoder } = await exportVideo(
         engine,
         project,
@@ -171,17 +172,17 @@ export function ExportDialog({
   }
 
   async function runStill(): Promise<void> {
-    const path = await window.api.saveFileDialog({
-      defaultName: defaultFilename(project, "png"),
-      filters: [{ name: "PNG Image", extensions: ["png"] }],
-    });
-    if (!path) return;
-
-    engine.pause();
-    setPlaying(false);
-    setBusy(true);
-    setStatus("Rendering frame…");
     try {
+      const path = await window.api.saveFileDialog({
+        defaultName: defaultFilename(project, "png"),
+        filters: [{ name: "PNG Image", extensions: ["png"] }],
+      });
+      if (!path) return;
+
+      engine.pause();
+      setPlaying(false);
+      setBusy(true);
+      setStatus("Rendering frame…");
       const bytes = await engine.captureStill(pngWidth, pngHeight);
       await window.api.writeFile(path, setPngDpi(bytes, pngDpi));
       setStatus(`Done — saved to ${path}`);
@@ -194,20 +195,20 @@ export function ExportDialog({
   }
 
   async function runSequence(): Promise<void> {
-    const dir = await window.api.openDirectoryDialog();
-    if (!dir) return;
-
-    engine.pause();
-    setPlaying(false);
-    setBusy(true);
-    setStatus("Rendering frames…");
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const stem = defaultStem(project);
-    const total = seqTotalFiles;
-    let doneCount = 0;
-    setSeqProgress({ done: 0, total });
     try {
+      const dir = await window.api.openDirectoryDialog();
+      if (!dir) return;
+
+      engine.pause();
+      setPlaying(false);
+      setBusy(true);
+      setStatus("Rendering frames…");
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const stem = defaultStem(project);
+      const total = seqTotalFiles;
+      let doneCount = 0;
+      setSeqProgress({ done: 0, total });
       for (const surface of seqSurfaceList) {
         for (let i = 0; i < seqTimes.length; i++) {
           if (controller.signal.aborted) {
@@ -294,9 +295,11 @@ export function ExportDialog({
           >
             <option value="mp4">MP4 video</option>
             <option value="png">Still frame (PNG, transparent)</option>
-            <option value="sequence">
-              Image sequence (PNG, transparent)
-            </option>
+            {!isWebBuild && (
+              <option value="sequence">
+                Image sequence (PNG, transparent)
+              </option>
+            )}
           </select>
         </label>
 

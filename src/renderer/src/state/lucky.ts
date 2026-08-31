@@ -61,6 +61,7 @@ import {
 } from "../engine/effects/catalog";
 import {
   defaultObjectImage,
+  defaultProject,
   defaultSecondObject,
   instanceFromDef,
 } from "./defaults";
@@ -656,7 +657,7 @@ export function generateLuckyScene(
   const shapePool = opts.shapes?.length ? opts.shapes : PRIMITIVE_MODELS;
 
   // ----- Object A -----
-  const a = next.objects[0];
+  const a = next.objects[0] ?? defaultProject().objects[0];
   a.primitive = pickWeighted(shapePool, (m) => tasteProfile.shapes[m] ?? 0);
   a.modelName = null;
   a.modelDataUrl = null;
