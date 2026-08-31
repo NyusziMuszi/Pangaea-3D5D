@@ -69,26 +69,7 @@ export const BASE_PROJECT: Project = {
   scene: {
     cameraType: "perspective",
   },
-  objects: [
-    {
-      primitive: "plane",
-      modelName: null,
-      modelDataUrl: null,
-      mapping: "uv",
-      surface: "image",
-      surfaceColor: branding.objectSurfaceColor,
-      surfaceWireWidth: 1,
-      image: defaultObjectImage(),
-      effects: [],
-      rotX: constant(0),
-      rotY: constant(0),
-      rotZ: constant(0),
-      scale: constant(0.7),
-      posX: constant(0),
-      posY: constant(0),
-      posZ: constant(0),
-    },
-  ],
+  objects: [branding.defaultObject],
   segments: [
     {
       id: uid("seg"),

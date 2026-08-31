@@ -9,6 +9,7 @@
 import type {
   ColorScheme,
   Mapping,
+  ObjectState,
   ObjectSurface,
   PaletteColor,
   RampColorMode,
@@ -53,8 +54,10 @@ export interface Branding {
   animBackgrounds: [string, string, string];
   /** The 3 text-card segments, in order (content + colours; fontSize/align stay shared). */
   textCards: [BrandTextCard, BrandTextCard, BrandTextCard];
-  /** Default surface colour for the primary and second object. */
+  /** Default surface colour for the second object (a target's defaultObject may also reuse it for the primary). */
   objectSurfaceColor: string;
+  /** The primary object a brand-new project (or "Reset to factory") starts with. */
+  defaultObject: ObjectState;
   /** "Feeling lucky" factory defaults for this target. */
   lucky: BrandLucky;
   /** Which Explore sections a fresh install shows by default. */

@@ -1,5 +1,10 @@
 import fontUrl from "@assets/parabole-mediumdisplay.otf?url";
+import { constant } from "../types";
 import type { Branding } from "./types";
+
+// Reused below for both the second object and the default primary object, so
+// a fresh scene reads as one consistent material until the user changes it.
+const objectSurfaceColor = "#a3d6dc";
 
 // Electron ("offline") brand: the app's existing factory colours and messages,
 // paired with the Parabole display font.
@@ -39,7 +44,25 @@ export const branding: Branding = {
       textBackdropColor: "#F3FF0D",
     },
   ],
-  objectSurfaceColor: "#a3d6dc",
+  objectSurfaceColor,
+  defaultObject: {
+    primitive: "plane",
+    modelName: null,
+    modelDataUrl: null,
+    mapping: "uv",
+    surface: "image",
+    surfaceColor: objectSurfaceColor,
+    surfaceWireWidth: 1,
+    image: { name: null, assetId: null, offsetX: constant(0.5), offsetY: constant(0.5) },
+    effects: [],
+    rotX: constant(0),
+    rotY: constant(0),
+    rotZ: constant(0),
+    scale: constant(0.7),
+    posX: constant(0),
+    posY: constant(0),
+    posZ: constant(0),
+  },
   lucky: {
     colors: [
       { hex: "#ffffff", roles: ["background"] },

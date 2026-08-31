@@ -1,4 +1,5 @@
 import fontUrl from "@assets/SpaceMono-Bold.ttf?url";
+import { constant } from "../types";
 import type { Branding } from "./types";
 
 // Web ("online") brand: a distinct factory palette + placeholder messages,
@@ -37,6 +38,86 @@ export const branding: Branding = {
     },
   ],
   objectSurfaceColor: "#9AD6E6",
+  // A twisting, rippling dodecahedron — so a fresh web session has an object
+  // and animation on screen right away instead of a static plane. Values
+  // copied from a hand-tuned "Feeling lucky" roll.
+  defaultObject: {
+    primitive: "dodecahedron",
+    modelName: null,
+    modelDataUrl: null,
+    mapping: "uv",
+    surface: "depth",
+    surfaceColor: "#4F83B7",
+    surfaceColorLow: "#ffffff",
+    surfaceWireWidth: 1,
+    image: { name: null, assetId: null, offsetX: constant(0.5), offsetY: constant(0.5) },
+    effects: [
+      {
+        instanceId: "fx8ltjxhp",
+        defId: "twist",
+        enabled: true,
+        values: { uTwist: constant(1), uSpeed: constant(0.4) },
+      },
+      {
+        instanceId: "fxjz5kgz7",
+        defId: "ripple",
+        enabled: true,
+        values: {
+          uAmplitude: constant(0.12),
+          uFrequency: constant(14),
+          uSpeed: constant(2),
+          uAxis: constant(2),
+        },
+      },
+      {
+        instanceId: "fx3pwjvcg",
+        defId: "jitter",
+        enabled: true,
+        values: { uScale: constant(3), uAmount: constant(0.12), uSpeed: constant(2) },
+      },
+      {
+        instanceId: "fx8doey6l",
+        defId: "wave",
+        enabled: true,
+        values: {
+          uAmplitude: {
+            kind: "keys",
+            keys: [
+              { t: 0, value: 0.5215837032391858, ease: "easeInOut" },
+              { t: 15, value: 0.5226147747622744, ease: "easeInOut" },
+            ],
+          },
+          uFrequency: constant(6),
+          uSpeed: constant(1.6),
+        },
+      },
+    ],
+    rotX: constant(0),
+    rotY: {
+      kind: "keys",
+      keys: [
+        { t: 0, value: 0, ease: "easeInOut" },
+        { t: 15, value: -5.780530482605219, ease: "easeInOut" },
+      ],
+    },
+    rotZ: constant(0),
+    scale: {
+      kind: "keys",
+      keys: [
+        { t: 0, value: 0.8146059037887439, ease: "easeInOut" },
+        { t: 15, value: 0.6710768659360921, ease: "easeInOut" },
+      ],
+    },
+    posX: constant(0),
+    posY: {
+      kind: "keys",
+      keys: [
+        { t: 0, value: 0.1642451801142924, ease: "easeInOut" },
+        { t: 15, value: 0.18705994039839385, ease: "easeInOut" },
+      ],
+    },
+    posZ: constant(0),
+  },
   lucky: {
     colors: [
       { hex: "#9AD6E6", roles: ["type"] },
