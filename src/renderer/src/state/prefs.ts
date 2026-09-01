@@ -90,9 +90,9 @@ export function migrateLuckyConfig(lucky: Project["lucky"]): Project["lucky"] {
     surfaces: lucky.surfaces ?? BASE_PROJECT.lucky.surfaces,
     blendModes: lucky.blendModes ?? BASE_PROJECT.lucky.blendModes,
     textBackdrops: lucky.textBackdrops ?? BASE_PROJECT.lucky.textBackdrops,
-    // multiply/mask were once offered in the Explore pool but can never roll
-    // (see catalog.ts's OTHER_OBJECT_EFFECT_IDS). Drop them so a stored set can
-    // still reach "every option ticked", which collapses to undefined = all.
+    // Drop any id no longer in LUCKY_EFFECTS (a removed custom effect, a
+    // renamed built-in) so a stored set can still reach "every option
+    // ticked", which collapses to undefined = all.
     enabledEffectIds: lucky.enabledEffectIds?.filter((id) =>
       LUCKY_EFFECTS.some((e) => e.id === id),
     ),

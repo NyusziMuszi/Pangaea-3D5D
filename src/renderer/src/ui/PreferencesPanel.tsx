@@ -50,7 +50,7 @@ import {
   TEXT_CARD_FONT_FAMILY,
 } from "../engine/fonts";
 import { bytesToDataUrl } from "./files";
-import { LUCKY_EFFECTS } from "../engine/effects/catalog";
+import { LUCKY_EFFECTS, OTHER_OBJECT_EFFECT_IDS } from "../engine/effects/catalog";
 import type { TasteProfile } from "../state/taste";
 
 // Extension -> font mime, embedded in the stored data URL. The browser parses
@@ -194,6 +194,14 @@ function EffectKindField({
         selected={draft.project.lucky.enabledEffectIds}
         all={LUCKY_EFFECTS.map((e) => e.id)}
         optional
+        disabledFor={(id) =>
+          OTHER_OBJECT_EFFECT_IDS.has(id) && !draft.project.lucky.images.length
+        }
+        titleFor={(id) =>
+          OTHER_OBJECT_EFFECT_IDS.has(id) && !draft.project.lucky.images.length
+            ? "Add images to the palette to explore image effects"
+            : undefined
+        }
         onChange={onChange}
       />
     </Field>

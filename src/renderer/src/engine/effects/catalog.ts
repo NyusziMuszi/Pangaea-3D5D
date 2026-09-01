@@ -380,22 +380,24 @@ export const IMAGE_DEPENDENT_EFFECT_IDS: ReadonlySet<string> = new Set([
   "mask",
 ]);
 
-// Effects that sample the *other* object's texture (pg_sampleOther). A lucky
-// roll only ever deals one object an image, so the other slot always reads the
-// grey placeholder and these degrade to a flat darken / flat alpha-dim no-op.
-// generateLuckyScene excludes them from both pools, and the Explore effects
-// pool hides them, so the UI can't advertise an option that will never roll.
-// Still pickable by hand from the Library catalog.
+// Effects that sample the *other* object's texture (pg_sampleOther). With one
+// image (or none), the other slot reads the grey placeholder and these
+// degrade to a flat darken / flat alpha-dim no-op, so generateLuckyScene
+// (lucky.ts) only deals them to the image object when the paired object also
+// wears a real image — see `bothImages`/`otherIsImage` there. The Explore
+// effects pool and Preferences grey them out whenever the palette has no
+// images at all, same as the other IMAGE_DEPENDENT_EFFECT_IDS.
 export const OTHER_OBJECT_EFFECT_IDS: ReadonlySet<string> = new Set([
   "multiply",
   "mask",
 ]);
 
-// The effects "Feeling lucky" can actually deal — the pool the Explore panel
-// offers. Single source of truth for both the generator and that list.
-export const LUCKY_EFFECTS = BUILTIN_EFFECTS.filter(
-  (d) => !OTHER_OBJECT_EFFECT_IDS.has(d.id),
-);
+// The effects "Feeling lucky" can deal — the pool the Explore panel offers.
+// Single source of truth for both the generator and that list. Equal to
+// BUILTIN_EFFECTS: nothing is unconditionally excluded any more, though
+// individual UI surfaces grey out entries whose precondition (e.g. a palette
+// image) isn't met yet.
+export const LUCKY_EFFECTS = BUILTIN_EFFECTS;
 
 export function findEffectDef(
   defId: string,

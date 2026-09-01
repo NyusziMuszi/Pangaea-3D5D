@@ -412,9 +412,13 @@ export function generateLuckyScene(
   // colour, leaving the image slot empty so the UI still offers "Load image"
   // rather than "Replace".
   //
-  // With two objects and at least one image, exactly one object wears the image
-  // and the other takes a flat surface, so the pair reads as image-against-
-  // silhouette rather than two textured shapes. A single object (or none with
+  // With two objects and at least one image, usually exactly one object wears
+  // the image and the other takes a flat surface, so the pair reads as image-
+  // against-silhouette rather than two textured shapes. Occasionally both
+  // objects wear an image instead — that's the only case where "other object"
+  // effects (mask/multiply, which read Object B's texture via pg_sampleOther)
+  // have a real second image to sample rather than the grey placeholder, so
+  // it's what unlocks them into imagePool below. A single object (or none with
   // images) simply wears the image itself. The two flat surfaces are picked
   // distinct (where opts.surfaces allows — a single-entry set gives both
   // objects the same surface) so a fully-flat pair still reads differently.
@@ -424,7 +428,12 @@ export function generateLuckyScene(
   const allowImage = !exploredSurfaces || exploredSurfaces.includes("image");
   const flatPool = (exploredSurfaces ?? FLAT_SURFACES).filter((s) => s !== "image");
   const hasImages = imageAssetIds.length > 0 && allowImage;
-  const imageObject = !hasImages ? -1 : twoObjects && Math.random() < 0.5 ? 1 : 0;
+  const bothImages = hasImages && twoObjects && Math.random() < 0.35;
+  const imageObjects: ReadonlySet<number> = !hasImages
+    ? new Set()
+    : bothImages
+      ? new Set([0, 1])
+      : new Set([twoObjects && Math.random() < 0.5 ? 1 : 0]);
   const flatSurfaces = pickDistinctWeighted(
     flatPool.length ? flatPool : FLAT_SURFACES,
     2,
@@ -433,11 +442,11 @@ export function generateLuckyScene(
   const availableMappings =
     opts.mappings && opts.mappings.length ? opts.mappings : MAPPINGS;
 
-  // Set an object's surface + image slot for its index. The image object gets a
+  // Set an object's surface + image slot for its index. An image object gets a
   // textured surface (random asset + mapping); any other object gets a flat
   // surface in a background-safe palette colour and an empty image slot.
   const dressObject = (o: ObjectState, i: number): void => {
-    if (i === imageObject) {
+    if (imageObjects.has(i)) {
       o.surface = "image";
       o.mapping = pickWeighted(availableMappings, (m) => tasteProfile.mappings[m] ?? 0);
       o.image = {
@@ -693,6 +702,12 @@ export function generateLuckyScene(
   const isEnabled = (id: string): boolean =>
     !enabledIds?.length || enabledIds.includes(id);
   const imageIdx = objects.findIndex((o) => o.surface === "image");
+  // Only non-degenerate when the paired object also wears a real image —
+  // otherwise pg_sampleOther reads the grey placeholder. See bothImages above.
+  const otherIsImage =
+    imageIdx >= 0 &&
+    objects.length === 2 &&
+    objects[1 - imageIdx].surface === "image";
   const generalPool = BUILTIN_EFFECTS.filter(
     (d) =>
       d.kind === "deform" &&
@@ -706,7 +721,7 @@ export function generateLuckyScene(
           (d) =>
             isEnabled(d.id) &&
             IMAGE_DEPENDENT_EFFECT_IDS.has(d.id) &&
-            !OTHER_OBJECT_EFFECT_IDS.has(d.id),
+            (otherIsImage || !OTHER_OBJECT_EFFECT_IDS.has(d.id)),
         );
   const effectScore = (d: EffectDef): number => tasteProfile.effects[d.id] ?? 0;
   // Guarantee the image object gets at least one image effect, so a textured
