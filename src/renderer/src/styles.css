@@ -340,6 +340,48 @@ input[type="number"] {
   width: 160px;
   height: 140px;
 }
+.color-popover-tabs {
+  display: flex;
+  gap: var(--space-1);
+}
+.color-popover-tab {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--section-border);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-size: 11px;
+}
+.color-popover-tab:hover {
+  color: var(--text);
+  box-shadow: none;
+}
+.color-popover-tab.active {
+  color: var(--text);
+  background: var(--section-border);
+}
+.color-popover-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  width: 160px;
+  min-height: 140px;
+  align-content: flex-start;
+}
+.color-popover-palette .color-swatch-btn {
+  width: 20px;
+  height: 20px;
+}
+.color-popover-palette .color-swatch-btn.selected {
+  box-shadow: 0 0 0 2px var(--text);
+}
+.color-popover-empty {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: var(--space-2) 0;
+}
 .color-popover-row {
   display: flex;
   align-items: center;

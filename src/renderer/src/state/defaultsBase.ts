@@ -170,6 +170,6 @@ export const BASE_PROJECT: Project = {
     ],
     mappings: [...branding.lucky.mappings],
     rampColors: [...branding.lucky.rampColors],
-    locks: { colours: false, motion: false, effects: false, objects: false },
+    locks: { colours: false, motion: false, effects: false, objects: false, surface: false },
   },
 };

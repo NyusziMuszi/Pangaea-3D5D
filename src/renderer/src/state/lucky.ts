@@ -227,7 +227,7 @@ export interface LuckyOptions {
 // copied across are structuredClone'd so `next` shares no references with
 // `base` (which is the live store project when called from the UI).
 //
-// Per-object copies (motion/effects/objects) are guarded on `base.objects[i]`
+// Per-object copies (motion/effects/objects/surface) are guarded on `base.objects[i]`
 // existing: when Objects is unlocked the generated object count may differ
 // from base, so indices beyond base just keep their freshly generated values.
 // Segment copies (colours) are always 1:1 — generateLuckyScene never changes
@@ -243,6 +243,12 @@ function applyLocks(base: Project, next: Project, locks: LuckLocks): void {
       o.primitive = b.primitive;
       o.modelName = b.modelName;
       o.modelDataUrl = b.modelDataUrl;
+    });
+  }
+  if (locks.surface) {
+    next.objects.forEach((o, i) => {
+      const b = base.objects[i];
+      if (!b) return;
       o.mapping = b.mapping;
       o.surface = b.surface;
       o.surfaceWireWidth = b.surfaceWireWidth;

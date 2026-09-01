@@ -80,17 +80,34 @@ function ShapesIcon(): JSX.Element {
   );
 }
 
-const LOCK_ICONS: Record<"colours" | "motion" | "effects" | "objects", () => JSX.Element> = {
+function SurfaceIcon(): JSX.Element {
+  return (
+    <Icon>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M3 15h18" />
+      <path d="M9 3v18" />
+      <path d="M15 3v18" />
+    </Icon>
+  );
+}
+
+const LOCK_ICONS: Record<
+  "colours" | "motion" | "effects" | "objects" | "surface",
+  () => JSX.Element
+> = {
   colours: PaletteIcon,
   motion: MoveIcon,
   effects: WandIcon,
   objects: ShapesIcon,
+  surface: SurfaceIcon,
 };
 
 // Floating panel (anchored off the library's right edge) holding the per-category
-// "lock" toggles. Lifted out of the Explore section so it only appears once a scene
-// exists to lock and re-roll. Lock state lives in project.lucky.locks; locked
-// categories are restored from the pre-roll project inside generateLuckyScene.
+// "lock" toggles (colours/motion/effects/objects/surface). Lifted out of the Explore
+// section so it only appears once a scene exists to lock and re-roll. Lock state
+// lives in project.lucky.locks; locked categories are restored from the pre-roll
+// project inside generateLuckyScene.
 export function LockPanel(): JSX.Element {
   const lucky = useStore((s) => s.project.lucky);
   const update = useStore((s) => s.update);
@@ -104,7 +121,7 @@ export function LockPanel(): JSX.Element {
         </span>
       </div>
       <div className="lucky-radio-group">
-        {(["colours", "motion", "effects", "objects"] as const).map((k) => {
+        {(["colours", "motion", "effects", "objects", "surface"] as const).map((k) => {
           const OptionIcon = LOCK_ICONS[k];
           return (
             <label className="lucky-radio" key={k}>
@@ -119,6 +136,7 @@ export function LockPanel(): JSX.Element {
                         motion: false,
                         effects: false,
                         objects: false,
+                        surface: false,
                       };
                     }
                     p.lucky.locks[k] = !p.lucky.locks[k];
@@ -133,6 +151,7 @@ export function LockPanel(): JSX.Element {
                     motion: "Motion",
                     effects: "Effects",
                     objects: "Objects",
+                    surface: "Surface",
                   }[k]
                 }
               </span>

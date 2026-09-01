@@ -298,7 +298,7 @@ export function PreferencesPanel({
         lucky: {
           ...live.lucky,
           images: [],
-          locks: { colours: false, motion: false, effects: false, objects: false },
+          locks: { colours: false, motion: false, effects: false, objects: false, surface: false },
         },
         scene: live.scene,
         segments: live.segments,

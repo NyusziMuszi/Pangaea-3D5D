@@ -441,9 +441,18 @@ export function ColorSwatch({
   onShiftClick?: () => void;
 }): JSX.Element {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [tab, setTab] = useState<"rgb" | "palette">("rgb");
   const btnRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const open = pos !== null;
+  // The project's "Feeling lucky" palette (state/lucky.ts) doubles as the set
+  // of colours the user has already picked elsewhere in this project, so it's
+  // offered here as a quick-reuse tab. Deduped by hex since the same colour
+  // can appear under several roles/weights.
+  const paletteColors = useStore((s) => s.project.lucky.colors);
+  const paletteHexes = Array.from(
+    new Map(paletteColors.map((c) => [c.hex.toLowerCase(), c.hex])).values(),
+  );
 
   // Anchor the popover to the swatch in viewport coordinates. It renders into a
   // portal (fixed position) so it isn't clipped by panels/segments that hide
@@ -522,7 +531,51 @@ export function ColorSwatch({
             style={{ top: pos.top, left: pos.left }}
             onClick={(e) => e.stopPropagation()}
           >
-            <HexColorPicker color={value} onChange={onChange} />
+            <div className="color-popover-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "rgb"}
+                className={"color-popover-tab" + (tab === "rgb" ? " active" : "")}
+                onClick={() => setTab("rgb")}
+              >
+                RGB
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "palette"}
+                className={"color-popover-tab" + (tab === "palette" ? " active" : "")}
+                onClick={() => setTab("palette")}
+              >
+                Palette
+              </button>
+            </div>
+            {tab === "rgb" ? (
+              <HexColorPicker color={value} onChange={onChange} />
+            ) : (
+              <div className="color-popover-palette">
+                {paletteHexes.length === 0 ? (
+                  <div className="color-popover-empty">
+                    No colours in the palette yet
+                  </div>
+                ) : (
+                  paletteHexes.map((hex) => (
+                    <button
+                      key={hex}
+                      type="button"
+                      className={
+                        "color-swatch-btn" +
+                        (hex.toLowerCase() === value.toLowerCase() ? " selected" : "")
+                      }
+                      title={hex}
+                      style={{ background: hex }}
+                      onClick={() => onChange(hex)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
             <div className="color-popover-row">
               {Ctor && (
                 <button

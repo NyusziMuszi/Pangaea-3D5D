@@ -199,7 +199,7 @@ src/
           exporter.ts      exportVideo() — WebCodecs primary, ffmpeg fallback
       ui/                  React panels + controls (see UI section), plus:
         PreferencesPanel.tsx  editable base defaults + custom card font, in a shared Modal
-        LockPanel.tsx      per-category "Feeling lucky" locks (colours/motion/effects/objects)
+        LockPanel.tsx      per-category "Feeling lucky" locks (colours/motion/effects/objects/surface)
         Modal.tsx          shared modal chrome (ExportDialog, ShaderEditorModal, PreferencesPanel)
         ProjectActions.tsx New / Open / Save / Export / Preferences
         objectOptions.ts   PRIMITIVE_OPTIONS / SURFACE_OPTIONS — labeled dropdown options
@@ -353,7 +353,7 @@ a data URL.
 - [PreferencesPanel.tsx](src/renderer/src/ui/PreferencesPanel.tsx) — editable base project/second-object
   defaults, custom card font upload, reset-to-defaults, reset learned taste.
 - [LockPanel.tsx](src/renderer/src/ui/LockPanel.tsx) — per-category locks (colours/motion/effects/
-  objects) that pin a category across "Feeling lucky" rolls.
+  objects/surface) that pin a category across "Feeling lucky" rolls.
 - [Modal.tsx](src/renderer/src/ui/Modal.tsx) — shared modal chrome; `ExportDialog`,
   `ShaderEditorModal`, and `PreferencesPanel` all render inside it.
 - [controls.tsx](src/renderer/src/ui/controls.tsx) — `Section`, `Field`, `ScalarControl`, `ColorRow`.
@@ -406,7 +406,7 @@ colour scheme / animation-amount controls. Explicit 👍/👎 signals plus impli
 hand-edit) bump a per-axis `TasteProfile` score that biases future rolls via `pickWeighted` /
 `pickDistinctWeighted` (exponential weighting, gently — a never-seen option is always reachable).
 [ui/LockPanel.tsx](src/renderer/src/ui/LockPanel.tsx) lets the user pin categories
-(colours/motion/effects/objects) so a roll leaves them untouched.
+(colours/motion/effects/objects/surface) so a roll leaves them untouched.
 
 **Object surfaces** — see invariant #4 above (`image`/`silhouette`/`wireframe`/`faceted`/`depth`).
 

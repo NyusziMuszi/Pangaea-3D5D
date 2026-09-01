@@ -288,7 +288,13 @@ export interface Project {
     // Per-category locks: when true, that category's values are restored from
     // the pre-generation project after a "Feeling lucky" roll. Optional for
     // back-compat with projects saved before this field existed.
-    locks?: { colours: boolean; motion: boolean; effects: boolean; objects: boolean };
+    locks?: {
+      colours: boolean;
+      motion: boolean;
+      effects: boolean;
+      objects: boolean;
+      surface: boolean;
+    };
   };
 }
 
@@ -298,6 +304,7 @@ export const ALL_UNLOCKED: LuckLocks = {
   motion: false,
   effects: false,
   objects: false,
+  surface: false,
 };
 
 export function totalDuration(p: Project): number {
