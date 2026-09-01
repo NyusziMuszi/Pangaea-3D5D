@@ -2029,3 +2029,45 @@ button.lucky-img-thumb {
   justify-content: center;
   gap: var(--space-2);
 }
+.dice-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.dice-icon .dice-body {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+.dice-icon .dice-pip {
+  fill: currentColor;
+  stroke: none;
+}
+/* Duration must stay in sync with ROLL_MS in ui/DiceIcon.tsx, which drives the
+   pip changes that happen mid-tumble. */
+.dice-icon.rolling {
+  animation: dice-tumble 620ms cubic-bezier(0.3, 0.75, 0.35, 1);
+}
+@keyframes dice-tumble {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  18% {
+    transform: rotate(100deg) scale(1.18);
+  }
+  55% {
+    transform: rotate(255deg) scale(1.18);
+  }
+  85% {
+    transform: rotate(345deg) scale(1.06);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dice-icon.rolling {
+    animation: none;
+  }
+}

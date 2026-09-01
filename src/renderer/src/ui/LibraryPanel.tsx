@@ -35,6 +35,7 @@ import { LockPanel } from "./LockPanel";
 import { PaletteColorList } from "./PaletteColorList";
 import { SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
 import { ShapeIcon } from "./ShapeIcon";
+import { DiceIcon, type DiceIconHandle } from "./DiceIcon";
 import { EffectIcon, type EffectIconHandle } from "./EffectIcon";
 import {
   EXPLORE_DEFAULT_OPEN,
@@ -113,6 +114,7 @@ export function LibraryPanel({
 
   const lucky = project.lucky;
   const [generating, setGenerating] = useState(false);
+  const diceRef = useRef<DiceIconHandle | null>(null);
   const [showInfo, setShowInfo] = useState(false);
 
   // Bumped whenever the Effects catalog becomes visible (section expanded,
@@ -714,61 +716,12 @@ export function LibraryPanel({
                 <button
                   className="full important lucky-roll"
                   disabled={generating}
-                  onClick={onGenerate}
+                  onClick={() => {
+                    diceRef.current?.roll();
+                    void onGenerate();
+                  }}
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    <rect
-                      width="12"
-                      height="12"
-                      x="2"
-                      y="10"
-                      rx="2"
-                      ry="2"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    />
-                    <path
-                      d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M6 18h.01"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M10 14h.01"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M15 6h.01"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M18 9h.01"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <DiceIcon ref={diceRef} />
                   Feeling lucky
                 </button>
                 <button
