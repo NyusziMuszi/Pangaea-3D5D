@@ -1,5 +1,7 @@
 import { type ReactNode } from "react";
 import { useStore } from "../state/store";
+import { getPrefs } from "../state/prefs";
+import { ALL_UNLOCKED } from "../types";
 
 // Lucide icons (github.com/lucide-icons/lucide), inlined so their
 // stroke="currentColor" tracks the label's actual text colour.
@@ -109,7 +111,8 @@ const LOCK_ICONS: Record<
 // lives in project.lucky.locks; locked categories are restored from the pre-roll
 // project inside generateLuckyScene.
 export function LockPanel(): JSX.Element {
-  const lucky = useStore((s) => s.project.lucky);
+  const project = useStore((s) => s.project);
+  const lucky = project.lucky;
   const update = useStore((s) => s.update);
 
   return (
@@ -128,7 +131,8 @@ export function LockPanel(): JSX.Element {
               <input
                 type="checkbox"
                 checked={!!lucky.locks?.[k]}
-                onChange={() =>
+                onChange={() => {
+                  const turningOn = !lucky.locks?.[k];
                   update((p) => {
                     if (!p.lucky.locks) {
                       p.lucky.locks = {
@@ -140,8 +144,20 @@ export function LockPanel(): JSX.Element {
                       };
                     }
                     p.lucky.locks[k] = !p.lucky.locks[k];
-                  })
-                }
+                  });
+                  // Credit taste right when the lock engages, not on every
+                  // re-roll while it stays on — otherwise leaving a category
+                  // locked through many rolls would keep piling weight onto
+                  // the same value and skew far past what a deliberate signal
+                  // should be. One click, one signal, until unlocked again.
+                  if (turningOn && useStore.getState().hasGenerated) {
+                    getPrefs().recordLocks(
+                      project,
+                      { ...ALL_UNLOCKED, [k]: true },
+                      useStore.getState().lastLuckyColorScheme,
+                    );
+                  }
+                }}
               />
               <OptionIcon />
               <span>

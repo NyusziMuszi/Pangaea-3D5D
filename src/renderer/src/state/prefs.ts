@@ -3,6 +3,7 @@ import { branding } from "@branding";
 import {
   COLOR_SCHEMES,
   type ColorScheme,
+  type LuckLocks,
   type ObjectState,
   type PaletteColor,
   type PaletteRole,
@@ -18,8 +19,10 @@ import {
   EDIT_WEIGHT,
   EMPTY_TASTE_PROFILE,
   EXPORT_WEIGHT,
+  extractLockedFeatures,
   extractSceneFeatures,
   LIKE_WEIGHT,
+  LOCK_WEIGHT,
   SAVE_WEIGHT,
   type TasteProfile,
 } from "./taste";
@@ -115,6 +118,11 @@ export interface Preferences {
   secondObject: ObjectState; // blueprint for defaultSecondObject()
   customFont: { name: string; dataUrl: string } | null;
   tasteProfile: TasteProfile;
+  // Whether the learned taste profile biases "Feeling lucky" rolls. Toggling
+  // this off freezes the profile in place (no new signals recorded, no bias
+  // applied) rather than clearing it — Reset taste profile is the separate,
+  // explicit way to clear it.
+  tasteEnabled: boolean;
   exploreSections: ExploreSectionId[];
 }
 
@@ -133,7 +141,14 @@ interface PrefsState extends Preferences {
   recordSave: (project: Project, colorScheme: ColorScheme | null) => void;
   recordExport: (project: Project, colorScheme: ColorScheme | null) => void;
   recordEdit: (prev: Project, next: Project) => void;
+  // Called once, when a lock category is switched on (not on every re-roll
+  // while it stays locked — see LockPanel.tsx): credits that category's
+  // current values (see taste.ts's extractLockedFeatures for exactly what
+  // each lock credits). `locks` should have only the just-toggled category
+  // set to true, so only that axis is credited.
+  recordLocks: (project: Project, locks: LuckLocks, colorScheme: ColorScheme | null) => void;
   resetTaste: () => void;
+  setTasteEnabled: (v: boolean) => void;
   resetAll: () => void;
 }
 
@@ -144,6 +159,7 @@ function snapshot(s: Preferences): Preferences {
     secondObject: s.secondObject,
     customFont: s.customFont,
     tasteProfile: s.tasteProfile,
+    tasteEnabled: s.tasteEnabled,
     exploreSections: s.exploreSections,
   };
 }
@@ -158,25 +174,33 @@ function persist(s: Preferences): void {
 // resets to, both on initial store creation and on an explicit reset.
 function defaultPrefsState(): Pick<
   PrefsState,
-  "project" | "secondObject" | "customFont" | "tasteProfile" | "exploreSections"
+  | "project"
+  | "secondObject"
+  | "customFont"
+  | "tasteProfile"
+  | "tasteEnabled"
+  | "exploreSections"
 > {
   return {
     project: structuredClone(BASE_PROJECT),
     secondObject: structuredClone(BASE_SECOND_OBJECT),
     customFont: null,
     tasteProfile: EMPTY_TASTE_PROFILE,
+    tasteEnabled: true,
     exploreSections: [...branding.exploreSections],
   };
 }
 
 export const usePrefs = create<PrefsState>((set, get) => {
   // Shared by every like/dislike/save/export signal: credit whatever's
-  // currently on screen, bump the profile, persist.
+  // currently on screen, bump the profile, persist. No-ops while the taste
+  // profile is disabled, so a paused profile stays exactly as the user left it.
   const applySignal = (
     project: Project,
     colorScheme: ColorScheme | null,
     weight: number,
   ): void => {
+    if (!get().tasteEnabled) return;
     const features = extractSceneFeatures(project, colorScheme);
     set({
       tasteProfile: applyTasteSignal(get().tasteProfile, features, weight),
@@ -216,6 +240,8 @@ export const usePrefs = create<PrefsState>((set, get) => {
         customFont: p.customFont,
         // Back-compat: older preferences.json files predate new axes.
         tasteProfile: { ...EMPTY_TASTE_PROFILE, ...p.tasteProfile },
+        // Back-compat: preferences.json predating this flag had taste always on.
+        tasteEnabled: p.tasteEnabled ?? true,
         exploreSections,
       });
     },
@@ -247,6 +273,7 @@ export const usePrefs = create<PrefsState>((set, get) => {
     // Bail before set/persist when nothing relevant changed, so a slider drag
     // never rewrites preferences.json.
     recordEdit: (prev, next) => {
+      if (!get().tasteEnabled) return;
       const features = diffEditFeatures(prev, next);
       if (Object.keys(features).length === 0) return;
       set({
@@ -258,8 +285,21 @@ export const usePrefs = create<PrefsState>((set, get) => {
       });
       persist(get());
     },
+    recordLocks: (project, locks, colorScheme) => {
+      if (!get().tasteEnabled) return;
+      const features = extractLockedFeatures(project, colorScheme, locks);
+      if (Object.keys(features).length === 0) return;
+      set({
+        tasteProfile: applyTasteSignal(get().tasteProfile, features, LOCK_WEIGHT),
+      });
+      persist(get());
+    },
     resetTaste: () => {
       set({ tasteProfile: EMPTY_TASTE_PROFILE });
+      persist(get());
+    },
+    setTasteEnabled: (tasteEnabled) => {
+      set({ tasteEnabled });
       persist(get());
     },
     resetAll: () => {

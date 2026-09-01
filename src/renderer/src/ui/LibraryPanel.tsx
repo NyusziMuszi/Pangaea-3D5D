@@ -29,6 +29,7 @@ import {
 import { makeThumbnailUrl, mimeForName } from "./files";
 import { registerAsset } from "../state/assets";
 import { generateLuckyScene } from "../state/lucky";
+import { EMPTY_TASTE_PROFILE } from "../state/taste";
 import { engine } from "../engine/engineSingleton";
 import { Section, Subsection, Field, tickGradient } from "./controls";
 import { LockPanel } from "./LockPanel";
@@ -256,7 +257,9 @@ export function LibraryPanel({
           locks: lucky.locks,
           enabledEffectIds: lucky.enabledEffectIds,
           mappings: lucky.mappings,
-          tasteProfile: getPrefs().tasteProfile,
+          tasteProfile: getPrefs().tasteEnabled
+            ? getPrefs().tasteProfile
+            : EMPTY_TASTE_PROFILE,
         },
       );
       // New identity re-syncs the engine via App.tsx's useEffect([project]).

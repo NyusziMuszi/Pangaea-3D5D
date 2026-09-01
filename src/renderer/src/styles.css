@@ -1732,6 +1732,53 @@ textarea.code {
   border-top: 1px solid var(--border);
   margin: 0;
 }
+.taste-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.taste-axis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.taste-axis-title {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.taste-axis-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.taste-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill, 999px);
+  border: 1px solid var(--border);
+  font-size: var(--font-sm);
+  line-height: 1.6;
+}
+.taste-chip-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.taste-chip-score {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.taste-up {
+  opacity: 1;
+}
+.taste-down {
+  opacity: 0.6;
+}
 
 /* ---------- Toast ---------- */
 .toast {

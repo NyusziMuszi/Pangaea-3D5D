@@ -27,7 +27,11 @@ import {
 } from "../types";
 import { Section, Field, ColorSwatch } from "./controls";
 import { PaletteColorList } from "./PaletteColorList";
-import { SURFACE_OPTIONS, PRIMITIVE_OPTIONS } from "./objectOptions";
+import {
+  SURFACE_OPTIONS,
+  PRIMITIVE_OPTIONS,
+  FLAT_SURFACE_OPTIONS,
+} from "./objectOptions";
 import { ShapeIcon } from "./ShapeIcon";
 import { exploreLabel, type ExploreSectionId } from "../state/exploreSections";
 import { ExploreCheckboxGroup } from "./ExploreCheckboxGroup";
@@ -47,6 +51,7 @@ import {
 } from "../engine/fonts";
 import { bytesToDataUrl } from "./files";
 import { LUCKY_EFFECTS } from "../engine/effects/catalog";
+import type { TasteProfile } from "../state/taste";
 
 // Extension -> font mime, embedded in the stored data URL. The browser parses
 // the face by content, so an approximate mime is fine.
@@ -209,6 +214,141 @@ function makeTextStyle(): TextStyle {
   };
 }
 
+// Label lookups for taste-profile axes, derived from the same option lists
+// the Explore section uses so a shape/effect/etc reads with the same name
+// everywhere in the UI.
+const OBJECT_COUNT_LABELS: Record<string, string> = Object.fromEntries(
+  OBJECT_COUNT_OPTIONS.map((o) => [o.value, o.label]),
+);
+const MAPPING_LABELS: Record<string, string> = Object.fromEntries(
+  MAPPING_OPTIONS.map((o) => [o.value, o.label]),
+);
+const COLOR_SCHEME_LABELS: Record<string, string> = Object.fromEntries(
+  COLOR_SCHEME_OPTIONS.map((o) => [o.value, o.label]),
+);
+const FLAT_SURFACE_LABELS: Record<string, string> = Object.fromEntries(
+  FLAT_SURFACE_OPTIONS.map((o) => [o.value, o.label]),
+);
+const PRIMITIVE_LABELS: Record<string, string> = Object.fromEntries(
+  PRIMITIVE_OPTIONS.map((o) => [o.value, o.label]),
+);
+const EFFECT_LABELS: Record<string, string> = Object.fromEntries(
+  LUCKY_EFFECTS.map((e) => [e.id, e.name]),
+);
+
+interface TasteEntry {
+  key: string;
+  label: string;
+  score: number;
+}
+
+// Non-zero entries of one taste-profile axis, labelled and sorted strongest
+// like first. Ties on the negative side keep object key order.
+function tasteEntries<K extends string>(
+  scores: Partial<Record<K, number>> | undefined,
+  labelOf: (k: K) => string,
+): TasteEntry[] {
+  return (Object.entries(scores ?? {}) as [K, number][])
+    .filter(([, v]) => v !== 0)
+    .map(([k, v]) => ({ key: k, label: labelOf(k), score: v }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function TasteAxisRow({
+  title,
+  entries,
+  swatches,
+}: {
+  title: string;
+  entries: TasteEntry[];
+  swatches?: boolean;
+}): JSX.Element | null {
+  if (!entries.length) return null;
+  return (
+    <div className="taste-axis">
+      <span className="taste-axis-title">{title}</span>
+      <div className="taste-axis-items">
+        {entries.map((e) => (
+          <span
+            key={e.key}
+            className={`taste-chip ${e.score > 0 ? "taste-up" : "taste-down"}`}
+          >
+            {swatches && (
+              <span
+                className="taste-chip-dot"
+                style={{ background: e.key }}
+              />
+            )}
+            {e.label}
+            <span className="taste-chip-score">
+              {e.score > 0 ? "+" : ""}
+              {e.score}
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Read-only readout of the learned taste profile: every axis with any signal,
+// strongest scores first. Score 0 (never seen) is omitted entirely — showing
+// every possible option would bury what actually matters.
+function TasteSummary({ profile }: { profile: TasteProfile }): JSX.Element {
+  const shapes = tasteEntries(profile.shapes, (k) => PRIMITIVE_LABELS[k] ?? k);
+  const mappings = tasteEntries(profile.mappings, (k) => MAPPING_LABELS[k] ?? k);
+  const flatSurfaces = tasteEntries(
+    profile.flatSurfaces,
+    (k) => FLAT_SURFACE_LABELS[k] ?? k,
+  );
+  const effects = tasteEntries(profile.effects, (k) => EFFECT_LABELS[k] ?? k);
+  const objectCounts = tasteEntries(
+    profile.objectCounts,
+    (k) => OBJECT_COUNT_LABELS[k] ?? k,
+  );
+  const colorSchemes = tasteEntries(
+    profile.colorSchemes,
+    (k) => COLOR_SCHEME_LABELS[k] ?? k,
+  );
+  const textColors = tasteEntries(profile.textColors, (k) => k.toUpperCase());
+  const surfaceColors = tasteEntries(
+    profile.surfaceColors,
+    (k) => k.toUpperCase(),
+  );
+
+  const empty =
+    !shapes.length &&
+    !mappings.length &&
+    !flatSurfaces.length &&
+    !effects.length &&
+    !objectCounts.length &&
+    !colorSchemes.length &&
+    !textColors.length &&
+    !surfaceColors.length;
+
+  if (empty) {
+    return (
+      <p className="prefs-note">
+        No signal yet — likes, saves, exports, and hand-edits of generated
+        scenes will start shaping future rolls.
+      </p>
+    );
+  }
+
+  return (
+    <div className="taste-summary">
+      <TasteAxisRow title="Shapes" entries={shapes} />
+      <TasteAxisRow title="Object count" entries={objectCounts} />
+      <TasteAxisRow title="Texture mapping" entries={mappings} />
+      <TasteAxisRow title="Surfaces" entries={flatSurfaces} />
+      <TasteAxisRow title="Effects" entries={effects} />
+      <TasteAxisRow title="Colour schemes" entries={colorSchemes} />
+      <TasteAxisRow title="Text colours" entries={textColors} swatches />
+      <TasteAxisRow title="Surface colours" entries={surfaceColors} swatches />
+    </div>
+  );
+}
+
 interface Draft {
   project: Project;
   secondObject: ObjectState;
@@ -222,6 +362,8 @@ export function PreferencesPanel({
 }): JSX.Element {
   const setToast = useStore((s) => s.setToast);
   const customFont = usePrefs((s) => s.customFont);
+  const tasteProfile = usePrefs((s) => s.tasteProfile);
+  const tasteEnabled = usePrefs((s) => s.tasteEnabled);
 
   // A working copy edited freely and committed only on Save (so Cancel reverts).
   // The font is applied immediately (it's a runtime/global effect), separate
@@ -324,6 +466,12 @@ export function PreferencesPanel({
   function resetTaste(): void {
     usePrefs.getState().resetTaste();
     setToast("Taste profile reset");
+  }
+
+  function toggleTasteEnabled(): void {
+    const next = !tasteEnabled;
+    usePrefs.getState().setTasteEnabled(next);
+    setToast(next ? "Taste profile enabled" : "Taste profile disabled");
   }
 
   function resetFactory(): void {
@@ -925,6 +1073,23 @@ export function PreferencesPanel({
               }
             />
           </ExploreField>
+        </Section>
+
+        <Section title="Taste profile" defaultOpen={false}>
+          <div className="prefs-explore-field">
+            <input
+              type="checkbox"
+              title="Bias Feeling lucky rolls toward what you've liked, saved, exported, and kept"
+              checked={tasteEnabled}
+              onChange={toggleTasteEnabled}
+            />
+            <p className="prefs-note">
+              {tasteEnabled
+                ? "Feeling lucky rolls are biased toward what you've liked, saved, exported, and kept after hand-edits."
+                : "Bias is paused — rolls are at even odds. The learned profile below is kept, not cleared, so re-enabling picks up where it left off."}
+            </p>
+          </div>
+          <TasteSummary profile={tasteProfile} />
           <hr className="prefs-hr" />
           <div className="prefs-row-add">
             <button className="important" onClick={resetTaste}>

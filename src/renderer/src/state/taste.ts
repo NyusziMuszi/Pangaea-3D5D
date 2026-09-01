@@ -19,6 +19,7 @@
 import {
   OBJECT_SURFACES,
   type ColorScheme,
+  type LuckLocks,
   type Mapping,
   type ObjectSurface,
   type PrimitiveModel,
@@ -60,6 +61,10 @@ export const DISLIKE_WEIGHT = -3;
 export const EXPORT_WEIGHT = 3;
 export const SAVE_WEIGHT = 2;
 export const EDIT_WEIGHT = 1;
+// A locked category is a deliberate "keep this exactly as-is" click, so it
+// counts for more than an incidental hand-edit but is a per-axis signal
+// rather than a whole-scene judgement, so it's weighted the same as a save.
+export const LOCK_WEIGHT = 2;
 
 // Weighted pick: weight = GROWTH^score, so a score-0 option always has weight
 // 1 and is never excluded. Drop-in replacement for lucky.ts's uniform pick().
@@ -189,6 +194,35 @@ export function extractSceneFeatures(
     surfaceColors,
   };
   if (colorScheme) features.colorSchemes = { [colorScheme]: 1 };
+  return features;
+}
+
+// Features credited when a locked category survives a re-roll: whatever's
+// currently on screen for exactly the axes that category's lock preserves in
+// applyLocks() (state/lucky.ts) — Objects -> shapes, Surface -> mappings +
+// flatSurfaces, Effects -> effects, Colours -> colour scheme + text/surface
+// colours. Motion has no categorical taste axis (rotation/scale/position are
+// continuous scalars, not a pick from a pool), so a Motion lock credits
+// nothing. Reuses extractSceneFeatures's full extraction and keeps only the
+// locked subset, so both signals compute a scene's features the same way.
+export function extractLockedFeatures(
+  project: Project,
+  colorScheme: ColorScheme | null,
+  locks: LuckLocks,
+): Partial<TasteProfile> {
+  const all = extractSceneFeatures(project, colorScheme);
+  const features: Partial<TasteProfile> = {};
+  if (locks.objects) features.shapes = all.shapes;
+  if (locks.surface) {
+    features.mappings = all.mappings;
+    features.flatSurfaces = all.flatSurfaces;
+  }
+  if (locks.effects) features.effects = all.effects;
+  if (locks.colours) {
+    features.colorSchemes = all.colorSchemes;
+    features.textColors = all.textColors;
+    features.surfaceColors = all.surfaceColors;
+  }
   return features;
 }
 
