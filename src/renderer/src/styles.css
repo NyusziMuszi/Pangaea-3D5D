@@ -618,6 +618,11 @@ button.collapse-btn:hover {
   align-items: center;
   gap: var(--space-3);
 }
+/* A full-width button loses the default text centring once it turns into a
+   flex row, so put it back. */
+button.full.btn-with-icon {
+  justify-content: center;
+}
 .lock-panel {
   position: absolute;
   top: 40px; /* line up with the collapse tab */
