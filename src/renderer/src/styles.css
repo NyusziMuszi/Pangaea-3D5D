@@ -531,10 +531,10 @@ textarea {
   height: 100%;
 }
 .workspace.library-collapsed {
-  --library-width: 40px;
+  --library-width: 24px;
 }
 .workspace.inspector-collapsed {
-  --inspector-width: 40px;
+  --inspector-width: 24px;
 }
 
 /* The library column wraps the scrollable panel plus a collapse tab that
@@ -552,13 +552,28 @@ textarea {
 .library-wrap.collapsed > .panel.library {
   cursor: pointer;
 }
+/* Sections (which normally draw the top edge via their own border-top)
+   aren't rendered while collapsed, so the rail needs its own — same colour,
+   thickness, and vertical position (1px down, matching the collapse tab and
+   the section's border-top when open) as a thin absolutely-positioned bar,
+   since a plain border-top on the panel would sit 1px too high (outside its
+   padding-top). */
+.library-wrap.collapsed::before {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--section-border);
+}
 /* Square tab sitting just outside the panel, in line with the first
    (Scene) section toggle. Same fill + border as the panels. Shared by the
    library (.right, overhangs the panel's right edge) and the inspector
    (.left, overhangs the left edge) — same square chrome, mirrored side. */
 .collapse-tab {
   position: absolute;
-  top: 2px;
+  top: 1px;
   width: 28px;
   height: 28px;
   display: flex;
@@ -566,6 +581,8 @@ textarea {
   justify-content: center;
   background: var(--panel);
   border: 1px solid var(--border);
+  /* Match the panel's own top edge (the first .section's border-top). */
+  border-top-color: var(--section-border);
   z-index: var(--z-tab);
 }
 .collapse-tab.right {
@@ -578,7 +595,8 @@ textarea {
    (the shared .btn-icon hover filter only applies to <img> children). */
 button.collapse-btn {
   cursor: pointer;
-  color: var(--diamond);
+  /* Match the project action icons' default (brighter) fill. */
+  color: var(--text-btn);
 }
 button.collapse-btn:hover {
   color: var(--text-btn-hover);
@@ -589,6 +607,20 @@ button.collapse-btn:hover {
 .library-wrap.collapsed .collapse-btn svg,
 .inspector-wrap.collapsed .collapse-btn svg {
   transform: rotate(180deg);
+}
+/* When an object is selected, the inspector's collapse tab picks up that
+   object's accent (tint background + icon colour) so it reads as part of the
+   same panel — same treatment as .panel.inspector.accented below. */
+.inspector-wrap.accented > .collapse-tab {
+  background: linear-gradient(var(--obj-highlight), var(--obj-highlight)), var(--panel);
+  /* Same accent colour as the panel's section rules/titles. */
+  border-top-color: var(--text-section);
+}
+.inspector-wrap.accented > .collapse-tab .collapse-btn {
+  color: var(--text-section);
+}
+.inspector-wrap.accented > .collapse-tab .collapse-btn:hover {
+  color: var(--obj-hover);
 }
 
 .right-col {
@@ -610,13 +642,37 @@ button.collapse-btn:hover {
   z-index: var(--z-badge);
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  /* Right-align so each pill hugs its own icon/text instead of stretching to
+     match the widest label, and hover-growth expands left into open canvas
+     space rather than toward the panel. */
+  align-items: flex-end;
   gap: var(--space-4);
 }
 .btn-with-icon {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+/* Icon-only pills that reveal their label on hover: the icon stays put at
+   the pill's trailing (right) edge, and the label grows out to its left. */
+.project-actions .btn-with-icon {
+  gap: 0;
+}
+.project-actions .btn-label {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  transition:
+    max-width var(--dur-slow) var(--ease),
+    opacity var(--dur) var(--ease),
+    margin-right var(--dur-slow) var(--ease);
+}
+.project-actions .btn-with-icon:hover .btn-label {
+  max-width: 160px;
+  opacity: 1;
+  margin-right: var(--space-3);
 }
 /* A full-width button loses the default text centring once it turns into a
    flex row, so put it back. */
@@ -626,7 +682,7 @@ button.full.btn-with-icon {
 .lock-panel {
   position: absolute;
   top: 40px; /* line up with the collapse tab */
-  left: calc(100% + 1px);
+  left: calc(100% - 1px);
   z-index: var(--z-badge);
   width: 120px;
   display: flex;
@@ -722,6 +778,26 @@ button.full.btn-with-icon {
 .inspector-wrap.collapsed > .panel.inspector {
   cursor: pointer;
 }
+/* Sections (which normally draw the top edge via their own border-top)
+   aren't rendered while collapsed, so the rail needs its own — same colour,
+   thickness, and vertical position (1px down, matching the collapse tab and
+   the section's border-top when open) as a thin absolutely-positioned bar,
+   since a plain border-top on the panel would sit 1px too high (outside its
+   padding-top). */
+.inspector-wrap.collapsed::before {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--section-border);
+}
+/* When an object is selected, match the accented top-border colour used
+   elsewhere in the inspector (section rules/titles, collapse tab). */
+.inspector-wrap.accented.collapsed::before {
+  background: var(--text-section);
+}
 
 /* ---------- Sections / fields ---------- */
 .section {
@@ -815,7 +891,9 @@ button.full.btn-with-icon {
   margin-top: var(--space-2);
 }
 .subhead-toggle {
-  width: 100%;
+  display: flex;
+  flex: 1;
+  min-width: 0;
   justify-content: flex-start;
   gap: var(--space-2);
   background: none;
@@ -1326,6 +1404,12 @@ input[type="checkbox"]:checked::after {
   margin: 0;
   cursor: pointer;
 }
+.explore-anim-slider {
+  /* Sits directly under the "Animations" subsection title with little room
+     to spare, which let the round thumb clip against the collapsible
+     wrapper's overflow:hidden edge — push it down clear of that edge. */
+  margin-top: var(--space-4);
+}
 .scrub::-webkit-slider-runnable-track,
 .scalar-slider::-webkit-slider-runnable-track {
   height: 4px;
@@ -1669,16 +1753,6 @@ textarea.code {
   font-size: var(--font-sm);
   margin: 0;
 }
-.prefs-rules {
-  margin: 0;
-  padding-left: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.prefs-rules li {
-  list-style: disc;
-}
 .prefs-foot-spread {
   justify-content: space-between;
 }
@@ -1695,6 +1769,8 @@ textarea.code {
 .explore-info-btn:hover,
 .explore-info-btn.active {
   color: var(--white);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
 }
 .explore-info {
   display: flex;
@@ -1847,7 +1923,9 @@ textarea.code {
 .palette-row {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(var(--pal-n, 3), var(--pal-cb)) calc(var(--chip-w, 18px) + var(--pal-sw-gap));
+  grid-template-columns: repeat(var(--pal-n, 3), var(--pal-cb)) calc(
+      var(--chip-w, 18px) + var(--pal-sw-gap)
+    );
   gap: var(--pal-gap);
   align-items: center;
   /* Reserves the strip .palette-row-actions (three 16px icon buttons) sits
@@ -2033,6 +2111,13 @@ button.lucky-img-thumb {
   gap: var(--space-2);
   cursor: pointer;
   color: var(--text-dim);
+  opacity: 0.6;
+}
+/* An engaged toggle (e.g. an active lock) reads at full strength; the rest
+   stay dimmed so the selected ones stand out. */
+.lucky-radio:has(input:checked) {
+  color: var(--text);
+  opacity: 1;
 }
 /* A checkbox that can't apply yet (e.g. the "image" surface with no palette
    images loaded) reads as greyed out rather than disappearing. */

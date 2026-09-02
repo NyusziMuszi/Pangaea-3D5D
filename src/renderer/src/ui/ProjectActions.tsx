@@ -179,25 +179,31 @@ export function ProjectActions({
 
   return (
     <div className="project-actions">
-      <button className="btn-with-icon" onClick={onOpenPreferences}>
+      <button className="btn-with-icon" onClick={onOpenPreferences} title="Preferences">
+        <span className="btn-label">Preferences</span>
         <SettingsIcon />
-        Preferences
       </button>
-      <button className="btn-with-icon" onClick={newProject}>
+      <button className="btn-with-icon" onClick={newProject} title="New">
+        <span className="btn-label">New</span>
         <FilePlusIcon />
-        New
       </button>
-      <button className="btn-with-icon" onClick={open}>
+      <button className="btn-with-icon" onClick={open} title="Open">
+        <span className="btn-label">Open</span>
         <FolderOpenIcon />
-        Open
       </button>
-      <button className="btn-with-icon" onClick={save}>
+      <button
+        className="btn-with-icon"
+        onClick={save}
+        title={window.api.canPickSaveLocation ? "Save" : "Download"}
+      >
+        <span className="btn-label">
+          {window.api.canPickSaveLocation ? "Save" : "Download"}
+        </span>
         {window.api.canPickSaveLocation ? <SaveIcon /> : <DownloadIcon />}
-        {window.api.canPickSaveLocation ? "Save" : "Download"}
       </button>
-      <button className="important btn-with-icon" onClick={onOpenExport}>
+      <button className="important btn-with-icon" onClick={onOpenExport} title="Export">
+        <span className="btn-label">Export</span>
         <FileOutputIcon />
-        Export
       </button>
     </div>
   );

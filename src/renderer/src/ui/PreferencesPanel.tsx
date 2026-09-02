@@ -62,6 +62,54 @@ const FONT_MIME: Record<string, string> = {
   woff2: "font/woff2",
 };
 
+// Lucide icons (github.com/lucide-icons/lucide), inlined so their
+// stroke="currentColor" tracks each button's actual text colour.
+function Icon({ children }: { children: ReactNode }): JSX.Element {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function SettingsIcon(): JSX.Element {
+  return (
+    <Icon>
+      <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+      <circle cx="12" cy="12" r="3" />
+    </Icon>
+  );
+}
+
+function XIcon(): JSX.Element {
+  return (
+    <Icon>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </Icon>
+  );
+}
+
+function SaveIcon(): JSX.Element {
+  return (
+    <Icon>
+      <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+      <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" />
+      <path d="M7 3v4a1 1 0 0 0 1 1h7" />
+    </Icon>
+  );
+}
+
 // Read a blueprint scalar's plain number (blueprints are const-only; fall back
 // to the first key just in case a saved blueprint carried animation).
 const cval = (s: Scalar): number =>
@@ -337,8 +385,8 @@ function TasteSummary({ profile }: { profile: TasteProfile }): JSX.Element {
   if (empty) {
     return (
       <p className="prefs-note">
-        No signal yet — likes, saves, exports, and hand-edits of generated
-        scenes will start shaping future rolls.
+        No signal yet — likes, saves, exports, hand-edits, and locks on
+        generated scenes will start shaping future rolls.
       </p>
     );
   }
@@ -550,9 +598,12 @@ export function PreferencesPanel({
       footClassName="prefs-foot-spread"
       head={
         <>
+          <SettingsIcon />
           <h3>Preferences</h3>
           <span className="spacer" />
-          <button onClick={onClose}>Close</button>
+          <button className="btn-icon" title="Close" onClick={onClose}>
+            <XIcon />
+          </button>
         </>
       }
       foot={
@@ -571,8 +622,9 @@ export function PreferencesPanel({
           </div>
           <div className="prefs-row-add">
             <button onClick={onClose}>Cancel</button>
-            <button className="important" onClick={save}>
-              Save
+            <button className="important btn-with-icon" onClick={save}>
+              <span className="btn-label">Save</span>
+              <SaveIcon />
             </button>
           </div>
         </>
@@ -868,8 +920,9 @@ export function PreferencesPanel({
               onChange={() => toggleSection("effects")}
             />
             <p className="prefs-note">
-              Choose which built-in effects Explore is allowed to use. All are
-              enabled by default — uncheck any you never want generated.
+              Choose which built-in effects Explore is allowed to use. All but
+              Fresnel are enabled by default — uncheck any you never want
+              generated.
             </p>
           </div>
           <EffectKindField
@@ -1087,13 +1140,13 @@ export function PreferencesPanel({
           <div className="prefs-explore-field">
             <input
               type="checkbox"
-              title="Bias Feeling lucky rolls toward what you've liked, saved, exported, and kept"
+              title="Bias Feeling lucky rolls toward what you've liked, saved, exported, locked, and kept"
               checked={tasteEnabled}
               onChange={toggleTasteEnabled}
             />
             <p className="prefs-note">
               {tasteEnabled
-                ? "Feeling lucky rolls are biased toward what you've liked, saved, exported, and kept after hand-edits."
+                ? "Feeling lucky rolls are biased toward what you've liked, saved, exported, locked, and kept after hand-edits."
                 : "Bias is paused — rolls are at even odds. The learned profile below is kept, not cleared, so re-enabling picks up where it left off."}
             </p>
           </div>
@@ -1105,8 +1158,8 @@ export function PreferencesPanel({
             </button>
           </div>
           <p className="prefs-note">
-            Clears the bias learned from likes, saves, exports, and hand-edits
-            of generated scenes — future rolls go back to even odds.
+            Clears the bias learned from likes, saves, exports, locks, and
+            hand-edits of generated scenes — future rolls go back to even odds.
           </p>
         </Section>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStore } from "../state/store";
 import { engine } from "../engine/engineSingleton";
 import {
@@ -20,6 +20,37 @@ const QUALITY = {
   High: 18_000_000,
   Max: 28_000_000,
 } as const;
+
+// Lucide icon (github.com/lucide-icons/lucide), inlined so its
+// stroke="currentColor" tracks the heading's actual text colour.
+function Icon({ children }: { children: ReactNode }): JSX.Element {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function FileOutputIcon(): JSX.Element {
+  return (
+    <Icon>
+      <path d="M4.226 20.925A2 2 0 0 0 6 22h12a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.127" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="m5 11-3 3" />
+      <path d="m5 17-3-3h10" />
+    </Icon>
+  );
+}
 
 type Format = "mp4" | "png" | "sequence";
 
@@ -257,6 +288,7 @@ export function ExportDialog({
       modalClassName="export-dialog"
       head={
         <>
+          <FileOutputIcon />
           <h3>
             Export{" "}
             {format === "mp4"

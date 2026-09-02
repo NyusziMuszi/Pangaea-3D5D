@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { activeObjectIndex, useStore } from "../state/store";
 import {
@@ -40,6 +41,7 @@ import { DiceIcon, type DiceIconHandle } from "./DiceIcon";
 import { EffectIcon, type EffectIconHandle } from "./EffectIcon";
 import {
   EXPLORE_DEFAULT_OPEN,
+  exploreInfo,
   exploreLabel,
   TEXT_CARD_SECTIONS,
   type ExploreSectionId,
@@ -118,6 +120,54 @@ function ImagePlusIcon(): JSX.Element {
   );
 }
 
+// One Explore option group, with its own ⓘ button next to the title. The
+// button and (when open) its explanation sit outside the fold-toggle body, so
+// what a control does stays readable without expanding its option list.
+//
+// Module scope, not a closure in the render body — same reasoning as
+// PreferencesPanel's ExploreField: a component declared inside a component is
+// a fresh type every render, which would remount (and re-collapse) every
+// group on each keystroke.
+function ExploreSubsection({
+  id,
+  infoOpen,
+  onToggleInfo,
+  children,
+}: {
+  id: ExploreSectionId;
+  infoOpen: ExploreSectionId | null;
+  onToggleInfo: (id: ExploreSectionId) => void;
+  children: ReactNode;
+}): JSX.Element {
+  const open = infoOpen === id;
+  const label = exploreLabel(id);
+  return (
+    <Subsection
+      title={label}
+      defaultOpen={EXPLORE_DEFAULT_OPEN.has(id)}
+      right={
+        <button
+          type="button"
+          className={`explore-info-btn${open ? " active" : ""}`}
+          title={`About ${label}`}
+          onClick={() => onToggleInfo(id)}
+        >
+          ⓘ
+        </button>
+      }
+      info={
+        open && (
+          <div className="explore-info">
+            <p className="prefs-note">{exploreInfo(id)}</p>
+          </div>
+        )
+      }
+    >
+      {children}
+    </Subsection>
+  );
+}
+
 export function LibraryPanel({
   collapsed,
   onToggleCollapse,
@@ -141,6 +191,10 @@ export function LibraryPanel({
   const [generating, setGenerating] = useState(false);
   const diceRef = useRef<DiceIconHandle | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  // Which single option group's own info note is expanded, if any.
+  const [infoOpen, setInfoOpen] = useState<ExploreSectionId | null>(null);
+  const toggleInfo = (id: ExploreSectionId): void =>
+    setInfoOpen((cur) => (cur === id ? null : id));
 
   // Bumped whenever the Effects catalog becomes visible (section expanded,
   // or scrolled into view) so each pill's EffectIcon replays its intro loop.
@@ -391,72 +445,20 @@ export function LibraryPanel({
                     axis, and one effect&rsquo;s intensity are always keyframed.
                   </p>
                   <p className="prefs-note">
-                    Each generation draws one entry from your chosen options (an
-                    empty set falls back to all options):
+                    Each generation draws one entry from your chosen options
+                    below (an empty set falls back to all options). Every
+                    colour trio puts the background and silhouette on one
+                    lightness side and the text on the opposite side, so text
+                    always stays legible. Click a group&rsquo;s own ⓘ below
+                    for what it controls.
                   </p>
-                  <ul className="prefs-note prefs-rules">
-                    <li>
-                      <strong>Objects</strong> — If there are 2 objects, and
-                      images have been loaded into the palette, by default only
-                      one object is generated with an image.
-                    </li>
-                    <li>
-                      <strong>Object surface</strong> — how a non-image object
-                      is drawn; with two flat objects the surfaces are picked
-                      distinct where the set allows.
-                    </li>
-                    <li>
-                      <strong>Light colour</strong> — the second colour of a
-                      faceted or depth ramp: plain white, black, or a
-                      contrasting palette colour.
-                    </li>
-                    <li>
-                      <strong>Shapes</strong> — which primitive shapes an
-                      object may take.
-                    </li>
-                    {hasTextCards && (
-                      <li>
-                        <strong>Colour Rhythm</strong> <em>~ + ~ + ~ +</em>:
-                        animation is treated as a continuous sequence with the
-                        message cards interrupting it. <em>~ ~ + + x x</em>: each
-                        animation belongs to a message. <em>Random</em>: every
-                        segment is coloured independently.
-                      </li>
-                    )}
-                    {hasTextCards && (
-                      <li>
-                        <strong>Text background</strong> — whether text cards
-                        show the object as a silhouette, none or wireframe
-                        backdrop.
-                      </li>
-                    )}
-                    {hasTextCards && (
-                      <li>
-                        <strong>Blend</strong> — how text glyphs composite over
-                        the object silhouette on text cards.
-                      </li>
-                    )}
-                    <li>
-                      <strong>Effects pool</strong> — which built-in effects
-                      Explore is allowed to use.
-                    </li>
-                    <li>
-                      <strong>Animations</strong> (0–1) — drives effect count,
-                      keyframe count, extra animated transforms, and rotation
-                      intensity.
-                    </li>
-                    <li>
-                      <strong>Colours</strong> — Every trio puts the background
-                      and silhouette on one lightness side and the text on the
-                      opposite side, so text always stays legible.
-                    </li>
-                  </ul>
                 </div>
               )}
               {shows("colors") && (
-                <Subsection
-                  title={exploreLabel("colors")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("colors")}
+                <ExploreSubsection
+                  id="colors"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <PaletteColorList
                     colors={lucky.colors}
@@ -466,13 +468,14 @@ export function LibraryPanel({
                       })
                     }
                   />
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {shows("images") && (
-                <Subsection
-                  title={exploreLabel("images")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("images")}
+                <ExploreSubsection
+                  id="images"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   {lucky.images.length > 0 && (
                     <div className="lucky-img-grid" data-resolved={thumbResolved}>
@@ -510,14 +513,15 @@ export function LibraryPanel({
                       Add images
                     </button>
                   )}
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {/* Mapping only applies to an object wearing an image. */}
               {shows("mappings") && hasPaletteImages && (
-                <Subsection
-                  title={exploreLabel("mappings")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("mappings")}
+                <ExploreSubsection
+                  id="mappings"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <ExploreCheckboxGroup
                     variant="stack"
@@ -531,13 +535,14 @@ export function LibraryPanel({
                       })
                     }
                   />
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {shows("objectCounts") && (
-                <Subsection
-                  title={exploreLabel("objectCounts")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("objectCounts")}
+                <ExploreSubsection
+                  id="objectCounts"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <ExploreCheckboxGroup
                     variant="stack"
@@ -550,13 +555,14 @@ export function LibraryPanel({
                       })
                     }
                   />
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {shows("surfaces") && (
-                <Subsection
-                  title={exploreLabel("surfaces")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("surfaces")}
+                <ExploreSubsection
+                  id="surfaces"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <ExploreCheckboxGroup
                     variant="stack"
@@ -575,16 +581,17 @@ export function LibraryPanel({
                       })
                     }
                   />
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {/* The ramp's second colour only exists on a faceted/depth surface. */}
               {shows("rampColors") &&
                 (!lucky.surfaces.length ||
                   lucky.surfaces.some((s) => s === "faceted" || s === "depth")) && (
-                  <Subsection
-                    title={exploreLabel("rampColors")}
-                    defaultOpen={EXPLORE_DEFAULT_OPEN.has("rampColors")}
+                  <ExploreSubsection
+                    id="rampColors"
+                    infoOpen={infoOpen}
+                    onToggleInfo={toggleInfo}
                   >
                     <ExploreCheckboxGroup
                       variant="stack"
@@ -598,13 +605,14 @@ export function LibraryPanel({
                         })
                       }
                     />
-                  </Subsection>
+                  </ExploreSubsection>
                 )}
 
               {shows("shapes") && (
-                <Subsection
-                  title={exploreLabel("shapes")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("shapes")}
+                <ExploreSubsection
+                  id="shapes"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <ExploreCheckboxGroup
                     variant="stack"
@@ -619,13 +627,14 @@ export function LibraryPanel({
                       })
                     }
                   />
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {shows("colorSchemes") && (
-                <Subsection
-                  title={exploreLabel("colorSchemes")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("colorSchemes")}
+                <ExploreSubsection
+                  id="colorSchemes"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <ExploreCheckboxGroup
                     variant="stack"
@@ -638,13 +647,14 @@ export function LibraryPanel({
                       })
                     }
                   />
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {shows("textBackdrops") && (
-                <Subsection
-                  title={exploreLabel("textBackdrops")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("textBackdrops")}
+                <ExploreSubsection
+                  id="textBackdrops"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <ExploreCheckboxGroup
                     variant="stack"
@@ -657,13 +667,14 @@ export function LibraryPanel({
                       })
                     }
                   />
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {shows("blendModes") && (
-                <Subsection
-                  title={exploreLabel("blendModes")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("blendModes")}
+                <ExploreSubsection
+                  id="blendModes"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <ExploreCheckboxGroup
                     variant="stack"
@@ -676,13 +687,14 @@ export function LibraryPanel({
                       })
                     }
                   />
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {shows("effects") && (
-                <Subsection
-                  title={exploreLabel("effects")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("effects")}
+                <ExploreSubsection
+                  id="effects"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <ExploreCheckboxGroup
                     variant="stack"
@@ -704,16 +716,17 @@ export function LibraryPanel({
                       })
                     }
                   />
-                </Subsection>
+                </ExploreSubsection>
               )}
 
               {shows("animation") && (
-                <Subsection
-                  title={exploreLabel("animation")}
-                  defaultOpen={EXPLORE_DEFAULT_OPEN.has("animation")}
+                <ExploreSubsection
+                  id="animation"
+                  infoOpen={infoOpen}
+                  onToggleInfo={toggleInfo}
                 >
                   <input
-                    className="scalar-slider"
+                    className="scalar-slider explore-anim-slider"
                     type="range"
                     min={0}
                     max={1}
@@ -739,7 +752,7 @@ export function LibraryPanel({
                     <span>Few</span>
                     <span>Many</span>
                   </div>
-                </Subsection>
+                </ExploreSubsection>
               )}
 
 
@@ -783,6 +796,7 @@ export function LibraryPanel({
                 </button>
               </div>
             </Section>
+
             <Section title="Scene" defaultOpen={false}>
               <Field label="Camera">
                 <select
@@ -884,11 +898,9 @@ export function LibraryPanel({
             aria-hidden="true"
           >
             <path
-              d="M15 18L9 12L15 6"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              d="M12 5.5L17 17.5H7L12 5.5Z"
+              fill="currentColor"
+              transform="rotate(-90 12 12)"
             />
           </svg>
         </button>

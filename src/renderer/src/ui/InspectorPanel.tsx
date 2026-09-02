@@ -217,7 +217,7 @@ export function InspectorPanel({
     });
   }
 
-  // Drop the object's image, restoring the centered default so the "Load image"
+  // Drop the object's image, restoring the centered default so the "Add image"
   // button returns.
   function clearImageFor(): void {
     updateObject((o) => {
@@ -241,7 +241,10 @@ export function InspectorPanel({
   }
 
   return (
-    <div className={`inspector-wrap ${collapsed ? "collapsed" : ""}`}>
+    <div
+      className={`inspector-wrap ${collapsed ? "collapsed" : ""} ${panelAccentClass}`}
+      style={accentStyle}
+    >
       <div
         className={`panel inspector ${panelAccentClass}`}
         style={accentStyle}
@@ -661,7 +664,7 @@ export function InspectorPanel({
                         onClick={loadImageFor}
                       >
                         <ImagePlusIcon />
-                        Load image
+                        Add image
                       </button>
                     ))}
                 </Section>
@@ -882,11 +885,9 @@ export function InspectorPanel({
             aria-hidden="true"
           >
             <path
-              d="M9 18L15 12L9 6"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              d="M12 5.5L17 17.5H7L12 5.5Z"
+              fill="currentColor"
+              transform="rotate(90 12 12)"
             />
           </svg>
         </button>

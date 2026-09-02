@@ -135,7 +135,7 @@ export const branding: Branding = {
     textBackdrops: ["silhouette"],
     rampColors: ["coloured", "black"],
     mappings: ["triplanar", "reflection"],
-    animation: 0.42,
+    animation: 1 / 3,
   },
   exploreSections: [
     "colors",

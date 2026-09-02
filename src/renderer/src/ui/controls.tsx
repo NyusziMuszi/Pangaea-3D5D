@@ -67,35 +67,46 @@ export function Section({
 
 // Lightweight foldable header for a subsection nested inside a `Section`
 // (e.g. each Explore option group). Same collapse mechanic as `Section`,
-// smaller chrome.
+// smaller chrome. `right` sits next to the title (e.g. an info button) and,
+// unlike `children`, isn't hidden when the subsection is folded; `info` is an
+// optional block rendered directly under the header for the same reason —
+// explanatory text should stay reachable without expanding the option list.
 export function Subsection({
   title,
   children,
   defaultOpen = true,
+  right,
+  info,
 }: {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  right?: ReactNode;
+  info?: ReactNode;
 }): JSX.Element {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="subsection">
-      <button
-        className="subhead subhead-toggle"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <svg
-          className={`subsection-caret ${open ? "open" : ""}`}
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-hidden="true"
+      <div className="subhead">
+        <button
+          className="subhead-toggle"
+          onClick={() => setOpen((o) => !o)}
         >
-          <path d="M12 5.5L17 17.5H7L12 5.5Z" fill="currentColor" />
-        </svg>
-        {title}
-      </button>
+          <svg
+            className={`subsection-caret ${open ? "open" : ""}`}
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M12 5.5L17 17.5H7L12 5.5Z" fill="currentColor" />
+          </svg>
+          {title}
+        </button>
+        {right}
+      </div>
+      {info}
       <div className={`section-body-wrap ${open ? "open" : ""}`}>
         <div className="section-body">
           <div className="subsection-body-inner">{children}</div>
