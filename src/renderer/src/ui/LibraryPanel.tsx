@@ -23,6 +23,7 @@ import {
   PRIMITIVE_MODELS,
   RAMP_COLOR_MODES,
   TEXT_BLEND_MODES,
+  totalDuration,
   type CameraType,
   type EffectDef,
   type ObjectState,
@@ -345,9 +346,15 @@ export function LibraryPanel({
       setLastLuckyColorScheme(colorScheme);
       // Reset the engine's own clock, not just the store. setPlayhead alone
       // leaves the engine's internal playhead at the old timestamp, so playback
-      // would resume there; seekTo(0) moves the real clock and fires
-      // onTick -> setPlayhead so the new scene always starts from the beginning.
-      engine.seekTo(0);
+      // would resume there; seekTo(...) moves the real clock and fires
+      // onTick -> setPlayhead. Keep the playhead where the user had it (clamped
+      // to the new scene's length) instead of jumping back to 0, so scrubbing
+      // to a specific moment survives a re-generate.
+      const keepAt = Math.min(
+        useStore.getState().playhead,
+        totalDuration(next),
+      );
+      engine.seekTo(keepAt);
       setHasGenerated(true);
     } finally {
       setGenerating(false);
